@@ -2,6 +2,7 @@
 
 import { createClient } from '@/lib/supabase/client'
 import { useEffect, useState } from 'react'
+import { useRouter, usePathname } from 'next/navigation'
 import type { User } from '@supabase/supabase-js'
 import type { Member, Organization } from '@/types/database'
 
@@ -12,6 +13,8 @@ interface AuthState {
   loading: boolean
 }
 
+const PUBLIC_PATHS = ['/login', '/signup', '/forgot-password', '/auth/callback', '/auth/confirm', '/aprovacao']
+
 export function useAuth() {
   const [state, setState] = useState<AuthState>({
     user: null,
@@ -21,47 +24,96 @@ export function useAuth() {
   })
 
   const supabase = createClient()
+  const router = useRouter()
+  const pathname = usePathname()
+
+  const isPublicPath = PUBLIC_PATHS.some(p => pathname.startsWith(p))
 
   useEffect(() => {
     async function getSession() {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (user) {
-        // Get member + org
-        const { data: member } = await supabase
+      try {
+        const { data: { user } } = await supabase.auth.getUser()
+
+        if (!user) {
+          setState({ user: null, member: null, org: null, loading: false })
+          if (!isPublicPath) {
+            router.push('/login')
+          }
+          return
+        }
+
+        // Get member + org - use maybeSingle to handle 0 or 1 results
+        const { data: memberData, error: memberError } = await supabase
           .from('members')
           .select('*, organizations(*)')
           .eq('user_id', user.id)
           .eq('status', 'active')
-          .single()
+          .limit(1)
+          .maybeSingle()
+
+        if (memberError) {
+          console.error('Erro ao buscar member:', memberError.message)
+        }
+
+        if (!memberData && !isPublicPath) {
+          // User exists but no member/org — might need org setup
+          console.warn('Usuário sem organização. Criando automaticamente...')
+          
+          // Try to create org + member for this user
+          const userName = user.user_metadata?.full_name || user.email?.split('@')[0] || 'Usuário'
+          const slug = userName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-') + '-' + user.id.slice(0, 8)
+          
+          const { data: newOrg, error: orgError } = await supabase
+            .from('organizations')
+            .insert({ name: userName + "'s Workspace", slug })
+            .select()
+            .single()
+
+          if (orgError) {
+            console.error('Erro ao criar org:', orgError.message)
+            setState({ user, member: null, org: null, loading: false })
+            return
+          }
+
+          const { data: newMember, error: memError } = await supabase
+            .from('members')
+            .insert({
+              user_id: user.id,
+              org_id: newOrg.id,
+              role: 'admin',
+              display_name: userName,
+              status: 'active'
+            })
+            .select('*, organizations(*)')
+            .single()
+
+          if (memError) {
+            console.error('Erro ao criar member:', memError.message)
+            setState({ user, member: null, org: newOrg, loading: false })
+            return
+          }
+
+          setState({
+            user,
+            member: newMember || null,
+            org: (newMember as any)?.organizations || newOrg,
+            loading: false,
+          })
+          return
+        }
 
         setState({
           user,
-          member: member || null,
-          org: (member as any)?.organizations || null,
+          member: memberData || null,
+          org: (memberData as any)?.organizations || null,
           loading: false,
         })
-      } else {
-        // Demo mode: provide mock data when no user is authenticated
-        setState({
-          user: { id: 'demo-user', email: 'kendy@agenciabase.com.br' } as any,
-          member: {
-            id: 'demo-member',
-            user_id: 'demo-user',
-            org_id: 'demo-org',
-            role: 'admin',
-            display_name: 'Kendy',
-            avatar_url: null,
-            status: 'active'
-          } as any,
-          org: {
-            id: 'demo-org',
-            name: 'Agência BASE',
-            slug: 'agencia-base',
-            plan: 'pro'
-          } as any,
-          loading: false,
-        })
+      } catch (err) {
+        console.error('Auth error:', err)
+        setState({ user: null, member: null, org: null, loading: false })
+        if (!isPublicPath) {
+          router.push('/login')
+        }
       }
     }
 
@@ -69,12 +121,14 @@ export function useAuth() {
 
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (event === 'SIGNED_IN' && session?.user) {
+        // Re-fetch member data
         const { data: member } = await supabase
           .from('members')
           .select('*, organizations(*)')
           .eq('user_id', session.user.id)
           .eq('status', 'active')
-          .single()
+          .limit(1)
+          .maybeSingle()
 
         setState({
           user: session.user,
@@ -83,26 +137,8 @@ export function useAuth() {
           loading: false,
         })
       } else if (event === 'SIGNED_OUT') {
-        // Demo mode: provide mock data instead of null
-        setState({
-          user: { id: 'demo-user', email: 'kendy@agenciabase.com.br' } as any,
-          member: {
-            id: 'demo-member',
-            user_id: 'demo-user',
-            org_id: 'demo-org',
-            role: 'admin',
-            display_name: 'Kendy',
-            avatar_url: null,
-            status: 'active'
-          } as any,
-          org: {
-            id: 'demo-org',
-            name: 'Agência BASE',
-            slug: 'agencia-base',
-            plan: 'pro'
-          } as any,
-          loading: false,
-        })
+        setState({ user: null, member: null, org: null, loading: false })
+        router.push('/login')
       }
     })
 
@@ -110,13 +146,8 @@ export function useAuth() {
   }, [])
 
   const signOut = async () => {
-    // Demo mode: just check if we have a real user before signing out
-    const { data: { user } } = await supabase.auth.getUser()
-    if (user && user.id !== 'demo-user') {
-      await supabase.auth.signOut()
-      window.location.href = '/login'
-    }
-    // In demo mode, signing out is a no-op
+    await supabase.auth.signOut()
+    router.push('/login')
   }
 
   return { ...state, signOut, supabase }

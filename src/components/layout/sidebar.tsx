@@ -14,12 +14,14 @@ import {
   Webhook,
   ChevronLeft,
   Menu,
+  FileText,
 } from 'lucide-react'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
+  { href: '/solicitacoes', label: 'Solicitações', icon: FileText },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/workflow', label: 'Workflow', icon: Kanban },
   { href: '/chat', label: 'Chat', icon: MessageSquare },

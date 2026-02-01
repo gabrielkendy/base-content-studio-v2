@@ -147,3 +147,26 @@ export interface ActivityLog {
   // Joined
   user?: Member
 }
+
+// Solicitações
+export type SolicitacaoPrioridade = 'baixa' | 'normal' | 'alta' | 'urgente'
+export type SolicitacaoStatus = 'nova' | 'em_analise' | 'aprovada' | 'em_producao' | 'entregue' | 'cancelada'
+
+export interface Solicitacao {
+  id: string
+  org_id: string
+  cliente_id: string
+  titulo: string
+  descricao: string | null
+  referencias: string[]
+  arquivos_ref: string[]
+  prioridade: SolicitacaoPrioridade
+  prazo_desejado: string | null
+  status: SolicitacaoStatus
+  respondido_por: string | null
+  resposta: string | null
+  created_at: string
+  updated_at: string
+  // Joined
+  cliente?: Cliente
+}

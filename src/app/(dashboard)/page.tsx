@@ -1,0 +1,246 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { useAuth } from '@/hooks/use-auth'
+import { Card, CardContent } from '@/components/ui/card'
+import { Badge } from '@/components/ui/badge'
+import { Avatar } from '@/components/ui/avatar'
+import { Skeleton } from '@/components/ui/skeleton'
+import { STATUS_CONFIG, TIPO_EMOJI, formatDate } from '@/lib/utils'
+import {
+  FileText, CheckCircle, Clock, AlertTriangle,
+  TrendingUp, ArrowRight
+} from 'lucide-react'
+import Link from 'next/link'
+import type { Conteudo, ActivityLog, Cliente } from '@/types/database'
+
+export default function DashboardPage() {
+  const { org, member, supabase, loading: authLoading } = useAuth()
+  const [stats, setStats] = useState({ total: 0, pendentes: 0, atrasados: 0, concluidos: 0 })
+  const [proximos, setProximos] = useState<(Conteudo & { empresa: Cliente })[]>([])
+  const [atividades, setAtividades] = useState<ActivityLog[]>([])
+  const [clientes, setClientes] = useState<Cliente[]>([])
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    if (!org) return
+
+    async function load() {
+      const now = new Date()
+      const mesAtual = now.getMonth() + 1
+      const anoAtual = now.getFullYear()
+
+      // Stats
+      const { data: conteudos } = await supabase
+        .from('conteudos')
+        .select('id, status, data_publicacao')
+        .eq('org_id', org!.id)
+
+      const all = conteudos || []
+      const hoje = now.toISOString().split('T')[0]
+
+      setStats({
+        total: all.length,
+        pendentes: all.filter(c => ['rascunho', 'conteudo', 'aprovacao_cliente'].includes(c.status)).length,
+        atrasados: all.filter(c => c.data_publicacao && c.data_publicacao < hoje && !['concluido', 'aprovado_agendado'].includes(c.status)).length,
+        concluidos: all.filter(c => c.status === 'concluido').length,
+      })
+
+      // Próximos conteúdos
+      const { data: prox } = await supabase
+        .from('conteudos')
+        .select('*, empresa:clientes(*)')
+        .eq('org_id', org!.id)
+        .gte('data_publicacao', hoje)
+        .not('status', 'eq', 'concluido')
+        .order('data_publicacao', { ascending: true })
+        .limit(6)
+
+      setProximos((prox as any) || [])
+
+      // Clientes
+      const { data: cls } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('org_id', org!.id)
+        .order('nome')
+
+      setClientes(cls || [])
+
+      // Atividade recente
+      const { data: acts } = await supabase
+        .from('activity_log')
+        .select('*')
+        .eq('org_id', org!.id)
+        .order('created_at', { ascending: false })
+        .limit(10)
+
+      setAtividades(acts || [])
+      setLoading(false)
+    }
+
+    load()
+  }, [org])
+
+  if (authLoading || loading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <Skeleton className="h-8 w-64" />
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1,2,3,4].map(i => <Skeleton key={i} className="h-28 rounded-xl" />)}
+        </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <Skeleton className="h-64 rounded-xl lg:col-span-2" />
+          <Skeleton className="h-64 rounded-xl" />
+        </div>
+      </div>
+    )
+  }
+
+  const STAT_CARDS = [
+    { label: 'Total de conteúdos', value: stats.total, icon: FileText, color: 'bg-blue-500', bg: 'bg-blue-50' },
+    { label: 'Pendentes', value: stats.pendentes, icon: Clock, color: 'bg-amber-500', bg: 'bg-amber-50' },
+    { label: 'Atrasados', value: stats.atrasados, icon: AlertTriangle, color: 'bg-red-500', bg: 'bg-red-50' },
+    { label: 'Concluídos (mês)', value: stats.concluidos, icon: CheckCircle, color: 'bg-green-500', bg: 'bg-green-50' },
+  ]
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900">
+          Olá, {member?.display_name?.split(' ')[0] || 'Bem-vindo'} 👋
+        </h1>
+        <p className="text-sm text-zinc-500 mt-1">
+          Aqui está o resumo da sua organização
+        </p>
+      </div>
+
+      {/* Stat Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        {STAT_CARDS.map((s, i) => (
+          <Card key={i} className="hover:shadow-md transition-shadow">
+            <CardContent className="flex items-center gap-4 py-5">
+              <div className={`p-3 rounded-xl ${s.bg}`}>
+                <s.icon className={`w-6 h-6 text-white ${s.color} rounded-lg p-0.5`} />
+              </div>
+              <div>
+                <div className="text-2xl font-bold text-zinc-900">{s.value}</div>
+                <div className="text-xs text-zinc-500">{s.label}</div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        {/* Próximas entregas */}
+        <Card className="lg:col-span-2">
+          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+            <h3 className="font-semibold text-zinc-900">📅 Próximas entregas</h3>
+            <Link href="/calendario" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              Ver calendário <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <CardContent className="p-0">
+            {proximos.length === 0 ? (
+              <div className="py-12 text-center text-sm text-zinc-400">
+                Nenhuma entrega próxima 🎉
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-50">
+                {proximos.map(c => (
+                  <Link
+                    key={c.id}
+                    href={`/clientes/${c.empresa?.slug}/conteudo/${c.id}`}
+                    className="flex items-center gap-4 px-6 py-3 hover:bg-zinc-50 transition-colors"
+                  >
+                    <div className="text-xl">{TIPO_EMOJI[c.tipo] || '📄'}</div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-medium text-zinc-900 truncate">{c.titulo || 'Sem título'}</div>
+                      <div className="text-xs text-zinc-400">{c.empresa?.nome}</div>
+                    </div>
+                    <div className="text-xs text-zinc-500">{formatDate(c.data_publicacao)}</div>
+                    <Badge variant={
+                      c.status === 'concluido' ? 'success' :
+                      c.status === 'aprovacao_cliente' ? 'warning' :
+                      c.status === 'ajustes' ? 'danger' : 'default'
+                    }>
+                      {STATUS_CONFIG[c.status as keyof typeof STATUS_CONFIG]?.label || c.status}
+                    </Badge>
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Clientes */}
+        <Card>
+          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+            <h3 className="font-semibold text-zinc-900">👥 Clientes</h3>
+            <Link href="/clientes" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
+              Ver todos <ArrowRight className="w-3 h-3" />
+            </Link>
+          </div>
+          <CardContent className="p-0">
+            {clientes.length === 0 ? (
+              <div className="py-12 text-center">
+                <p className="text-sm text-zinc-400 mb-3">Nenhum cliente ainda</p>
+                <Link href="/clientes">
+                  <span className="text-sm text-blue-600 hover:underline">+ Adicionar cliente</span>
+                </Link>
+              </div>
+            ) : (
+              <div className="divide-y divide-zinc-50">
+                {clientes.map(c => (
+                  <Link
+                    key={c.id}
+                    href={`/clientes/${c.slug}`}
+                    className="flex items-center gap-3 px-6 py-3 hover:bg-zinc-50 transition-colors"
+                  >
+                    <Avatar name={c.nome} src={c.logo_url} color={c.cores?.primaria} size="sm" />
+                    <div className="flex-1">
+                      <div className="text-sm font-medium text-zinc-900">{c.nome}</div>
+                    </div>
+                    <ArrowRight className="w-4 h-4 text-zinc-300" />
+                  </Link>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* Atividade recente */}
+      <Card>
+        <div className="px-6 py-4 border-b border-zinc-100">
+          <h3 className="font-semibold text-zinc-900">🕐 Atividade recente</h3>
+        </div>
+        <CardContent className="p-0">
+          {atividades.length === 0 ? (
+            <div className="py-8 text-center text-sm text-zinc-400">Nenhuma atividade ainda</div>
+          ) : (
+            <div className="divide-y divide-zinc-50">
+              {atividades.map(a => (
+                <div key={a.id} className="flex items-center gap-3 px-6 py-3">
+                  <div className="w-2 h-2 rounded-full bg-blue-400" />
+                  <div className="flex-1 text-sm text-zinc-600">
+                    <span className="font-medium">{(a.details as any)?.user_name || 'Alguém'}</span>
+                    {' '}{a.action}{' '}
+                    <span className="text-zinc-400">{a.entity_type}</span>
+                  </div>
+                  <div className="text-xs text-zinc-400">
+                    {new Date(a.created_at).toLocaleString('pt-BR', { 
+                      day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                    })}
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  )
+}

@@ -1,7 +1,7 @@
 import { type NextRequest, NextResponse } from 'next/server'
 
 export async function middleware(request: NextRequest) {
-  // Demo mode: bypass auth checks, allow all routes - updated 2025
+  // Demo mode: bypass ALL auth checks, allow all routes - v2.0
   return NextResponse.next()
 }
 

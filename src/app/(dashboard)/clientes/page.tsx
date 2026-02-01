@@ -113,12 +113,12 @@ export default function ClientesPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-sm:flex-col max-sm:items-start max-sm:gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Clientes</h1>
-          <p className="text-sm text-zinc-500">{clientes.length} clientes cadastrados</p>
+          <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Clientes</h1>
+          <p className="text-sm text-zinc-500 max-sm:text-xs">{clientes.length} clientes cadastrados</p>
         </div>
-        <Button variant="primary" onClick={openNew}>
+        <Button variant="primary" onClick={openNew} className="max-sm:w-full max-sm:justify-center">
           <Plus className="w-4 h-4" /> Novo Cliente
         </Button>
       </div>
@@ -135,7 +135,7 @@ export default function ClientesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {clientes.map(c => (
             <Link key={c.id} href={`/clientes/${c.slug}`}>
               <Card className="hover:shadow-md transition-all hover:border-zinc-200 cursor-pointer group h-full">
@@ -173,18 +173,18 @@ export default function ClientesPage() {
             <Label>Slug</Label>
             <Input value={form.slug} onChange={e => setForm({ ...form, slug: e.target.value })} placeholder="auto-gerado se vazio" />
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <Label>Cor Primária</Label>
               <div className="flex items-center gap-2">
-                <input type="color" value={form.primaria} onChange={e => setForm({ ...form, primaria: e.target.value })} className="w-10 h-10 rounded border cursor-pointer" />
+                <input type="color" value={form.primaria} onChange={e => setForm({ ...form, primaria: e.target.value })} className="w-10 h-10 rounded border cursor-pointer touch-manipulation" />
                 <Input value={form.primaria} onChange={e => setForm({ ...form, primaria: e.target.value })} className="flex-1" />
               </div>
             </div>
             <div>
               <Label>Cor Secundária</Label>
               <div className="flex items-center gap-2">
-                <input type="color" value={form.secundaria} onChange={e => setForm({ ...form, secundaria: e.target.value })} className="w-10 h-10 rounded border cursor-pointer" />
+                <input type="color" value={form.secundaria} onChange={e => setForm({ ...form, secundaria: e.target.value })} className="w-10 h-10 rounded border cursor-pointer touch-manipulation" />
                 <Input value={form.secundaria} onChange={e => setForm({ ...form, secundaria: e.target.value })} className="flex-1" />
               </div>
             </div>

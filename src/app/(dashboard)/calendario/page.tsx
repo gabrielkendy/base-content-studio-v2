@@ -80,25 +80,26 @@ export default function CalendarioPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Calendário Editorial</h1>
-          <p className="text-sm text-zinc-500">{conteudos.length} conteúdos em {MESES[mes]} {ano}</p>
+          <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Calendário Editorial</h1>
+          <p className="text-sm text-zinc-500 max-sm:text-xs">{conteudos.length} conteúdos em {MESES[mes]} {ano}</p>
         </div>
-        <div className="flex items-center gap-3">
-          <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-44">
+        <div className="flex items-center gap-3 max-sm:flex-col max-sm:w-full max-sm:gap-2">
+          <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-44 max-sm:w-full">
             <option value="todos">Todos os clientes</option>
             {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </Select>
           <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" onClick={prevMonth}><ChevronLeft className="w-4 h-4" /></Button>
-            <span className="font-semibold text-sm min-w-[140px] text-center">{MESES[mes]} {ano}</span>
-            <Button size="sm" variant="ghost" onClick={nextMonth}><ChevronRight className="w-4 h-4" /></Button>
+            <Button size="sm" variant="ghost" onClick={prevMonth} className="min-h-[44px] min-w-[44px] max-sm:flex-1"><ChevronLeft className="w-4 h-4" /></Button>
+            <span className="font-semibold text-sm min-w-[140px] text-center max-sm:flex-1 max-sm:px-2">{MESES[mes]} {ano}</span>
+            <Button size="sm" variant="ghost" onClick={nextMonth} className="min-h-[44px] min-w-[44px] max-sm:flex-1"><ChevronRight className="w-4 h-4" /></Button>
           </div>
         </div>
       </div>
 
-      <Card className="overflow-hidden">
+      {/* Desktop Calendar View */}
+      <Card className="overflow-hidden max-md:hidden">
         {/* Weekday headers */}
         <div className="grid grid-cols-7 border-b border-zinc-100">
           {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
@@ -150,6 +151,62 @@ export default function CalendarioPage() {
           ))}
         </div>
       </Card>
+
+      {/* Mobile Agenda View */}
+      <div className="md:hidden space-y-3">
+        {days.filter(d => d.posts.length > 0).length === 0 ? (
+          <Card>
+            <div className="p-6 text-center text-zinc-400">
+              <p>Nenhum conteúdo agendado para este mês</p>
+            </div>
+          </Card>
+        ) : (
+          days.filter(d => d.posts.length > 0).map(({ day, posts }) => (
+            <Card key={day}>
+              <div className="p-4">
+                <div className={`text-sm font-semibold mb-3 flex items-center gap-2 ${
+                  isToday(day) ? 'text-blue-600' : 'text-zinc-700'
+                }`}>
+                  <span className={`px-2 py-1 rounded-full text-xs ${
+                    isToday(day) ? 'bg-blue-100 text-blue-700' : 'bg-zinc-100 text-zinc-600'
+                  }`}>
+                    {day}
+                  </span>
+                  {['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][new Date(ano, mes, day).getDay()]}, {day} de {MESES[mes]}
+                </div>
+                <div className="space-y-2">
+                  {posts.map(p => {
+                    const cfg = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]
+                    return (
+                      <Link
+                        key={p.id}
+                        href={`/clientes/${p.empresa?.slug}/conteudo/${p.id}`}
+                        className="block p-3 rounded-lg border border-zinc-100 hover:border-zinc-200 transition-colors"
+                        style={{ borderLeftColor: cfg?.color || '#ccc', borderLeftWidth: '3px' }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-lg">{TIPO_EMOJI[p.tipo] || '📄'}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-zinc-900 truncate">{p.titulo || 'Sem título'}</div>
+                            <div className="text-xs text-zinc-500 mt-0.5">{p.empresa?.nome}</div>
+                          </div>
+                          <Badge variant={
+                            p.status === 'concluido' ? 'success' :
+                            p.status === 'aprovacao_cliente' ? 'warning' :
+                            p.status === 'ajustes' ? 'danger' : 'default'
+                          } className="text-[10px] px-1.5 py-0.5">
+                            {STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]?.label || p.status}
+                          </Badge>
+                        </div>
+                      </Link>
+                    )
+                  })}
+                </div>
+              </div>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
   )
 }

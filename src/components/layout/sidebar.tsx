@@ -39,7 +39,7 @@ export function Sidebar() {
     <>
       {/* Mobile toggle */}
       <button
-        className="fixed top-4 left-4 z-50 p-2 rounded-lg bg-white shadow-md md:hidden"
+        className="fixed top-4 left-4 z-[60] p-2 rounded-lg bg-white shadow-lg md:hidden touch-manipulation min-h-[44px] min-w-[44px] flex items-center justify-center"
         onClick={() => setMobileOpen(!mobileOpen)}
       >
         <Menu className="w-5 h-5" />
@@ -48,7 +48,7 @@ export function Sidebar() {
       {/* Overlay mobile */}
       {mobileOpen && (
         <div
-          className="fixed inset-0 bg-black/30 z-40 md:hidden"
+          className="fixed inset-0 bg-black/50 z-[45] md:hidden transition-opacity"
           onClick={() => setMobileOpen(false)}
         />
       )}
@@ -56,10 +56,10 @@ export function Sidebar() {
       {/* Sidebar */}
       <aside
         className={cn(
-          'fixed left-0 top-0 h-screen bg-white border-r border-zinc-100 z-40',
-          'flex flex-col transition-all duration-200',
+          'fixed left-0 top-0 h-screen bg-white border-r border-zinc-100 z-[50]',
+          'flex flex-col transition-all duration-300 ease-out',
           collapsed ? 'w-16' : 'w-60',
-          'max-md:translate-x-[-100%] max-md:w-60',
+          'max-md:translate-x-[-100%] max-md:w-60 max-md:shadow-2xl',
           mobileOpen && 'max-md:translate-x-0'
         )}
       >

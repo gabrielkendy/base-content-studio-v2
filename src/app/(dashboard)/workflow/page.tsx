@@ -73,17 +73,17 @@ export default function WorkflowPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Workflow</h1>
-          <p className="text-sm text-zinc-500">{conteudos.length} conteúdos</p>
+          <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
+          <p className="text-sm text-zinc-500 max-sm:text-xs">{conteudos.length} conteúdos</p>
         </div>
-        <div className="flex gap-2">
-          <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-40">
+        <div className="flex gap-2 max-sm:flex-col max-sm:w-full">
+          <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-40 max-sm:w-full">
             <option value="todos">Todos clientes</option>
             {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </Select>
-          <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="w-36">
+          <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="w-36 max-sm:w-full">
             <option value="todos">Todos meses</option>
             {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
           </Select>
@@ -91,13 +91,13 @@ export default function WorkflowPage() {
       </div>
 
       {/* Kanban board */}
-      <div className="flex gap-4 overflow-x-auto pb-4" style={{ minHeight: '70vh' }}>
+      <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory scrollbar-thin max-sm:gap-3" style={{ minHeight: '70vh' }}>
         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
           const items = porStatus[key] || []
           return (
             <div
               key={key}
-              className="min-w-[280px] w-[280px] flex-shrink-0 flex flex-col"
+              className="min-w-[280px] w-[280px] flex-shrink-0 flex flex-col snap-start max-sm:min-w-[240px] max-sm:w-[240px]"
               onDragOver={e => e.preventDefault()}
               onDrop={e => handleDrop(e, key)}
             >
@@ -122,21 +122,21 @@ export default function WorkflowPage() {
                     }}
                     onDragEnd={() => setDragging(null)}
                     className={`bg-white rounded-lg border border-zinc-100 p-3 cursor-grab active:cursor-grabbing
-                      hover:shadow-md transition-all ${dragging === item.id ? 'opacity-50' : ''}`}
+                      hover:shadow-md transition-all touch-manipulation max-sm:p-2 ${dragging === item.id ? 'opacity-50' : ''}`}
                   >
                     <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm font-medium text-zinc-900 line-clamp-2 flex-1">
+                      <span className="text-sm font-medium text-zinc-900 line-clamp-2 flex-1 max-sm:text-xs">
                         {item.titulo || 'Sem título'}
                       </span>
                     </div>
-                    <div className="flex items-center gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 flex-wrap max-sm:gap-1">
                       {item.empresa && (
-                        <Avatar name={item.empresa.nome} color={item.empresa.cores?.primaria} size="sm" className="w-5 h-5 text-[8px]" />
+                        <Avatar name={item.empresa.nome} color={item.empresa.cores?.primaria} size="sm" className="w-5 h-5 text-[8px] max-sm:w-4 max-sm:h-4" />
                       )}
-                      <span className="text-[10px] text-zinc-400">{item.empresa?.nome}</span>
-                      <span className="text-xs ml-auto">{TIPO_EMOJI[item.tipo] || '📄'}</span>
+                      <span className="text-[10px] text-zinc-400 max-sm:text-[9px]">{item.empresa?.nome}</span>
+                      <span className="text-xs ml-auto max-sm:text-[10px]">{TIPO_EMOJI[item.tipo] || '📄'}</span>
                       {item.data_publicacao && (
-                        <span className="text-[10px] text-zinc-400">{formatDate(item.data_publicacao)}</span>
+                        <span className="text-[10px] text-zinc-400 max-sm:text-[9px]">{formatDate(item.data_publicacao)}</span>
                       )}
                     </div>
                   </div>

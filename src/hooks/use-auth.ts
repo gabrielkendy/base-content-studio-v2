@@ -42,7 +42,26 @@ export function useAuth() {
           loading: false,
         })
       } else {
-        setState({ user: null, member: null, org: null, loading: false })
+        // Demo mode: provide mock data when no user is authenticated
+        setState({
+          user: { id: 'demo-user', email: 'kendy@agenciabase.com.br' } as any,
+          member: {
+            id: 'demo-member',
+            user_id: 'demo-user',
+            org_id: 'demo-org',
+            role: 'admin',
+            display_name: 'Kendy',
+            avatar_url: null,
+            status: 'active'
+          } as any,
+          org: {
+            id: 'demo-org',
+            name: 'Agência BASE',
+            slug: 'agencia-base',
+            plan: 'pro'
+          } as any,
+          loading: false,
+        })
       }
     }
 
@@ -64,7 +83,26 @@ export function useAuth() {
           loading: false,
         })
       } else if (event === 'SIGNED_OUT') {
-        setState({ user: null, member: null, org: null, loading: false })
+        // Demo mode: provide mock data instead of null
+        setState({
+          user: { id: 'demo-user', email: 'kendy@agenciabase.com.br' } as any,
+          member: {
+            id: 'demo-member',
+            user_id: 'demo-user',
+            org_id: 'demo-org',
+            role: 'admin',
+            display_name: 'Kendy',
+            avatar_url: null,
+            status: 'active'
+          } as any,
+          org: {
+            id: 'demo-org',
+            name: 'Agência BASE',
+            slug: 'agencia-base',
+            plan: 'pro'
+          } as any,
+          loading: false,
+        })
       }
     })
 
@@ -72,8 +110,13 @@ export function useAuth() {
   }, [])
 
   const signOut = async () => {
-    await supabase.auth.signOut()
-    window.location.href = '/login'
+    // Demo mode: just check if we have a real user before signing out
+    const { data: { user } } = await supabase.auth.getUser()
+    if (user && user.id !== 'demo-user') {
+      await supabase.auth.signOut()
+      window.location.href = '/login'
+    }
+    // In demo mode, signing out is a no-op
   }
 
   return { ...state, signOut, supabase }

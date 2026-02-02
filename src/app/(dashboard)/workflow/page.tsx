@@ -72,7 +72,7 @@ function WorkflowContent() {
         filters: [{ op: 'eq', col: 'org_id', val: org.id }, { op: 'eq', col: 'status', val: 'active' }],
       }),
       db.select('conteudos', {
-        select: '*, empresa:clientes(id, nome, slug, cores), assignee:members!conteudos_assigned_to_fkey(id, display_name, avatar_url, user_id)',
+        select: '*, empresa:clientes(id, nome, slug, cores)',
         filters: [{ op: 'eq', col: 'org_id', val: org.id }],
         order: [{ col: 'ordem', asc: true }],
       }),
@@ -90,8 +90,19 @@ function WorkflowContent() {
     ])
 
     setClientes(clsRes.data || [])
-    setMembers(membersRes.data || [])
-    setConteudos((conteudosRes.data as any) || [])
+    const membersData = membersRes.data || []
+    setMembers(membersData)
+
+    // Map assignee from members by user_id (since assigned_to references auth.users, not members)
+    const rawConteudos = (conteudosRes.data as any) || []
+    const conteudosWithAssignee = rawConteudos.map((c: any) => {
+      if (c.assigned_to) {
+        const assignee = membersData.find((m: any) => m.user_id === c.assigned_to)
+        if (assignee) c.assignee = assignee
+      }
+      return c
+    })
+    setConteudos(conteudosWithAssignee)
     setSolicitacoes((solsRes.data as any) || [])
     setAprovacoes((aprovRes.data as any) || [])
     setLoading(false)

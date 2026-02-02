@@ -237,9 +237,9 @@ export default function AgendarPage() {
     if (!selectedCliente || !org) return
 
     const isVideo = file.type.startsWith('video/')
-    const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024
+    const maxSize = isVideo ? 2 * 1024 * 1024 * 1024 : 50 * 1024 * 1024
     if (file.size > maxSize) {
-      toast(`${file.name} excede o limite de ${isVideo ? '500MB' : '10MB'}`, 'error')
+      toast(`${file.name} excede o limite de ${isVideo ? '2GB' : '50MB'}`, 'error')
       return
     }
 
@@ -764,7 +764,7 @@ export default function AgendarPage() {
                   {uploading ? 'Enviando...' : 'Arraste arquivos ou clique para selecionar'}
                 </p>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Imagens até 10MB • Vídeos até 500MB • JPG, PNG, WebP, GIF, MP4
+                  Imagens até 50MB • Vídeos até 2GB • JPG, PNG, WebP, GIF, MP4
                 </p>
               </div>
 

@@ -31,8 +31,8 @@ async function getUserMembership(userId: string) {
   return data
 }
 
-const MAX_IMAGE_SIZE = 10 * 1024 * 1024  // 10MB
-const MAX_VIDEO_SIZE = 500 * 1024 * 1024  // 500MB
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024   // 50MB
+const MAX_VIDEO_SIZE = 2 * 1024 * 1024 * 1024  // 2GB
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm']
 

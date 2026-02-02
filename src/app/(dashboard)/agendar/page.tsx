@@ -1,19 +1,103 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef, useCallback } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
-import { Input, Label } from '@/components/ui/input'
-import { Modal } from '@/components/ui/modal'
+import { Input, Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import { Calendar, Clock, Send, Image, Hash, CheckSquare, Square, Instagram, Youtube, Facebook, Linkedin, Twitter, Zap, Upload } from 'lucide-react'
 import type { Cliente } from '@/types/database'
 
+// ─── Platform Config ────────────────────────────────────────────────
+interface PlatformConfig {
+  id: string
+  name: string
+  color: string
+  bgColor: string
+  maxChars: number
+  icon: string
+  formats: FormatConfig[]
+}
+
+interface FormatConfig {
+  id: string
+  name: string
+  aspectRatio: string
+  width: number
+  height: number
+}
+
+const PLATFORMS: PlatformConfig[] = [
+  {
+    id: 'instagram', name: 'Instagram', color: '#E4405F', bgColor: '#E4405F15',
+    maxChars: 2200, icon: '📸',
+    formats: [
+      { id: 'feed-1:1', name: 'Feed 1:1', aspectRatio: '1:1', width: 1, height: 1 },
+      { id: 'feed-4:5', name: 'Feed 4:5', aspectRatio: '4:5', width: 4, height: 5 },
+      { id: 'feed-1.91:1', name: 'Feed 1.91:1', aspectRatio: '1.91:1', width: 1.91, height: 1 },
+      { id: 'stories', name: 'Stories', aspectRatio: '9:16', width: 9, height: 16 },
+      { id: 'reels', name: 'Reels', aspectRatio: '9:16', width: 9, height: 16 },
+      { id: 'carrossel', name: 'Carrossel', aspectRatio: '1:1', width: 1, height: 1 },
+    ]
+  },
+  {
+    id: 'tiktok', name: 'TikTok', color: '#010101', bgColor: '#01010115',
+    maxChars: 2200, icon: '🎵',
+    formats: [
+      { id: 'video', name: 'Vídeo', aspectRatio: '9:16', width: 9, height: 16 },
+    ]
+  },
+  {
+    id: 'youtube', name: 'YouTube', color: '#FF0000', bgColor: '#FF000015',
+    maxChars: 5000, icon: '▶️',
+    formats: [
+      { id: 'video', name: 'Vídeo', aspectRatio: '16:9', width: 16, height: 9 },
+      { id: 'shorts', name: 'Shorts', aspectRatio: '9:16', width: 9, height: 16 },
+    ]
+  },
+  {
+    id: 'facebook', name: 'Facebook', color: '#1877F2', bgColor: '#1877F215',
+    maxChars: 63206, icon: '👤',
+    formats: [
+      { id: 'post', name: 'Post', aspectRatio: 'livre', width: 1, height: 1 },
+      { id: 'stories', name: 'Stories', aspectRatio: '9:16', width: 9, height: 16 },
+      { id: 'reels', name: 'Reels', aspectRatio: '9:16', width: 9, height: 16 },
+    ]
+  },
+  {
+    id: 'linkedin', name: 'LinkedIn', color: '#0A66C2', bgColor: '#0A66C215',
+    maxChars: 3000, icon: '💼',
+    formats: [
+      { id: 'post', name: 'Post', aspectRatio: 'livre', width: 1, height: 1 },
+      { id: 'artigo', name: 'Artigo', aspectRatio: 'livre', width: 16, height: 9 },
+    ]
+  },
+  {
+    id: 'twitter', name: 'X / Twitter', color: '#000000', bgColor: '#00000010',
+    maxChars: 280, icon: '𝕏',
+    formats: [
+      { id: 'post', name: 'Post', aspectRatio: 'livre', width: 16, height: 9 },
+    ]
+  },
+  {
+    id: 'threads', name: 'Threads', color: '#000000', bgColor: '#00000010',
+    maxChars: 500, icon: '🧵',
+    formats: [
+      { id: 'post', name: 'Post', aspectRatio: 'livre', width: 1, height: 1 },
+    ]
+  },
+  {
+    id: 'pinterest', name: 'Pinterest', color: '#BD081C', bgColor: '#BD081C15',
+    maxChars: 500, icon: '📌',
+    formats: [
+      { id: 'pin', name: 'Pin', aspectRatio: '2:3', width: 2, height: 3 },
+    ]
+  },
+]
+
+// ─── Types ──────────────────────────────────────────────────────────
 interface SocialAccount {
   id: string
   platform: string
@@ -23,212 +107,319 @@ interface SocialAccount {
   status: string
 }
 
-const SOCIAL_PLATFORMS = [
-  { id: 'instagram', name: 'Instagram', icon: Instagram, color: '#E4405F', maxChars: 2200 },
-  { id: 'tiktok', name: 'TikTok', icon: Zap, color: '#000000', maxChars: 2200 },
-  { id: 'youtube', name: 'YouTube', icon: Youtube, color: '#FF0000', maxChars: 5000 },
-  { id: 'facebook', name: 'Facebook', icon: Facebook, color: '#1877F2', maxChars: 63206 },
-  { id: 'linkedin', name: 'LinkedIn', icon: Linkedin, color: '#0A66C2', maxChars: 3000 },
-  { id: 'twitter', name: 'X / Twitter', icon: Twitter, color: '#1DA1F2', maxChars: 280 },
-  { id: 'threads', name: 'Threads', icon: Hash, color: '#000000', maxChars: 500 },
-  { id: 'pinterest', name: 'Pinterest', icon: Hash, color: '#BD081C', maxChars: 500 }
-]
+interface UploadedMedia {
+  url: string
+  filename: string
+  size: number
+  type: string
+  isVideo: boolean
+  preview?: string
+}
 
+interface PlatformFormat {
+  platform: string
+  format: string
+}
+
+// ─── Helpers ────────────────────────────────────────────────────────
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+}
+
+// ─── Main Component ─────────────────────────────────────────────────
 export default function AgendarPage() {
   const { org } = useAuth()
   const { toast } = useToast()
   
+  // State
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
   const [socialAccounts, setSocialAccounts] = useState<SocialAccount[]>([])
-  const [selectedPlatforms, setSelectedPlatforms] = useState<string[]>([])
+  const [loadingAccounts, setLoadingAccounts] = useState(false)
+  const [selectedProfiles, setSelectedProfiles] = useState<Set<string>>(new Set())
+  const [platformFormats, setPlatformFormats] = useState<Map<string, string>>(new Map())
   const [caption, setCaption] = useState('')
   const [hashtags, setHashtags] = useState('')
+  const [customCaptions, setCustomCaptions] = useState(false)
+  const [captionByPlatform, setCaptionByPlatform] = useState<Record<string, string>>({})
+  const [uploadedMedia, setUploadedMedia] = useState<UploadedMedia[]>([])
+  const [uploading, setUploading] = useState(false)
   const [scheduledDate, setScheduledDate] = useState('')
   const [scheduledTime, setScheduledTime] = useState('')
-  const [mediaFiles, setMediaFiles] = useState<File[]>([])
   const [loading, setLoading] = useState(true)
   const [publishing, setPublishing] = useState(false)
   const [scheduling, setScheduling] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const dropZoneRef = useRef<HTMLDivElement>(null)
+  const [dragOver, setDragOver] = useState(false)
 
+  // ─── Load Clientes ──────────────────────────────────────────────
   useEffect(() => {
     if (!org) return
-    loadClientes()
+    ;(async () => {
+      setLoading(true)
+      const { data } = await db.select('clientes', {
+        filters: [{ op: 'eq', col: 'org_id', val: org.id }],
+        order: [{ col: 'nome', asc: true }],
+      })
+      setClientes(data || [])
+      setLoading(false)
+    })()
   }, [org])
 
+  // ─── Load Social Accounts via API ─────────────────────────────
   useEffect(() => {
-    if (selectedCliente) {
-      loadSocialAccounts(selectedCliente.id)
-    } else {
+    if (!selectedCliente) {
       setSocialAccounts([])
-      setSelectedPlatforms([])
+      setSelectedProfiles(new Set())
+      setPlatformFormats(new Map())
+      return
     }
+    ;(async () => {
+      setLoadingAccounts(true)
+      try {
+        const res = await fetch(`/api/social/status?clienteSlug=${selectedCliente.slug}`)
+        const json = await res.json()
+        if (json.success && json.accounts) {
+          setSocialAccounts(json.accounts)
+        } else {
+          setSocialAccounts([])
+        }
+      } catch {
+        setSocialAccounts([])
+      }
+      setLoadingAccounts(false)
+    })()
   }, [selectedCliente])
 
-  async function loadClientes() {
-    setLoading(true)
-    const { data } = await db.select('clientes', {
-      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
-      order: [{ col: 'nome', asc: true }],
+  // ─── Profile Selection ────────────────────────────────────────
+  const toggleProfile = useCallback((accountId: string, platform: string) => {
+    setSelectedProfiles(prev => {
+      const next = new Set(prev)
+      if (next.has(accountId)) {
+        next.delete(accountId)
+        setPlatformFormats(pf => {
+          const n = new Map(pf)
+          n.delete(platform)
+          return n
+        })
+      } else {
+        next.add(accountId)
+        // Auto-select first format
+        const platformConfig = PLATFORMS.find(p => p.id === platform)
+        if (platformConfig && platformConfig.formats.length > 0) {
+          setPlatformFormats(pf => {
+            const n = new Map(pf)
+            n.set(platform, platformConfig.formats[0].id)
+            return n
+          })
+        }
+      }
+      return next
     })
-    setClientes(data || [])
-    setLoading(false)
+  }, [])
+
+  // ─── Selected platforms helper ────────────────────────────────
+  const selectedPlatforms = socialAccounts.filter(acc => selectedProfiles.has(acc.id))
+  const selectedPlatformIds = [...new Set(selectedPlatforms.map(acc => acc.platform))]
+  const activePlatformConfigs = PLATFORMS.filter(p => selectedPlatformIds.includes(p.id))
+
+  // ─── Character counting ───────────────────────────────────────
+  const minMaxChars = activePlatformConfigs.length > 0
+    ? Math.min(...activePlatformConfigs.map(p => p.maxChars))
+    : null
+
+  // ─── Media Upload ─────────────────────────────────────────────
+  async function uploadFile(file: File) {
+    if (!selectedCliente || !org) return
+
+    const isVideo = file.type.startsWith('video/')
+    const maxSize = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024
+    if (file.size > maxSize) {
+      toast(`${file.name} excede o limite de ${isVideo ? '100MB' : '10MB'}`, 'error')
+      return
+    }
+
+    setUploading(true)
+    try {
+      const formData = new FormData()
+      formData.append('file', file)
+      formData.append('clienteId', selectedCliente.id)
+
+      const res = await fetch('/api/media/upload', {
+        method: 'POST',
+        body: formData,
+      })
+      const json = await res.json()
+
+      if (!res.ok) {
+        throw new Error(json.error || 'Erro no upload')
+      }
+
+      // Create preview for images
+      let preview: string | undefined
+      if (!json.isVideo) {
+        preview = URL.createObjectURL(file)
+      }
+
+      setUploadedMedia(prev => [...prev, { ...json, preview }])
+      toast(`${file.name} enviado com sucesso!`, 'success')
+    } catch (error: any) {
+      toast(error.message || 'Erro ao enviar arquivo', 'error')
+    } finally {
+      setUploading(false)
+    }
   }
 
-  async function loadSocialAccounts(clienteId: string) {
-    const { data } = await db.select('social_accounts', {
-      filters: [
-        { op: 'eq', col: 'cliente_id', val: clienteId },
-        { op: 'eq', col: 'status', val: 'active' },
-      ],
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const files = e.target.files
+    if (!files) return
+    for (const file of Array.from(files)) {
+      await uploadFile(file)
+    }
+    e.target.value = ''
+  }
+
+  function handleDrop(e: React.DragEvent) {
+    e.preventDefault()
+    setDragOver(false)
+    const files = e.dataTransfer.files
+    for (const file of Array.from(files)) {
+      uploadFile(file)
+    }
+  }
+
+  function removeMedia(index: number) {
+    setUploadedMedia(prev => {
+      const next = [...prev]
+      if (next[index].preview) URL.revokeObjectURL(next[index].preview!)
+      next.splice(index, 1)
+      return next
     })
-    setSocialAccounts(data || [])
+  }
+
+  // ─── Get current aspect ratio ─────────────────────────────────
+  function getCurrentAspectRatio(): FormatConfig | null {
+    for (const [platform, formatId] of platformFormats.entries()) {
+      const pConfig = PLATFORMS.find(p => p.id === platform)
+      const fConfig = pConfig?.formats.find(f => f.id === formatId)
+      if (fConfig) return fConfig
+    }
+    return null
+  }
+
+  // ─── Submit Handlers ──────────────────────────────────────────
+  function getPlatformFormatsArray(): PlatformFormat[] {
+    return selectedPlatformIds.map(pid => ({
+      platform: pid,
+      format: platformFormats.get(pid) || 'post',
+    }))
+  }
+
+  function validate(requireDateTime = true): boolean {
+    if (!selectedCliente) { toast('Selecione um cliente', 'error'); return false }
+    if (selectedProfiles.size === 0) { toast('Selecione pelo menos um perfil', 'error'); return false }
+    if (!caption.trim() && !customCaptions) { toast('Digite a legenda do post', 'error'); return false }
+    if (requireDateTime) {
+      if (!scheduledDate || !scheduledTime) { toast('Defina data e hora', 'error'); return false }
+      if (new Date(`${scheduledDate}T${scheduledTime}`) <= new Date()) { toast('Data deve ser no futuro', 'error'); return false }
+    }
+    return true
   }
 
   async function handleSchedulePost() {
-    if (!validateForm()) return
-
+    if (!validate()) return
     setScheduling(true)
     try {
-      const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`).toISOString()
-      const hashtagsArray = hashtags.split(' ').filter(tag => tag.trim().startsWith('#')).map(tag => tag.trim())
-
-      const response = await fetch('/api/posts/schedule', {
+      const res = await fetch('/api/posts/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cliente_id: selectedCliente!.id,
-          platforms: selectedPlatforms,
-          caption,
-          hashtags: hashtagsArray,
-          scheduled_at: scheduledAt,
-          media_urls: [] // TODO: Implement media upload
+          platforms: getPlatformFormatsArray(),
+          caption: caption,
+          hashtags: hashtags.split(/\s+/).filter(t => t.startsWith('#')),
+          media_urls: uploadedMedia.map(m => m.url),
+          scheduled_at: new Date(`${scheduledDate}T${scheduledTime}`).toISOString(),
         })
       })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao agendar post')
-      }
-
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
       toast('Post agendado com sucesso! 📅', 'success')
       resetForm()
     } catch (error: any) {
-      toast(error.message || 'Erro ao agendar post', 'error')
+      toast(error.message || 'Erro ao agendar', 'error')
     } finally {
       setScheduling(false)
     }
   }
 
   async function handlePublishNow() {
-    if (!validateForm(false)) return
-
+    if (!validate(false)) return
     setPublishing(true)
     try {
-      const hashtagsArray = hashtags.split(' ').filter(tag => tag.trim().startsWith('#')).map(tag => tag.trim())
-
-      const response = await fetch('/api/posts/publish-now', {
+      const res = await fetch('/api/posts/publish-now', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cliente_id: selectedCliente!.id,
-          platforms: selectedPlatforms,
-          caption,
-          hashtags: hashtagsArray,
-          media_urls: [] // TODO: Implement media upload
+          platforms: getPlatformFormatsArray(),
+          caption: caption,
+          hashtags: hashtags.split(/\s+/).filter(t => t.startsWith('#')),
+          media_urls: uploadedMedia.map(m => m.url),
         })
       })
-
-      const result = await response.json()
-
-      if (!response.ok) {
-        throw new Error(result.error || 'Erro ao publicar post')
-      }
-
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error)
       toast('Post publicado com sucesso! 🚀', 'success')
       resetForm()
     } catch (error: any) {
-      toast(error.message || 'Erro ao publicar post', 'error')
+      toast(error.message || 'Erro ao publicar', 'error')
     } finally {
       setPublishing(false)
     }
   }
 
-  function validateForm(requireDateTime = true) {
-    if (!selectedCliente) {
-      toast('Selecione um cliente', 'error')
-      return false
-    }
-    if (selectedPlatforms.length === 0) {
-      toast('Selecione pelo menos uma plataforma', 'error')
-      return false
-    }
-    if (!caption.trim()) {
-      toast('Digite a legenda do post', 'error')
-      return false
-    }
-    if (requireDateTime) {
-      if (!scheduledDate || !scheduledTime) {
-        toast('Defina a data e hora do agendamento', 'error')
-        return false
-      }
-      const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}`)
-      if (scheduledAt <= new Date()) {
-        toast('Data e hora devem ser no futuro', 'error')
-        return false
-      }
-    }
-    return true
-  }
-
   function resetForm() {
     setCaption('')
     setHashtags('')
+    setUploadedMedia([])
     setScheduledDate('')
     setScheduledTime('')
-    setMediaFiles([])
-    setSelectedPlatforms([])
+    setSelectedProfiles(new Set())
+    setPlatformFormats(new Map())
+    setCustomCaptions(false)
+    setCaptionByPlatform({})
   }
 
-  function togglePlatform(platformId: string) {
-    setSelectedPlatforms(prev => 
-      prev.includes(platformId) 
-        ? prev.filter(p => p !== platformId)
-        : [...prev, platformId]
-    )
-  }
+  // ─── Aspect Ratio Preview ─────────────────────────────────────
+  const currentFormat = getCurrentAspectRatio()
 
-  function getCharacterCount() {
-    const selectedPlatformConfigs = SOCIAL_PLATFORMS.filter(p => selectedPlatforms.includes(p.id))
-    if (selectedPlatformConfigs.length === 0) return null
-    
-    const minMaxChars = Math.min(...selectedPlatformConfigs.map(p => p.maxChars))
-    return { current: caption.length, max: minMaxChars }
-  }
-
-  const charCount = getCharacterCount()
-  const isOverLimit = charCount && charCount.current > charCount.max
-
+  // ─── Loading State ────────────────────────────────────────────
   if (loading) {
     return (
-      <div className="space-y-6">
-        <Skeleton className="h-8 w-48" />
+      <div className="space-y-6 p-6">
+        <Skeleton className="h-8 w-64" />
         <div className="grid lg:grid-cols-3 gap-6">
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
-          <Skeleton className="h-64" />
+          <Skeleton className="h-96" />
+          <Skeleton className="h-96" />
+          <Skeleton className="h-96" />
         </div>
       </div>
     )
   }
 
+  // ─── Render ───────────────────────────────────────────────────
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
       <div className="flex items-center gap-4">
-        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600">
-          <Calendar className="w-6 h-6 text-white" />
+        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-purple-600 shadow-lg shadow-blue-500/20">
+          <svg className="w-6 h-6 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+          </svg>
         </div>
         <div>
           <h1 className="text-2xl font-bold text-zinc-900">Agendar Post</h1>
@@ -236,157 +427,344 @@ export default function AgendarPage() {
         </div>
       </div>
 
-      {/* Main Interface */}
-      <div className="grid lg:grid-cols-3 gap-6">
-        {/* Left Column - Client & Platform Selection */}
-        <div className="space-y-6">
-          {/* Client Selection */}
+      {/* 3-Column Layout */}
+      <div className="grid lg:grid-cols-[320px_1fr_340px] gap-6">
+
+        {/* ════════ COLUNA 1: Perfis + Formato ════════ */}
+        <div className="space-y-5">
+
+          {/* Cliente Selection */}
           <Card>
-            <CardContent className="p-6">
-              <h2 className="font-semibold text-zinc-900 mb-4 flex items-center gap-2">
-                <Avatar name="Cliente" size="sm" />
-                Selecionar Cliente
+            <CardContent className="p-5">
+              <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                👤 Cliente
               </h2>
-              <div className="space-y-2">
-                {clientes.map(cliente => (
-                  <button
-                    key={cliente.id}
-                    onClick={() => setSelectedCliente(cliente)}
-                    className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
-                      selectedCliente?.id === cliente.id
-                        ? 'border-blue-500 bg-blue-50'
-                        : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
-                    }`}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Avatar 
-                        name={cliente.nome} 
-                        src={cliente.logo_url} 
-                        color={cliente.cores?.primaria || '#6366F1'}
-                        size="sm"
-                      />
-                      <span className="font-medium">{cliente.nome}</span>
-                    </div>
-                  </button>
+              <select
+                value={selectedCliente?.id || ''}
+                onChange={e => {
+                  const c = clientes.find(c => c.id === e.target.value) || null
+                  setSelectedCliente(c)
+                }}
+                className="w-full rounded-lg border border-zinc-200 bg-white px-3 py-2.5 text-sm text-zinc-900 focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition-all"
+              >
+                <option value="">Selecione um cliente...</option>
+                {clientes.map(c => (
+                  <option key={c.id} value={c.id}>{c.nome}</option>
                 ))}
-              </div>
+              </select>
             </CardContent>
           </Card>
 
-          {/* Platform Selection */}
+          {/* Perfis Conectados */}
           {selectedCliente && (
             <Card>
-              <CardContent className="p-6">
-                <h2 className="font-semibold text-zinc-900 mb-4 flex items-center gap-2">
-                  <Hash className="w-5 h-5" />
-                  Redes Sociais
+              <CardContent className="p-5">
+                <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                  🌐 Perfis Conectados
                 </h2>
-                <div className="space-y-3">
-                  {socialAccounts.map(account => {
-                    const platform = SOCIAL_PLATFORMS.find(p => p.id === account.platform)
-                    if (!platform) return null
 
-                    const Icon = platform.icon
-                    const isSelected = selectedPlatforms.includes(account.platform)
+                {loadingAccounts ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => <Skeleton key={i} className="h-14" />)}
+                  </div>
+                ) : socialAccounts.length === 0 ? (
+                  <div className="text-center py-8">
+                    <div className="text-4xl mb-3">🔗</div>
+                    <p className="text-sm text-zinc-500 mb-3">Nenhuma conta conectada</p>
+                    <a
+                      href={`/clientes/${selectedCliente.slug}/redes`}
+                      className="inline-flex items-center gap-1.5 text-sm text-blue-600 hover:text-blue-700 font-medium"
+                    >
+                      Conectar redes →
+                    </a>
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {socialAccounts.map(account => {
+                      const platform = PLATFORMS.find(p => p.id === account.platform)
+                      if (!platform) return null
+                      const isSelected = selectedProfiles.has(account.id)
 
+                      return (
+                        <button
+                          key={account.id}
+                          onClick={() => toggleProfile(account.id, account.platform)}
+                          className={`w-full p-3 rounded-xl border-2 text-left transition-all duration-200 ${
+                            isSelected
+                              ? 'border-blue-500 bg-blue-50 shadow-sm shadow-blue-500/10'
+                              : 'border-zinc-100 hover:border-zinc-200 hover:bg-zinc-50'
+                          }`}
+                        >
+                          <div className="flex items-center gap-3">
+                            {/* Platform Icon */}
+                            <div
+                              className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
+                              style={{ backgroundColor: platform.bgColor }}
+                            >
+                              {account.profile_avatar ? (
+                                <img
+                                  src={account.profile_avatar}
+                                  alt=""
+                                  className="w-8 h-8 rounded-lg object-cover"
+                                />
+                              ) : (
+                                <span>{platform.icon}</span>
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium text-sm text-zinc-900 truncate">
+                                {account.profile_name || platform.name}
+                              </div>
+                              <div className="text-xs text-zinc-400">{platform.name}</div>
+                            </div>
+                            {/* Checkbox */}
+                            <div className={`w-5 h-5 rounded-md border-2 flex items-center justify-center transition-all ${
+                              isSelected
+                                ? 'bg-blue-500 border-blue-500'
+                                : 'border-zinc-300'
+                            }`}>
+                              {isSelected && (
+                                <svg className="w-3 h-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={3}>
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                                </svg>
+                              )}
+                            </div>
+                          </div>
+                        </button>
+                      )
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Formato por Plataforma */}
+          {activePlatformConfigs.length > 0 && (
+            <Card>
+              <CardContent className="p-5">
+                <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                  📐 Formato
+                </h2>
+                <div className="space-y-4">
+                  {activePlatformConfigs.map(platform => {
+                    const selectedFormat = platformFormats.get(platform.id)
                     return (
-                      <button
-                        key={account.id}
-                        onClick={() => togglePlatform(account.platform)}
-                        className={`w-full p-3 rounded-lg border-2 text-left transition-all ${
-                          isSelected
-                            ? 'border-blue-500 bg-blue-50'
-                            : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 rounded-lg" style={{ backgroundColor: `${platform.color}15` }}>
-                            <Icon className="w-4 h-4" style={{ color: platform.color }} />
-                          </div>
-                          <div className="flex-1">
-                            <div className="font-medium">{platform.name}</div>
-                            <div className="text-xs text-zinc-500">{account.profile_name}</div>
-                          </div>
-                          {isSelected ? (
-                            <CheckSquare className="w-5 h-5 text-blue-500" />
-                          ) : (
-                            <Square className="w-5 h-5 text-zinc-400" />
-                          )}
+                      <div key={platform.id}>
+                        <div className="flex items-center gap-2 mb-2">
+                          <span className="text-base">{platform.icon}</span>
+                          <span className="text-xs font-semibold text-zinc-700">{platform.name}</span>
                         </div>
-                      </button>
+                        <div className="grid grid-cols-2 gap-1.5">
+                          {platform.formats.map(format => {
+                            const isActive = selectedFormat === format.id
+                            return (
+                              <button
+                                key={format.id}
+                                onClick={() => setPlatformFormats(prev => {
+                                  const n = new Map(prev)
+                                  n.set(platform.id, format.id)
+                                  return n
+                                })}
+                                className={`px-2.5 py-2 rounded-lg text-xs font-medium transition-all border ${
+                                  isActive
+                                    ? 'bg-blue-500 text-white border-blue-500 shadow-sm'
+                                    : 'bg-zinc-50 text-zinc-600 border-zinc-100 hover:bg-zinc-100'
+                                }`}
+                              >
+                                <div>{format.name}</div>
+                                <div className={`text-[10px] mt-0.5 ${isActive ? 'text-blue-100' : 'text-zinc-400'}`}>
+                                  {format.aspectRatio}
+                                </div>
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
                     )
                   })}
-                  
-                  {socialAccounts.length === 0 && (
-                    <div className="text-center py-6 text-sm text-zinc-500">
-                      <Hash className="w-8 h-8 mx-auto mb-2 text-zinc-300" />
-                      Nenhuma conta conectada
-                    </div>
-                  )}
                 </div>
               </CardContent>
             </Card>
           )}
         </div>
 
-        {/* Center Column - Content Creation */}
-        <div className="space-y-6">
-          {/* Caption */}
+        {/* ════════ COLUNA 2: Legenda + Hashtags + Mídia ════════ */}
+        <div className="space-y-5">
+
+          {/* Legenda */}
           <Card>
-            <CardContent className="p-6">
-              <div className="flex items-center justify-between mb-4">
-                <h2 className="font-semibold text-zinc-900">Legenda</h2>
-                {charCount && (
-                  <span className={`text-xs ${isOverLimit ? 'text-red-500' : 'text-zinc-500'}`}>
-                    {charCount.current}/{charCount.max}
+            <CardContent className="p-5">
+              <div className="flex items-center justify-between mb-3">
+                <h2 className="font-semibold text-zinc-900 text-sm uppercase tracking-wide">
+                  ✏️ Legenda
+                </h2>
+                {minMaxChars && (
+                  <span className={`text-xs font-mono ${
+                    caption.length > minMaxChars ? 'text-red-500 font-bold' : 'text-zinc-400'
+                  }`}>
+                    {caption.length}/{minMaxChars}
                   </span>
                 )}
               </div>
-              <textarea
-                value={caption}
-                onChange={(e) => setCaption(e.target.value)}
-                placeholder="Escreva a legenda do seu post..."
-                className={`w-full h-32 p-3 border border-zinc-200 rounded-lg resize-none focus:border-blue-500 focus:outline-none ${
-                  isOverLimit ? 'border-red-500' : ''
-                }`}
-              />
+
+              {/* Personalizar toggle */}
+              {activePlatformConfigs.length > 1 && (
+                <label className="flex items-center gap-2 mb-3 cursor-pointer group">
+                  <div
+                    className={`relative w-9 h-5 rounded-full transition-colors ${
+                      customCaptions ? 'bg-blue-500' : 'bg-zinc-200'
+                    }`}
+                    onClick={() => setCustomCaptions(!customCaptions)}
+                  >
+                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                      customCaptions ? 'translate-x-4' : ''
+                    }`} />
+                  </div>
+                  <span className="text-xs text-zinc-500 group-hover:text-zinc-700">
+                    Personalizar por rede
+                  </span>
+                </label>
+              )}
+
+              {customCaptions ? (
+                <div className="space-y-3">
+                  {activePlatformConfigs.map(platform => (
+                    <div key={platform.id}>
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm">{platform.icon}</span>
+                          <span className="text-xs font-medium text-zinc-700">{platform.name}</span>
+                        </div>
+                        <span className={`text-[10px] font-mono ${
+                          (captionByPlatform[platform.id] || '').length > platform.maxChars ? 'text-red-500' : 'text-zinc-400'
+                        }`}>
+                          {(captionByPlatform[platform.id] || '').length}/{platform.maxChars}
+                        </span>
+                      </div>
+                      <Textarea
+                        value={captionByPlatform[platform.id] || ''}
+                        onChange={e => setCaptionByPlatform(prev => ({ ...prev, [platform.id]: e.target.value }))}
+                        placeholder={`Legenda para ${platform.name}...`}
+                        className="min-h-[80px]"
+                      />
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <Textarea
+                  value={caption}
+                  onChange={e => setCaption(e.target.value)}
+                  placeholder="Escreva a legenda do seu post..."
+                  className="min-h-[140px]"
+                />
+              )}
+
+              {/* Char limits info */}
+              {activePlatformConfigs.length > 0 && !customCaptions && (
+                <div className="flex flex-wrap gap-2 mt-3">
+                  {activePlatformConfigs.map(p => (
+                    <span
+                      key={p.id}
+                      className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${
+                        caption.length > p.maxChars
+                          ? 'bg-red-50 text-red-600'
+                          : 'bg-zinc-50 text-zinc-400'
+                      }`}
+                    >
+                      {p.icon} {p.maxChars}
+                    </span>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
 
           {/* Hashtags */}
           <Card>
-            <CardContent className="p-6">
-              <h2 className="font-semibold text-zinc-900 mb-4">Hashtags</h2>
+            <CardContent className="p-5">
+              <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                # Hashtags
+              </h2>
               <Input
                 value={hashtags}
-                onChange={(e) => setHashtags(e.target.value)}
-                placeholder="#hashtag1 #hashtag2 #hashtag3"
+                onChange={e => setHashtags(e.target.value)}
+                placeholder="#marketing #socialmedia #conteudo"
               />
-              <p className="text-xs text-zinc-500 mt-2">
-                Separe as hashtags com espaços
-              </p>
+              <p className="text-[11px] text-zinc-400 mt-1.5">Separe as hashtags com espaços</p>
             </CardContent>
           </Card>
 
-          {/* Media Upload */}
+          {/* Upload de Mídia */}
           <Card>
-            <CardContent className="p-6">
-              <h2 className="font-semibold text-zinc-900 mb-4">Mídia</h2>
-              <div className="border-2 border-dashed border-zinc-200 rounded-lg p-6 text-center">
-                <Upload className="w-8 h-8 mx-auto mb-2 text-zinc-400" />
-                <p className="text-sm text-zinc-500 mb-2">Arraste arquivos aqui ou clique para selecionar</p>
-                <p className="text-xs text-zinc-400">JPG, PNG, MP4 até 100MB</p>
-                <Button size="sm" variant="outline" className="mt-3">
-                  Escolher Arquivos
-                </Button>
+            <CardContent className="p-5">
+              <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                📎 Mídia
+              </h2>
+
+              {/* Drop Zone */}
+              <div
+                ref={dropZoneRef}
+                onDragOver={e => { e.preventDefault(); setDragOver(true) }}
+                onDragLeave={() => setDragOver(false)}
+                onDrop={handleDrop}
+                onClick={() => fileInputRef.current?.click()}
+                className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all duration-200 ${
+                  dragOver
+                    ? 'border-blue-400 bg-blue-50 scale-[1.02]'
+                    : 'border-zinc-200 hover:border-zinc-300 hover:bg-zinc-50'
+                }`}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept="image/jpeg,image/png,image/webp,image/gif,video/mp4,video/quicktime,video/webm"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+                <div className={`text-4xl mb-2 transition-transform ${dragOver ? 'scale-110' : ''}`}>
+                  {uploading ? '⏳' : '📂'}
+                </div>
+                <p className="text-sm text-zinc-600 font-medium">
+                  {uploading ? 'Enviando...' : 'Arraste arquivos ou clique para selecionar'}
+                </p>
+                <p className="text-xs text-zinc-400 mt-1">
+                  Imagens até 10MB • Vídeos até 100MB • JPG, PNG, WebP, GIF, MP4
+                </p>
               </div>
-              {mediaFiles.length > 0 && (
+
+              {/* Uploaded Files */}
+              {uploadedMedia.length > 0 && (
                 <div className="mt-4 space-y-2">
-                  {mediaFiles.map((file, index) => (
-                    <div key={index} className="flex items-center gap-2 p-2 bg-zinc-50 rounded">
-                      <Image className="w-4 h-4" />
-                      <span className="text-sm flex-1">{file.name}</span>
-                      <button className="text-red-500 text-xs">Remover</button>
+                  {uploadedMedia.map((media, index) => (
+                    <div key={index} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
+                      {/* Thumbnail */}
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 flex-shrink-0">
+                        {media.isVideo ? (
+                          <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-white text-lg">
+                            🎬
+                          </div>
+                        ) : media.preview ? (
+                          <img src={media.preview} alt="" className="w-full h-full object-cover" />
+                        ) : (
+                          <div className="w-full h-full flex items-center justify-center text-lg">🖼️</div>
+                        )}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-zinc-700 truncate">{media.filename}</p>
+                        <p className="text-xs text-zinc-400">
+                          {formatFileSize(media.size)} • {media.isVideo ? 'Vídeo' : 'Imagem'}
+                        </p>
+                      </div>
+                      <button
+                        onClick={() => removeMedia(index)}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"
+                      >
+                        <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                        </svg>
+                      </button>
                     </div>
                   ))}
                 </div>
@@ -395,66 +773,126 @@ export default function AgendarPage() {
           </Card>
         </div>
 
-        {/* Right Column - Preview & Scheduling */}
-        <div className="space-y-6">
-          {/* Platform Previews */}
-          {selectedPlatforms.length > 0 && (
-            <Card>
-              <CardContent className="p-6">
-                <h2 className="font-semibold text-zinc-900 mb-4">Preview</h2>
-                <div className="space-y-4">
-                  {selectedPlatforms.map(platformId => {
-                    const platform = SOCIAL_PLATFORMS.find(p => p.id === platformId)
-                    const account = socialAccounts.find(acc => acc.platform === platformId)
-                    if (!platform || !account) return null
+        {/* ════════ COLUNA 3: Preview + Agendamento ════════ */}
+        <div className="space-y-5">
 
-                    const Icon = platform.icon
+          {/* Preview */}
+          <Card>
+            <CardContent className="p-5">
+              <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                👁️ Preview
+              </h2>
+
+              {selectedPlatforms.length === 0 ? (
+                <div className="text-center py-10">
+                  <div className="text-3xl mb-2 opacity-30">📱</div>
+                  <p className="text-xs text-zinc-400">Selecione perfis para ver o preview</p>
+                </div>
+              ) : (
+                <div className="space-y-4">
+                  {selectedPlatforms.map(account => {
+                    const platform = PLATFORMS.find(p => p.id === account.platform)
+                    if (!platform) return null
+                    const formatId = platformFormats.get(platform.id)
+                    const format = platform.formats.find(f => f.id === formatId)
 
                     return (
-                      <div key={platformId} className="p-3 border border-zinc-200 rounded-lg">
-                        <div className="flex items-center gap-2 mb-2">
-                          <Icon className="w-4 h-4" style={{ color: platform.color }} />
-                          <span className="text-sm font-medium">{platform.name}</span>
+                      <div key={account.id} className="rounded-xl border border-zinc-100 overflow-hidden">
+                        {/* Platform Header */}
+                        <div className="flex items-center gap-2 p-3 bg-zinc-50 border-b border-zinc-100">
+                          <div
+                            className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
+                            style={{ backgroundColor: platform.bgColor }}
+                          >
+                            {account.profile_avatar ? (
+                              <img src={account.profile_avatar} alt="" className="w-6 h-6 rounded-md object-cover" />
+                            ) : (
+                              platform.icon
+                            )}
+                          </div>
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-800">
+                              {account.profile_name || platform.name}
+                            </div>
+                            <div className="text-[10px] text-zinc-400">
+                              {format ? `${format.name} • ${format.aspectRatio}` : platform.name}
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-sm text-zinc-700 whitespace-pre-wrap">
-                          {caption || 'Sua legenda aparecerá aqui...'}
-                        </div>
-                        {hashtags && (
-                          <div className="text-sm text-blue-600 mt-2">
-                            {hashtags}
+
+                        {/* Media Preview */}
+                        {uploadedMedia.length > 0 && format && (
+                          <div
+                            className="relative bg-zinc-900 overflow-hidden"
+                            style={{
+                              aspectRatio: `${format.width}/${format.height}`,
+                              maxHeight: '280px',
+                            }}
+                          >
+                            {uploadedMedia[0].isVideo ? (
+                              <video
+                                src={uploadedMedia[0].url}
+                                className="w-full h-full object-cover"
+                                muted
+                              />
+                            ) : (
+                              <img
+                                src={uploadedMedia[0].preview || uploadedMedia[0].url}
+                                alt=""
+                                className="w-full h-full object-cover"
+                              />
+                            )}
+                            {uploadedMedia.length > 1 && (
+                              <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
+                                +{uploadedMedia.length - 1}
+                              </div>
+                            )}
                           </div>
                         )}
+
+                        {/* Caption Preview */}
+                        <div className="p-3">
+                          <p className="text-xs text-zinc-700 whitespace-pre-wrap line-clamp-4">
+                            {(customCaptions
+                              ? captionByPlatform[platform.id]
+                              : caption) || (
+                              <span className="text-zinc-300 italic">Sua legenda aparecerá aqui...</span>
+                            )}
+                          </p>
+                          {hashtags && (
+                            <p className="text-xs text-blue-500 mt-1">{hashtags}</p>
+                          )}
+                        </div>
                       </div>
                     )
                   })}
                 </div>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
 
-          {/* Scheduling */}
+          {/* Agendamento */}
           <Card>
-            <CardContent className="p-6">
-              <h2 className="font-semibold text-zinc-900 mb-4 flex items-center gap-2">
-                <Clock className="w-5 h-5" />
-                Agendamento
+            <CardContent className="p-5">
+              <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
+                ⏰ Agendamento
               </h2>
-              <div className="space-y-4">
+              <div className="space-y-3">
                 <div>
-                  <Label>Data</Label>
+                  <Label className="text-xs">Data</Label>
                   <Input
                     type="date"
                     value={scheduledDate}
-                    onChange={(e) => setScheduledDate(e.target.value)}
+                    onChange={e => setScheduledDate(e.target.value)}
                     min={new Date().toISOString().split('T')[0]}
                   />
                 </div>
                 <div>
-                  <Label>Hora</Label>
+                  <Label className="text-xs">Hora</Label>
                   <Input
                     type="time"
                     value={scheduledTime}
-                    onChange={(e) => setScheduledTime(e.target.value)}
+                    onChange={e => setScheduledTime(e.target.value)}
                   />
                 </div>
               </div>
@@ -462,24 +900,75 @@ export default function AgendarPage() {
           </Card>
 
           {/* Action Buttons */}
-          <div className="space-y-3">
+          <div className="space-y-2.5">
             <Button
               onClick={handleSchedulePost}
-              disabled={scheduling || !selectedCliente || selectedPlatforms.length === 0}
-              className="w-full"
+              disabled={scheduling || selectedProfiles.size === 0}
+              className="w-full bg-gradient-to-r from-blue-600 to-blue-500 hover:from-blue-700 hover:to-blue-600 text-white shadow-lg shadow-blue-500/20 py-3"
+              size="lg"
             >
-              {scheduling ? 'Agendando...' : '📅 Agendar Post'}
+              {scheduling ? (
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Agendando...
+                </span>
+              ) : '📅 Agendar Post'}
             </Button>
             
             <Button
               onClick={handlePublishNow}
-              disabled={publishing || !selectedCliente || selectedPlatforms.length === 0}
+              disabled={publishing || selectedProfiles.size === 0}
               variant="outline"
-              className="w-full"
+              className="w-full py-3"
+              size="lg"
             >
-              {publishing ? 'Publicando...' : '🚀 Publicar Agora'}
+              {publishing ? (
+                <span className="flex items-center gap-2">
+                  <svg className="w-4 h-4 animate-spin" viewBox="0 0 24 24" fill="none">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                  Publicando...
+                </span>
+              ) : '🚀 Publicar Agora'}
             </Button>
           </div>
+
+          {/* Resumo */}
+          {selectedProfiles.size > 0 && (
+            <div className="rounded-xl bg-zinc-50 border border-zinc-100 p-4">
+              <h3 className="text-xs font-semibold text-zinc-500 uppercase mb-2">Resumo</h3>
+              <div className="space-y-1.5 text-xs text-zinc-600">
+                <div className="flex justify-between">
+                  <span>Perfis</span>
+                  <span className="font-medium">{selectedProfiles.size}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Mídias</span>
+                  <span className="font-medium">{uploadedMedia.length}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span>Caracteres</span>
+                  <span className={`font-medium ${minMaxChars && caption.length > minMaxChars ? 'text-red-500' : ''}`}>
+                    {caption.length}
+                  </span>
+                </div>
+                {scheduledDate && scheduledTime && (
+                  <div className="flex justify-between">
+                    <span>Agendado para</span>
+                    <span className="font-medium">
+                      {new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString('pt-BR', {
+                        day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit'
+                      })}
+                    </span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -6,14 +6,13 @@ import { cookies } from 'next/headers'
 interface SchedulePostRequest {
   cliente_id: string
   conteudo_id?: string
-  platforms: string[]
+  platforms: Array<{ platform: string; format: string }> | string[]
   caption: string
   media_urls?: string[]
   hashtags?: string[]
-  scheduled_at: string // ISO date string
+  scheduled_at: string
 }
 
-// Get authenticated user
 async function getAuthUser() {
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -30,7 +29,6 @@ async function getAuthUser() {
   return user
 }
 
-// Get user's membership (org_id + role)
 async function getUserMembership(userId: string) {
   const admin = createServiceClient()
   const { data } = await admin
@@ -66,14 +64,15 @@ export async function POST(request: NextRequest) {
       scheduled_at 
     } = body
 
-    // Validate required fields
+    // Support both old format (string[]) and new format (object[])
+    const platformStrings = platforms.map(p => typeof p === 'string' ? p : p.platform)
+
     if (!cliente_id || !platforms || platforms.length === 0 || !scheduled_at || !caption) {
       return NextResponse.json({ 
         error: 'Missing required fields: cliente_id, platforms, caption, scheduled_at' 
       }, { status: 400 })
     }
 
-    // Validate scheduled_at is in the future
     const scheduledDate = new Date(scheduled_at)
     if (scheduledDate <= new Date()) {
       return NextResponse.json({ 
@@ -83,7 +82,7 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceClient()
 
-    // Verify client exists and user has access
+    // Verify client
     const { data: cliente, error: clienteError } = await admin
       .from('clientes')
       .select('id, nome, org_id')
@@ -95,16 +94,16 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Verify platforms are connected for this client
+    // Verify platforms connected
     const { data: connectedAccounts } = await admin
       .from('social_accounts')
       .select('platform')
       .eq('cliente_id', cliente_id)
       .eq('status', 'active')
-      .in('platform', platforms)
+      .in('platform', platformStrings)
 
     const connectedPlatforms = (connectedAccounts || []).map(acc => acc.platform)
-    const missingPlatforms = platforms.filter(p => !connectedPlatforms.includes(p))
+    const missingPlatforms = platformStrings.filter(p => !connectedPlatforms.includes(p))
     
     if (missingPlatforms.length > 0) {
       return NextResponse.json({ 
@@ -112,7 +111,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    // Create scheduled post
+    // Create scheduled post with full platform+format info
     const { data: scheduledPost, error: insertError } = await admin
       .from('scheduled_posts')
       .insert({
@@ -135,27 +134,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao agendar post' }, { status: 500 })
     }
 
-    // TODO: When Upload-Post API key is available, schedule the post there
-    // For now, just mock the response
-    const mockUploadPostResponse = {
-      id: `up_${scheduledPost.id}`,
-      status: 'scheduled',
-      scheduled_at: scheduled_at,
-      platforms: platforms
-    }
-
-    // Update with Upload-Post response
-    await admin
-      .from('scheduled_posts')
-      .update({
-        upload_post_id: mockUploadPostResponse.id,
-        upload_post_response: mockUploadPostResponse
-      })
-      .eq('id', scheduledPost.id)
-
     return NextResponse.json({ 
-      data: scheduledPost, 
-      upload_post_response: mockUploadPostResponse 
+      data: scheduledPost,
+      message: 'Post agendado com sucesso!'
     })
   } catch (error: any) {
     console.error('Schedule post error:', error)

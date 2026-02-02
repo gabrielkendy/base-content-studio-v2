@@ -1,15 +1,18 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { Select, Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate } from '@/lib/utils'
-import { Search } from 'lucide-react'
+import { Search, X, Filter, Inbox } from 'lucide-react'
+import Link from 'next/link'
 import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/types/database'
 
 type KanbanItem = {
@@ -23,11 +26,15 @@ type KanbanItem = {
   isSolicitacao?: boolean
   solicitacaoData?: Solicitacao
   ajusteComentario?: string | null
+  prioridade?: string
+  fromSolicitacao?: boolean
 }
 
-export default function WorkflowPage() {
+function WorkflowContent() {
   const { org } = useAuth()
   const { toast } = useToast()
+  const searchParams = useSearchParams()
+  const router = useRouter()
   const [conteudos, setConteudos] = useState<(Conteudo & { empresa?: Cliente; assignee?: Member })[]>([])
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [aprovacoes, setAprovacoes] = useState<AprovacaoLink[]>([])
@@ -37,11 +44,16 @@ export default function WorkflowPage() {
   const [dragging, setDragging] = useState<string | null>(null)
 
   // Filtros
-  const [filtroCliente, setFiltroCliente] = useState('todos')
+  const [filtroCliente, setFiltroCliente] = useState(searchParams.get('cliente') || 'todos')
   const [filtroMes, setFiltroMes] = useState('todos')
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [busca, setBusca] = useState('')
+
+  // Nome do cliente filtrado
+  const clienteFiltrado = filtroCliente !== 'todos'
+    ? clientes.find(c => c.id === filtroCliente)
+    : null
 
   useEffect(() => {
     if (!org) return
@@ -88,8 +100,11 @@ export default function WorkflowPage() {
   // Build kanban items
   const kanbanItems: KanbanItem[] = []
 
-  // Add solicitações as nova_solicitacao items
+  // Add solicitações as nova_solicitacao items (only pending ones)
+  const pendingSolStatuses = ['nova', 'em_analise', 'aprovada']
   solicitacoes.forEach(sol => {
+    if (!pendingSolStatuses.includes(sol.status)) return
+
     // Apply filters
     if (filtroCliente !== 'todos' && sol.cliente_id !== filtroCliente) return
     if (busca && !sol.titulo.toLowerCase().includes(busca.toLowerCase())) return
@@ -102,19 +117,18 @@ export default function WorkflowPage() {
       empresa: sol.cliente as Cliente | undefined,
       isSolicitacao: true,
       solicitacaoData: sol,
+      prioridade: sol.prioridade,
     })
   })
 
   // Add conteúdos
   conteudos.forEach(c => {
-    // Apply filters
     if (filtroCliente !== 'todos' && c.empresa_id !== filtroCliente) return
     if (filtroMes !== 'todos' && c.mes !== parseInt(filtroMes)) return
     if (filtroResponsavel !== 'todos' && c.assigned_to !== filtroResponsavel) return
     if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) return
     if (busca && !(c.titulo || '').toLowerCase().includes(busca.toLowerCase())) return
 
-    // Find ajuste comment
     const ajusteLink = c.status === 'ajuste'
       ? aprovacoes.find(a => a.conteudo_id === c.id && a.status === 'ajuste')
       : null
@@ -128,6 +142,7 @@ export default function WorkflowPage() {
       assignee: c.assignee,
       data_publicacao: c.data_publicacao,
       ajusteComentario: ajusteLink?.comentario_cliente,
+      fromSolicitacao: !!(c as any).solicitacao_id,
     })
   })
 
@@ -146,22 +161,29 @@ export default function WorkflowPage() {
     const rawId = e.dataTransfer.getData('text/plain')
     if (!rawId) { setDragging(null); return }
 
-    // Solicitação being dropped
+    // Solicitação being dropped — aceitar e mover pra Produção
     if (rawId.startsWith('sol_')) {
-      if (newStatus === 'nova_solicitacao') { setDragging(null); return } // same column
+      if (newStatus === 'nova_solicitacao') { setDragging(null); return }
       const solId = rawId.replace('sol_', '')
-      if (newStatus !== 'rascunho') {
-        toast('Arraste solicitações apenas para "Rascunho"', 'error')
-        setDragging(null)
-        return
-      }
+
+      // Aceitar solicitação → cria conteúdo em "producao"
       try {
         const res = await fetch(`/api/solicitacoes/${solId}/aceitar`, { method: 'POST' })
         const json = await res.json()
         if (!res.ok) {
           toast(`Erro: ${json.error}`, 'error')
         } else {
-          toast('✅ Solicitação aceita → Conteúdo criado!', 'success')
+          toast('✅ Solicitação aceita → Conteúdo em Produção!', 'success')
+
+          // Se o drop foi em outra coluna que não producao, mover o conteúdo criado
+          if (newStatus !== 'producao' && newStatus !== 'nova_solicitacao' && json.data?.id) {
+            await db.update('conteudos', {
+              status: newStatus,
+              updated_at: new Date().toISOString()
+            }, { id: json.data.id })
+            const cfg = STATUS_CONFIG[newStatus]
+            toast(`Movido para ${cfg?.label || newStatus}`, 'success')
+          }
         }
       } catch {
         toast('Erro ao aceitar solicitação', 'error')
@@ -173,7 +195,7 @@ export default function WorkflowPage() {
 
     // Regular conteúdo move
     const currentItem = kanbanItems.find(i => i.id === rawId)
-    if (currentItem && currentItem.status === newStatus) { setDragging(null); return } // same column
+    if (currentItem && currentItem.status === newStatus) { setDragging(null); return }
 
     try {
       await db.update('conteudos', {
@@ -190,6 +212,18 @@ export default function WorkflowPage() {
     await loadData()
   }
 
+  function clearFilters() {
+    setFiltroCliente('todos')
+    setFiltroMes('todos')
+    setFiltroResponsavel('todos')
+    setFiltroTipo('todos')
+    setBusca('')
+    // Remove URL params
+    router.replace('/workflow')
+  }
+
+  const hasFilters = filtroCliente !== 'todos' || filtroMes !== 'todos' || filtroResponsavel !== 'todos' || filtroTipo !== 'todos' || busca !== ''
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -201,13 +235,41 @@ export default function WorkflowPage() {
   }
 
   const totalItems = kanbanItems.length
+  const totalSolicitacoes = solicitacoes.filter(s => pendingSolStatuses.includes(s.status)).length
 
   return (
     <div className="space-y-4 animate-fade-in">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
-        <p className="text-sm text-zinc-500 max-sm:text-xs">{totalItems} itens no board</p>
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <div className="flex items-center gap-3">
+            <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
+            {clienteFiltrado && (
+              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
+                <Avatar
+                  name={clienteFiltrado.nome}
+                  color={clienteFiltrado.cores?.primaria}
+                  size="sm"
+                  className="w-5 h-5 text-[8px]"
+                />
+                <span className="text-sm font-medium text-blue-700">{clienteFiltrado.nome}</span>
+                <button onClick={() => { setFiltroCliente('todos'); router.replace('/workflow') }}
+                  className="text-blue-400 hover:text-blue-600">
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+          <p className="text-sm text-zinc-500 max-sm:text-xs">
+            {totalItems} itens no board
+            {totalSolicitacoes > 0 && ` • ${totalSolicitacoes} solicitações pendentes`}
+          </p>
+        </div>
+        {hasFilters && (
+          <Button size="sm" variant="ghost" onClick={clearFilters}>
+            <X className="w-4 h-4" /> Limpar filtros
+          </Button>
+        )}
       </div>
 
       {/* Filtros */}
@@ -281,11 +343,19 @@ export default function WorkflowPage() {
                     isDragging={dragging === item.id}
                     onDragStart={() => setDragging(item.id)}
                     onDragEnd={() => setDragging(null)}
+                    clienteSlug={(item.empresa as any)?.slug}
                   />
                 ))}
                 {items.length === 0 && (
                   <div className="text-center py-8 text-xs text-zinc-300">
-                    Arraste cards aqui
+                    {key === 'nova_solicitacao' ? (
+                      <div className="flex flex-col items-center gap-1">
+                        <Inbox className="w-5 h-5" />
+                        <span>Sem solicitações</span>
+                      </div>
+                    ) : (
+                      'Arraste cards aqui'
+                    )}
                   </div>
                 )}
               </div>
@@ -302,16 +372,26 @@ function KanbanCard({
   isDragging,
   onDragStart,
   onDragEnd,
+  clienteSlug,
 }: {
   item: KanbanItem
   isDragging: boolean
   onDragStart: () => void
   onDragEnd: () => void
+  clienteSlug?: string
 }) {
   const isSol = item.isSolicitacao
   const [showTooltip, setShowTooltip] = useState(false)
 
-  return (
+  const PRIORIDADE_STYLE: Record<string, string> = {
+    urgente: 'bg-red-50 text-red-600 border-red-200',
+    alta: 'bg-orange-50 text-orange-600 border-orange-200',
+    normal: 'bg-blue-50 text-blue-600 border-blue-200',
+    baixa: 'bg-zinc-50 text-zinc-500 border-zinc-200',
+  }
+
+  // Link to content detail if it's a regular conteúdo
+  const cardContent = (
     <div
       draggable
       onDragStart={e => {
@@ -329,11 +409,25 @@ function KanbanCard({
         }
       `}
     >
-      {/* Solicitação badge */}
+      {/* Solicitação badge + prioridade */}
       {isSol && (
-        <div className="flex items-center gap-1 mb-1.5">
+        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
           <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">
             📩 Solicitação
+          </span>
+          {item.prioridade && item.prioridade !== 'normal' && (
+            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${PRIORIDADE_STYLE[item.prioridade] || ''}`}>
+              {item.prioridade === 'urgente' ? '🔴' : item.prioridade === 'alta' ? '🟠' : '⚪'} {item.prioridade}
+            </span>
+          )}
+        </div>
+      )}
+
+      {/* From solicitação badge */}
+      {!isSol && item.fromSolicitacao && (
+        <div className="flex items-center gap-1 mb-1.5">
+          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
+            📋 Demanda do cliente
           </span>
         </div>
       )}
@@ -392,5 +486,31 @@ function KanbanCard({
         )}
       </div>
     </div>
+  )
+
+  // Wrap conteúdos (not solicitações) in Link
+  if (!isSol && clienteSlug) {
+    return (
+      <Link href={`/clientes/${clienteSlug}/conteudo/${item.id}`}>
+        {cardContent}
+      </Link>
+    )
+  }
+
+  return cardContent
+}
+
+// Wrap in Suspense for useSearchParams
+export default function WorkflowPage() {
+  return (
+    <Suspense fallback={
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-[70vh] rounded-xl" />
+      </div>
+    }>
+      <WorkflowContent />
+    </Suspense>
   )
 }

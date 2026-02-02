@@ -2,8 +2,6 @@
 
 import { Suspense, useState, useEffect } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
-import { db } from '@/lib/api'
-import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
@@ -12,7 +10,6 @@ function InviteContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const token = searchParams.get('token')
-  const supabase = createClient()
 
   const [loading, setLoading] = useState(true)
   const [invite, setInvite] = useState<any>(null)
@@ -20,6 +17,7 @@ function InviteContent() {
   const [submitting, setSubmitting] = useState(false)
   const [error, setError] = useState('')
   const [success, setSuccess] = useState(false)
+  const [successMessage, setSuccessMessage] = useState('')
 
   const [form, setForm] = useState({
     nome: '',
@@ -38,27 +36,19 @@ function InviteContent() {
 
   const loadInvite = async () => {
     try {
-      const { data, error: err } = await db.select('invites', {
-        filters: [
-          { op: 'eq', col: 'token', val: token },
-          { op: 'is', col: 'accepted_at', val: null },
-        ],
-        single: true,
+      const res = await fetch('/api/invite/validate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token }),
       })
 
-      if (err || !data) {
+      if (!res.ok) {
         setExpired(true)
         setLoading(false)
         return
       }
 
-      // Check expiration
-      if (data.expires_at && new Date(data.expires_at) < new Date()) {
-        setExpired(true)
-        setLoading(false)
-        return
-      }
-
+      const data = await res.json()
       setInvite(data)
       setForm(prev => ({ ...prev, email: data.email || '' }))
     } catch {
@@ -70,50 +60,43 @@ function InviteContent() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    if (!invite) return
+    if (!invite || !token) return
 
     setSubmitting(true)
     setError('')
 
     try {
-      // 1. Create user via Supabase Auth
-      const { data: authData, error: authError } = await supabase.auth.signUp({
-        email: form.email,
-        password: form.senha,
-        options: {
-          data: {
-            display_name: form.nome,
-          },
-        },
+      const res = await fetch('/api/invite/accept', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          token,
+          nome: form.nome,
+          email: form.email,
+          senha: form.senha,
+        }),
       })
 
-      if (authError) throw new Error(authError.message)
-      if (!authData.user) throw new Error('Falha ao criar usuário')
+      const data = await res.json()
 
-      // 2. Mark invite as accepted
-      const { error: inviteErr } = await db.update('invites', {
-        accepted_at: new Date().toISOString(),
-      }, { id: invite.id })
-
-      if (inviteErr) throw new Error(inviteErr)
-
-      // 3. Create member in org
-      const { error: memberErr } = await db.insert('members', {
-        user_id: authData.user.id,
-        org_id: invite.org_id,
-        role: invite.role || 'designer',
-        display_name: form.nome,
-        status: 'active',
-      })
-
-      if (memberErr) throw new Error(memberErr)
+      if (!res.ok) {
+        throw new Error(data.error || 'Erro ao criar conta')
+      }
 
       setSuccess(true)
+      setSuccessMessage(data.message || 'Conta criada com sucesso!')
     } catch (err: any) {
       setError(err.message || 'Erro ao criar conta')
     } finally {
       setSubmitting(false)
     }
+  }
+
+  const ROLE_LABELS: Record<string, string> = {
+    admin: 'Administrador',
+    gestor: 'Gestor',
+    designer: 'Designer',
+    cliente: 'Cliente',
   }
 
   if (loading) {
@@ -134,6 +117,9 @@ function InviteContent() {
             Este link de convite pode ter expirado, já sido usado ou ser inválido.
             Entre em contato com quem te convidou para solicitar um novo link.
           </p>
+          <Button onClick={() => router.push('/login')} className="bg-blue-600 hover:bg-blue-700 mt-4">
+            Ir para Login
+          </Button>
         </div>
       </div>
     )
@@ -144,12 +130,10 @@ function InviteContent() {
       <div className="min-h-screen flex items-center justify-center bg-gray-50 p-4">
         <div className="text-center space-y-6">
           <div className="text-6xl">🎉</div>
-          <h2 className="text-2xl font-bold text-gray-900">Conta criada com sucesso!</h2>
-          <p className="text-gray-600">
-            Verifique seu email para confirmar sua conta, depois faça login.
-          </p>
+          <h2 className="text-2xl font-bold text-gray-900">Bem-vindo à equipe!</h2>
+          <p className="text-gray-600">{successMessage}</p>
           <Button onClick={() => router.push('/login')} className="bg-blue-600 hover:bg-blue-700">
-            Ir para Login
+            Fazer Login
           </Button>
         </div>
       </div>
@@ -163,8 +147,8 @@ function InviteContent() {
           <div className="text-5xl mb-4">📩</div>
           <h1 className="text-2xl font-bold text-gray-900 mb-2">Aceitar Convite</h1>
           <p className="text-gray-600">
-            Você foi convidado como <strong>{invite?.role || 'membro'}</strong>.
-            Crie sua conta para acessar o workspace.
+            Você foi convidado para <strong>{invite?.org_name}</strong> como{' '}
+            <strong>{ROLE_LABELS[invite?.role] || invite?.role}</strong>.
           </p>
         </div>
 
@@ -194,12 +178,12 @@ function InviteContent() {
               onChange={(e) => setForm(prev => ({ ...prev, email: e.target.value }))}
               placeholder="seu@email.com"
               readOnly={!!invite?.email}
-              className={invite?.email ? 'bg-gray-50' : ''}
+              className={invite?.email ? 'bg-gray-50 cursor-not-allowed' : ''}
             />
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Senha</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Criar senha</label>
             <Input
               required
               type="password"
@@ -215,7 +199,7 @@ function InviteContent() {
             disabled={submitting}
             className="w-full bg-blue-600 hover:bg-blue-700"
           >
-            {submitting ? 'Criando conta...' : 'Criar Conta e Aceitar'}
+            {submitting ? 'Criando conta...' : '✅ Criar Conta e Entrar na Equipe'}
           </Button>
         </form>
 

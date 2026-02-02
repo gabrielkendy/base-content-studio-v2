@@ -20,10 +20,24 @@ import {
   CheckCircle,
   Clock,
   Hash,
+  Upload,
+  X,
+  Loader2,
+  Plus,
+  Download,
+  Film,
+  Trash2,
 } from 'lucide-react'
 import { STATUS_CONFIG, TIPO_EMOJI, CANAIS, formatDateFull } from '@/lib/utils'
 import type { Conteudo, Cliente } from '@/types/database'
 import Link from 'next/link'
+
+function formatFileSize(bytes: number) {
+  if (bytes < 1024) return bytes + ' B'
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+  if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+  return (bytes / (1024 * 1024 * 1024)).toFixed(2) + ' GB'
+}
 
 export default function ConteudoDetailPage() {
   const params = useParams()
@@ -36,6 +50,11 @@ export default function ConteudoDetailPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
   const [linkCopied, setLinkCopied] = useState(false)
+
+  // Upload state
+  const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
+  const fileInputRef = useState<HTMLInputElement | null>(null)
 
   useEffect(() => {
     if (org?.id) loadData()
@@ -110,7 +129,112 @@ export default function ConteudoDetailPage() {
   }
 
   const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url)
-  const isVideo = (url: string) => /\.(mp4|webm|mov)(\?|$)/i.test(url)
+  const isVideo = (url: string) => /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url)
+
+  // Upload files directly to Supabase via presigned URLs (supports GBs)
+  const handleMediaUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files?.length || !conteudo || !cliente) return
+
+    setUploading(true)
+    const fileList = Array.from(files)
+    const progress: Record<string, number> = {}
+    fileList.forEach(f => { progress[f.name] = 0 })
+    setUploadProgress({ ...progress })
+
+    try {
+      // Get presigned URLs
+      const res = await fetch('/api/posts/media-presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          conteudoId: conteudo.id,
+          clienteId: cliente.id,
+          files: fileList.map(f => ({ name: f.name, type: f.type, size: f.size })),
+        }),
+      })
+
+      if (!res.ok) {
+        const err = await res.json()
+        alert(`Erro: ${err.error}`)
+        setUploading(false)
+        return
+      }
+
+      const { urls: presigned } = await res.json()
+      const newPublicUrls: string[] = []
+
+      // Upload each file directly to Supabase Storage
+      for (let i = 0; i < presigned.length; i++) {
+        const file = fileList[i]
+        const { uploadUrl, token, publicUrl } = presigned[i]
+
+        try {
+          const uploadRes = await new Promise<boolean>((resolve) => {
+            const xhr = new XMLHttpRequest()
+            xhr.open('PUT', uploadUrl)
+            xhr.setRequestHeader('Content-Type', file.type)
+            if (token) xhr.setRequestHeader('x-upsert', 'false')
+
+            xhr.upload.onprogress = (ev) => {
+              if (ev.lengthComputable) {
+                const pct = Math.round((ev.loaded / ev.total) * 100)
+                setUploadProgress(prev => ({ ...prev, [file.name]: pct }))
+              }
+            }
+
+            xhr.onload = () => resolve(xhr.status >= 200 && xhr.status < 300)
+            xhr.onerror = () => resolve(false)
+            xhr.send(file)
+          })
+
+          if (uploadRes) {
+            newPublicUrls.push(publicUrl)
+          }
+        } catch (err) {
+          console.error(`Upload failed for ${file.name}:`, err)
+        }
+      }
+
+      // Update conteúdo with new media URLs
+      if (newPublicUrls.length > 0) {
+        const currentUrls = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
+        const updatedUrls = [...currentUrls, ...newPublicUrls]
+
+        const { error } = await db.update('conteudos', {
+          midia_urls: updatedUrls,
+          updated_at: new Date().toISOString(),
+        }, { id: conteudo.id })
+
+        if (!error) {
+          setConteudo(prev => prev ? { ...prev, midia_urls: updatedUrls } : null)
+        }
+      }
+    } catch (err) {
+      console.error('Upload error:', err)
+      alert('Erro ao fazer upload')
+    }
+
+    setUploading(false)
+    setUploadProgress({})
+    // Reset input
+    e.target.value = ''
+  }
+
+  const handleRemoveMedia = async (urlToRemove: string) => {
+    if (!conteudo || !confirm('Remover este arquivo?')) return
+    const currentUrls = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
+    const updatedUrls = currentUrls.filter((u: string) => u !== urlToRemove)
+
+    const { error } = await db.update('conteudos', {
+      midia_urls: updatedUrls,
+      updated_at: new Date().toISOString(),
+    }, { id: conteudo.id })
+
+    if (!error) {
+      setConteudo(prev => prev ? { ...prev, midia_urls: updatedUrls } : null)
+    }
+  }
 
   if (loading) {
     return (
@@ -301,35 +425,126 @@ export default function ConteudoDetailPage() {
         </Card>
       )}
 
-      {/* Mídia */}
-      {mediaUrls.length > 0 && (
-        <Card className="p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">
-            📎 Mídia ({mediaUrls.length})
+      {/* Mídia + Upload */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900">
+            📎 Mídia {mediaUrls.length > 0 && `(${mediaUrls.length})`}
           </h3>
+          <label className="cursor-pointer">
+            <input
+              type="file"
+              multiple
+              accept="image/*,video/*,.pdf,.ai,.psd,.zip,.rar"
+              onChange={handleMediaUpload}
+              className="hidden"
+              disabled={uploading}
+            />
+            <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-all
+              ${uploading
+                ? 'bg-gray-100 text-gray-400 cursor-wait'
+                : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer shadow-sm hover:shadow-md'
+              }`}>
+              {uploading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+              {uploading ? 'Enviando...' : 'Adicionar Conteúdo'}
+            </div>
+          </label>
+        </div>
+
+        {/* Upload progress */}
+        {Object.keys(uploadProgress).length > 0 && (
+          <div className="space-y-2 mb-4">
+            {Object.entries(uploadProgress).map(([name, pct]) => (
+              <div key={name} className="bg-gray-50 rounded-lg p-3">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-xs font-medium text-gray-700 truncate max-w-[70%]">{name}</span>
+                  <span className="text-xs text-blue-600 font-bold">{pct}%</span>
+                </div>
+                <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-blue-600 rounded-full transition-all duration-300"
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Drop zone quando vazio */}
+        {mediaUrls.length === 0 && !uploading && (
+          <label className="cursor-pointer block">
+            <input
+              type="file"
+              multiple
+              accept="image/*,video/*,.pdf,.ai,.psd,.zip,.rar"
+              onChange={handleMediaUpload}
+              className="hidden"
+            />
+            <div className="border-2 border-dashed border-gray-200 rounded-xl p-12 text-center hover:border-blue-400 hover:bg-blue-50/30 transition-all">
+              <Upload className="w-10 h-10 text-gray-300 mx-auto mb-3" />
+              <p className="text-sm font-medium text-gray-500">Arraste ou clique para adicionar</p>
+              <p className="text-xs text-gray-400 mt-1">Imagens, vídeos, PDFs — sem limite de tamanho</p>
+            </div>
+          </label>
+        )}
+
+        {/* Media grid */}
+        {mediaUrls.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {mediaUrls.map((url: string, i: number) => (
-              <div key={i} className="border rounded-lg overflow-hidden bg-white">
+              <div key={i} className="relative group border rounded-lg overflow-hidden bg-white hover:shadow-md transition-all">
                 {isImage(url) ? (
                   <img src={url} alt={`Mídia ${i + 1}`} className="w-full h-48 object-cover" />
                 ) : isVideo(url) ? (
-                  <video src={url} controls className="w-full h-48 object-cover" />
+                  <div className="relative">
+                    <video src={url} controls className="w-full h-48 object-cover" />
+                    <Film className="absolute top-2 left-2 w-5 h-5 text-white drop-shadow-lg" />
+                  </div>
                 ) : (
                   <div className="w-full h-48 bg-gray-100 flex items-center justify-center">
                     <File className="w-8 h-8 text-gray-400" />
                   </div>
                 )}
+                {/* Overlay actions */}
+                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 transition-all flex items-center justify-center gap-2 opacity-0 group-hover:opacity-100">
+                  <a href={url} target="_blank" rel="noopener noreferrer" download
+                    className="p-2 bg-white rounded-lg hover:bg-gray-100 transition-colors"
+                    onClick={e => e.stopPropagation()}>
+                    <Download className="w-4 h-4 text-gray-700" />
+                  </a>
+                  <button type="button" onClick={() => handleRemoveMedia(url)}
+                    className="p-2 bg-white rounded-lg hover:bg-red-50 transition-colors">
+                    <Trash2 className="w-4 h-4 text-red-500" />
+                  </button>
+                </div>
                 <div className="p-3 flex items-center justify-between">
-                  <span className="text-sm text-gray-600">Arquivo {i + 1}</span>
+                  <span className="text-xs text-gray-500 truncate">Arquivo {i + 1}</span>
                   <a href={url} target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:text-blue-700">
                     <ExternalLink className="w-4 h-4" />
                   </a>
                 </div>
               </div>
             ))}
+
+            {/* Add more button */}
+            <label className="cursor-pointer">
+              <input
+                type="file"
+                multiple
+                accept="image/*,video/*,.pdf,.ai,.psd,.zip,.rar"
+                onChange={handleMediaUpload}
+                className="hidden"
+                disabled={uploading}
+              />
+              <div className="border-2 border-dashed border-gray-200 rounded-lg h-full min-h-[200px] flex flex-col items-center justify-center hover:border-blue-400 hover:bg-blue-50/30 transition-all">
+                <Plus className="w-8 h-8 text-gray-300 mb-2" />
+                <span className="text-xs text-gray-400">Adicionar mais</span>
+              </div>
+            </label>
           </div>
-        </Card>
-      )}
+        )}
+      </Card>
     </div>
   )
 }

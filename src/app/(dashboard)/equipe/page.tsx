@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Mail, Shield, UserX } from 'lucide-react'
+import { Plus, Mail, UserX, Trash2, Copy, RefreshCw, MoreVertical, Shield, Users, Clock } from 'lucide-react'
 import type { Member, Invite, Cliente } from '@/types/database'
 import { useRoleGuard } from '@/hooks/use-role-guard'
 
@@ -27,6 +27,10 @@ export default function EquipePage() {
   const [inviteRole, setInviteRole] = useState('designer')
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [selectedClienteIds, setSelectedClienteIds] = useState<string[]>([])
+  const [actionLoading, setActionLoading] = useState<string | null>(null)
+  const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({
+    open: false, title: '', message: '', onConfirm: () => {}
+  })
 
   useEffect(() => {
     if (!org) return
@@ -70,6 +74,13 @@ export default function EquipePage() {
       return
     }
 
+    // Check for duplicate pending invite
+    const existingInvite = invites.find(inv => inv.email.toLowerCase() === inviteEmail.toLowerCase())
+    if (existingInvite) {
+      toast('Já existe um convite pendente para este email. Reenvie ou apague o existente.', 'error')
+      return
+    }
+
     const token = Array.from({ length: 32 }, () =>
       'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
     ).join('')
@@ -84,16 +95,10 @@ export default function EquipePage() {
 
     if (error) { toast('Erro ao enviar convite', 'error'); return }
 
-    // If role is "cliente", save the client associations
-    // These will be applied when the invite is accepted (member is created)
-    // For now, store them as metadata in a separate table keyed by invite token
     if (inviteRole === 'cliente' && selectedClienteIds.length > 0 && invite) {
-      // Store pending client links - will be resolved when member is created
-      // We use a convention: store in member_clients with a placeholder member_id
-      // that matches the invite id, so we can resolve it on accept
       for (const clienteId of selectedClienteIds) {
         await db.insert('member_clients', {
-          member_id: invite.id, // temporarily store invite id as member_id
+          member_id: invite.id,
           cliente_id: clienteId,
           org_id: org!.id,
         })
@@ -102,7 +107,6 @@ export default function EquipePage() {
 
     const link = `${window.location.origin}/auth/invite?token=${token}`
     
-    // Send invite email automatically
     try {
       const emailRes = await fetch('/api/invite/send', {
         method: 'POST',
@@ -119,7 +123,6 @@ export default function EquipePage() {
       if (emailData.status === 'sent' || emailData.status === 'magic_link_sent') {
         toast('✅ Convite enviado por email!', 'success')
       } else {
-        // Fallback: copy link
         await navigator.clipboard.writeText(link)
         toast('⚠️ Email não enviado. Link copiado!', 'info')
       }
@@ -134,37 +137,186 @@ export default function EquipePage() {
     loadData()
   }
 
+  async function handleDeleteInvite(inviteId: string, email: string) {
+    setConfirmModal({
+      open: true,
+      title: 'Apagar Convite',
+      message: `Tem certeza que deseja apagar o convite para ${email}? Esta ação não pode ser desfeita.`,
+      onConfirm: async () => {
+        setActionLoading(inviteId)
+        setConfirmModal(prev => ({ ...prev, open: false }))
+        try {
+          // Also clean up any member_clients associated with this invite
+          await db.delete('member_clients', { member_id: inviteId })
+          await db.delete('invites', { id: inviteId })
+          toast('Convite apagado!', 'success')
+          loadData()
+        } catch {
+          toast('Erro ao apagar convite', 'error')
+        } finally {
+          setActionLoading(null)
+        }
+      }
+    })
+  }
+
+  async function handleDeleteAllInvitesForEmail(email: string) {
+    const matching = invites.filter(inv => inv.email.toLowerCase() === email.toLowerCase())
+    if (matching.length <= 1) return
+
+    setConfirmModal({
+      open: true,
+      title: 'Apagar Convites Duplicados',
+      message: `Existem ${matching.length} convites para ${email}. Deseja apagar todos os duplicados e manter apenas o mais recente?`,
+      onConfirm: async () => {
+        setActionLoading(email)
+        setConfirmModal(prev => ({ ...prev, open: false }))
+        try {
+          // Keep the first one (most recent), delete the rest
+          const toDelete = matching.slice(1)
+          for (const inv of toDelete) {
+            await db.delete('member_clients', { member_id: inv.id })
+            await db.delete('invites', { id: inv.id })
+          }
+          toast(`${toDelete.length} convite(s) duplicado(s) removido(s)!`, 'success')
+          loadData()
+        } catch {
+          toast('Erro ao apagar convites', 'error')
+        } finally {
+          setActionLoading(null)
+        }
+      }
+    })
+  }
+
+  async function handleResendInvite(invite: Invite) {
+    setActionLoading(invite.id)
+    try {
+      const emailRes = await fetch('/api/invite/send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          email: invite.email,
+          role: invite.role,
+          inviteToken: invite.token,
+          orgName: org?.name || 'BASE Content Studio',
+        }),
+      })
+      const emailData = await emailRes.json()
+      
+      if (emailData.status === 'sent' || emailData.status === 'magic_link_sent') {
+        toast(`✅ Convite reenviado para ${invite.email}!`, 'success')
+      } else {
+        const link = `${window.location.origin}/auth/invite?token=${invite.token}`
+        await navigator.clipboard.writeText(link)
+        toast('⚠️ Email não enviado. Link copiado!', 'info')
+      }
+    } catch {
+      toast('Erro ao reenviar convite', 'error')
+    } finally {
+      setActionLoading(null)
+    }
+  }
+
+  async function handleCopyInviteLink(token: string) {
+    const link = `${window.location.origin}/auth/invite?token=${token}`
+    await navigator.clipboard.writeText(link)
+    toast('🔗 Link copiado!', 'success')
+  }
+
   async function handleRoleChange(memberId: string, newRole: string) {
     await db.update('members', { role: newRole }, { id: memberId })
     toast('Role atualizado!', 'success')
     loadData()
   }
 
-  async function handleRemove(memberId: string) {
-    if (!confirm('Remover este membro da equipe?')) return
-    await db.update('members', { status: 'inactive' }, { id: memberId })
-    toast('Membro removido', 'success')
-    loadData()
+  async function handleRemoveMember(memberId: string, displayName: string) {
+    setConfirmModal({
+      open: true,
+      title: 'Remover Membro',
+      message: `Tem certeza que deseja remover ${displayName || 'este membro'} da equipe? O acesso será revogado imediatamente.`,
+      onConfirm: async () => {
+        setActionLoading(memberId)
+        setConfirmModal(prev => ({ ...prev, open: false }))
+        try {
+          await db.update('members', { status: 'inactive' }, { id: memberId })
+          toast('Membro removido da equipe', 'success')
+          loadData()
+        } catch {
+          toast('Erro ao remover membro', 'error')
+        } finally {
+          setActionLoading(null)
+        }
+      }
+    })
+  }
+
+  async function handleCleanupDuplicates() {
+    // Group invites by email and find duplicates
+    const emailMap = new Map<string, Invite[]>()
+    invites.forEach(inv => {
+      const key = inv.email.toLowerCase()
+      emailMap.set(key, [...(emailMap.get(key) || []), inv])
+    })
+
+    let totalDeleted = 0
+    for (const [, group] of emailMap) {
+      if (group.length > 1) {
+        const toDelete = group.slice(1) // keep most recent
+        for (const inv of toDelete) {
+          await db.delete('member_clients', { member_id: inv.id })
+          await db.delete('invites', { id: inv.id })
+          totalDeleted++
+        }
+      }
+    }
+
+    if (totalDeleted > 0) {
+      toast(`🧹 ${totalDeleted} convite(s) duplicado(s) removido(s)!`, 'success')
+      loadData()
+    } else {
+      toast('Nenhum duplicado encontrado', 'info')
+    }
   }
 
   const isAdmin = currentMember?.role === 'admin'
+  const isAdminOrGestor = currentMember?.role === 'admin' || currentMember?.role === 'gestor'
+  const activeMembers = members.filter(m => m.status === 'active')
+
+  // Detect duplicates
+  const emailCounts = new Map<string, number>()
+  invites.forEach(inv => {
+    const key = inv.email.toLowerCase()
+    emailCounts.set(key, (emailCounts.get(key) || 0) + 1)
+  })
+  const hasDuplicates = Array.from(emailCounts.values()).some(count => count > 1)
 
   const ROLE_COLORS = {
     admin: 'danger', gestor: 'info', designer: 'success', cliente: 'warning'
   } as const
 
+  const ROLE_LABELS: Record<string, string> = {
+    admin: 'Admin', gestor: 'Gestor', designer: 'Designer', cliente: 'Cliente'
+  }
+
   if (loading || roleLoading || !allowed) {
-    return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-64 rounded-xl" /></div>
+    return <div className="space-y-4 p-6"><Skeleton className="h-8 w-48" /><Skeleton className="h-64 rounded-xl" /></div>
   }
 
   return (
     <div className="space-y-6 animate-fade-in">
+      {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-zinc-900">Equipe</h1>
-          <p className="text-sm text-zinc-500">{members.filter(m => m.status === 'active').length} membros ativos</p>
+          <h1 className="text-2xl font-bold text-zinc-900 flex items-center gap-2">
+            <Users className="w-6 h-6" /> Equipe
+          </h1>
+          <p className="text-sm text-zinc-500 mt-1">
+            {activeMembers.length} membro{activeMembers.length !== 1 ? 's' : ''} ativo{activeMembers.length !== 1 ? 's' : ''}
+            {invites.length > 0 && ` · ${invites.length} convite${invites.length !== 1 ? 's' : ''} pendente${invites.length !== 1 ? 's' : ''}`}
+          </p>
         </div>
-        {isAdmin && (
+        {isAdminOrGestor && (
           <Button variant="primary" onClick={() => setInviteOpen(true)}>
             <Plus className="w-4 h-4" /> Convidar
           </Button>
@@ -173,41 +325,73 @@ export default function EquipePage() {
 
       {/* Members */}
       <Card>
-        <div className="px-6 py-4 border-b border-zinc-100">
-          <h3 className="font-semibold text-zinc-900">Membros</h3>
+        <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+          <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+            <Shield className="w-4 h-4 text-zinc-400" /> Membros
+          </h3>
+          <span className="text-xs text-zinc-400">{activeMembers.length} ativo{activeMembers.length !== 1 ? 's' : ''}</span>
         </div>
         <CardContent className="p-0">
           <div className="divide-y divide-zinc-50">
-            {members.filter(m => m.status === 'active').map(m => (
-              <div key={m.id} className="flex items-center gap-4 px-6 py-4">
-                <Avatar name={m.display_name || '?'} src={m.avatar_url} />
-                <div className="flex-1">
-                  <div className="text-sm font-medium text-zinc-900">{m.display_name}</div>
-                  <div className="text-xs text-zinc-400">{m.user_id === currentMember?.user_id ? 'Você' : ''}</div>
+            {activeMembers.map(m => {
+              const isCurrentUser = m.user_id === currentMember?.user_id
+              return (
+                <div key={m.id} className="flex items-center gap-4 px-6 py-4 hover:bg-zinc-50/50 transition-colors">
+                  <Avatar name={m.display_name || '?'} src={m.avatar_url} />
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium text-zinc-900 truncate">{m.display_name || 'Sem nome'}</span>
+                      {isCurrentUser && (
+                        <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Você</span>
+                      )}
+                    </div>
+                    <div className="text-xs text-zinc-400 truncate">
+                      {(m as any).email || m.user_id?.slice(0, 8)}
+                      {m.created_at && ` · Desde ${new Date(m.created_at).toLocaleDateString('pt-BR')}`}
+                    </div>
+                  </div>
+
+                  {/* Role selector or badge */}
+                  {isAdmin && !isCurrentUser ? (
+                    <Select
+                      value={m.role}
+                      onChange={e => handleRoleChange(m.id, e.target.value)}
+                      className="w-32 text-sm"
+                    >
+                      <option value="admin">Admin</option>
+                      <option value="gestor">Gestor</option>
+                      <option value="designer">Designer</option>
+                      <option value="cliente">Cliente</option>
+                    </Select>
+                  ) : (
+                    <Badge variant={ROLE_COLORS[m.role as keyof typeof ROLE_COLORS] || 'default'}>
+                      {ROLE_LABELS[m.role] || m.role}
+                    </Badge>
+                  )}
+
+                  {/* Remove button */}
+                  {isAdmin && !isCurrentUser && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => handleRemoveMember(m.id, m.display_name || '')}
+                      disabled={actionLoading === m.id}
+                      className="text-zinc-400 hover:text-red-500 hover:bg-red-50"
+                      title="Remover membro"
+                    >
+                      <UserX className="w-4 h-4" />
+                    </Button>
+                  )}
                 </div>
-                {isAdmin && m.user_id !== currentMember?.user_id ? (
-                  <Select
-                    value={m.role}
-                    onChange={e => handleRoleChange(m.id, e.target.value)}
-                    className="w-32"
-                  >
-                    <option value="admin">Admin</option>
-                    <option value="gestor">Gestor</option>
-                    <option value="designer">Designer</option>
-                    <option value="cliente">Cliente</option>
-                  </Select>
-                ) : (
-                  <Badge variant={ROLE_COLORS[m.role as keyof typeof ROLE_COLORS] || 'default'}>
-                    {m.role}
-                  </Badge>
-                )}
-                {isAdmin && m.user_id !== currentMember?.user_id && (
-                  <Button size="sm" variant="ghost" onClick={() => handleRemove(m.id)}>
-                    <UserX className="w-4 h-4 text-zinc-400" />
-                  </Button>
-                )}
+              )
+            })}
+
+            {activeMembers.length === 0 && (
+              <div className="px-6 py-12 text-center text-zinc-400">
+                <Users className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">Nenhum membro ativo</p>
               </div>
-            ))}
+            )}
           </div>
         </CardContent>
       </Card>
@@ -215,23 +399,101 @@ export default function EquipePage() {
       {/* Pending invites */}
       {invites.length > 0 && (
         <Card>
-          <div className="px-6 py-4 border-b border-zinc-100">
-            <h3 className="font-semibold text-zinc-900">Convites Pendentes</h3>
+          <div className="px-6 py-4 border-b border-zinc-100 flex items-center justify-between">
+            <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+              <Clock className="w-4 h-4 text-zinc-400" /> Convites Pendentes
+            </h3>
+            <div className="flex items-center gap-2">
+              {hasDuplicates && isAdminOrGestor && (
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleCleanupDuplicates}
+                  className="text-xs text-amber-600 hover:text-amber-700 hover:bg-amber-50"
+                >
+                  🧹 Limpar duplicados
+                </Button>
+              )}
+              <span className="text-xs text-zinc-400">{invites.length} pendente{invites.length !== 1 ? 's' : ''}</span>
+            </div>
           </div>
           <CardContent className="p-0">
             <div className="divide-y divide-zinc-50">
-              {invites.map(inv => (
-                <div key={inv.id} className="flex items-center gap-4 px-6 py-4">
-                  <Mail className="w-5 h-5 text-zinc-300" />
-                  <div className="flex-1">
-                    <div className="text-sm text-zinc-900">{inv.email}</div>
-                    <div className="text-xs text-zinc-400">
-                      Expira em {new Date(inv.expires_at).toLocaleDateString('pt-BR')}
+              {invites.map(inv => {
+                const isDuplicate = (emailCounts.get(inv.email.toLowerCase()) || 0) > 1
+                const isExpired = new Date(inv.expires_at) < new Date()
+                return (
+                  <div
+                    key={inv.id}
+                    className={`flex items-center gap-4 px-6 py-4 transition-colors ${
+                      isExpired ? 'bg-red-50/30' : isDuplicate ? 'bg-amber-50/30' : 'hover:bg-zinc-50/50'
+                    }`}
+                  >
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
+                      isExpired ? 'bg-red-100' : 'bg-zinc-100'
+                    }`}>
+                      <Mail className={`w-5 h-5 ${isExpired ? 'text-red-400' : 'text-zinc-400'}`} />
                     </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-zinc-900 truncate">{inv.email}</span>
+                        {isDuplicate && (
+                          <span className="text-[10px] font-medium text-amber-600 bg-amber-100 px-1.5 py-0.5 rounded">Duplicado</span>
+                        )}
+                        {isExpired && (
+                          <span className="text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded">Expirado</span>
+                        )}
+                      </div>
+                      <div className="text-xs text-zinc-400">
+                        {isExpired
+                          ? `Expirou em ${new Date(inv.expires_at).toLocaleDateString('pt-BR')}`
+                          : `Expira em ${new Date(inv.expires_at).toLocaleDateString('pt-BR')}`
+                        }
+                        {inv.created_at && ` · Enviado em ${new Date(inv.created_at).toLocaleDateString('pt-BR')}`}
+                      </div>
+                    </div>
+
+                    <Badge variant={ROLE_COLORS[inv.role as keyof typeof ROLE_COLORS] || 'default'}>
+                      {ROLE_LABELS[inv.role] || inv.role}
+                    </Badge>
+
+                    {/* Action buttons */}
+                    {isAdminOrGestor && (
+                      <div className="flex items-center gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleCopyInviteLink(inv.token)}
+                          className="text-zinc-400 hover:text-blue-500 hover:bg-blue-50"
+                          title="Copiar link do convite"
+                        >
+                          <Copy className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleResendInvite(inv)}
+                          disabled={actionLoading === inv.id}
+                          className="text-zinc-400 hover:text-green-500 hover:bg-green-50"
+                          title="Reenviar convite"
+                        >
+                          <RefreshCw className={`w-4 h-4 ${actionLoading === inv.id ? 'animate-spin' : ''}`} />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          onClick={() => handleDeleteInvite(inv.id, inv.email)}
+                          disabled={actionLoading === inv.id}
+                          className="text-zinc-400 hover:text-red-500 hover:bg-red-50"
+                          title="Apagar convite"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
-                  <Badge>{inv.role}</Badge>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </CardContent>
         </Card>
@@ -252,6 +514,12 @@ export default function EquipePage() {
               <option value="designer">Designer</option>
               <option value="cliente">Cliente</option>
             </Select>
+            <p className="text-xs text-zinc-400 mt-1">
+              {inviteRole === 'admin' && 'Acesso total: gerenciar equipe, clientes e configurações'}
+              {inviteRole === 'gestor' && 'Gerenciar conteúdos, clientes e equipe'}
+              {inviteRole === 'designer' && 'Criar e editar conteúdos dos clientes atribuídos'}
+              {inviteRole === 'cliente' && 'Visualizar e aprovar conteúdos do(s) seu(s) perfil(is)'}
+            </p>
           </div>
           {inviteRole === 'cliente' && (
             <div>
@@ -291,6 +559,17 @@ export default function EquipePage() {
             <Button type="submit" variant="primary">📨 Enviar Convite</Button>
           </div>
         </form>
+      </Modal>
+
+      {/* Confirmation modal */}
+      <Modal open={confirmModal.open} onClose={() => setConfirmModal(prev => ({ ...prev, open: false }))} title={confirmModal.title} size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-600">{confirmModal.message}</p>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setConfirmModal(prev => ({ ...prev, open: false }))}>Cancelar</Button>
+            <Button variant="primary" className="bg-red-600 hover:bg-red-700" onClick={confirmModal.onConfirm}>Confirmar</Button>
+          </div>
+        </div>
       </Modal>
     </div>
   )

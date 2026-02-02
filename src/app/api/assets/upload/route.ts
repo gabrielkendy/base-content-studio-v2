@@ -10,7 +10,7 @@ async function ensureBucket(supabase: ReturnType<typeof createServiceClient>) {
   if (!data) {
     await supabase.storage.createBucket(BUCKET, {
       public: true,
-      fileSizeLimit: 104857600, // 100MB
+      fileSizeLimit: 52428800, // 50MB per file
     })
   }
 }

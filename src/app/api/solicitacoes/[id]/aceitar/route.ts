@@ -74,7 +74,7 @@ export async function POST(
         titulo: solicitacao.titulo,
         tipo: 'post',
         descricao: solicitacao.descricao,
-        status: 'rascunho',
+        status: 'producao',
         ordem: 0,
         slides: [],
         prompts_imagem: [],
@@ -82,6 +82,7 @@ export async function POST(
         midia_urls: [],
         canais: [],
         assigned_to: membership.user_id,
+        solicitacao_id: solicitacaoId,
         created_at: now.toISOString(),
         updated_at: now.toISOString(),
       })

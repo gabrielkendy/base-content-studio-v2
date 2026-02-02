@@ -25,7 +25,7 @@ export default function ClienteDetailPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [conteudos, setConteudos] = useState<Conteudo[]>([])
   const [ano, setAno] = useState(new Date().getFullYear())
-  const [view, setView] = useState<'anual' | 'workflow' | 'acessos'>('anual')
+  const [view, setView] = useState<'anual' | 'acessos'>('anual')
   const [loading, setLoading] = useState(true)
 
   // Acessos state
@@ -197,13 +197,11 @@ export default function ClienteDetailPage() {
         >
           <Calendar className="w-4 h-4" /> Visão Anual
         </Button>
-        <Button
-          size="sm"
-          variant={view === 'workflow' ? 'primary' : 'outline'}
-          onClick={() => setView('workflow')}
-        >
-          <Kanban className="w-4 h-4" /> Workflow
-        </Button>
+        <Link href={`/workflow?cliente=${cliente.id}`}>
+          <Button size="sm" variant="outline">
+            <Kanban className="w-4 h-4" /> Workflow
+          </Button>
+        </Link>
         <Button
           size="sm"
           variant={view === 'acessos' ? 'primary' : 'outline'}
@@ -278,47 +276,6 @@ export default function ClienteDetailPage() {
                   </CardContent>
                 </Card>
               </Link>
-            )
-          })}
-        </div>
-      )}
-
-      {view === 'workflow' && (
-        /* WORKFLOW KANBAN */
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-            const items = porStatus[key] || []
-            return (
-              <div key={key} className="min-w-[280px] flex-shrink-0">
-                <div className="flex items-center gap-2 mb-3 px-1">
-                  <span>{cfg.emoji}</span>
-                  <span className="text-sm font-semibold" style={{ color: cfg.color }}>{cfg.label}</span>
-                  <Badge>{items.length}</Badge>
-                </div>
-                <div className="space-y-2">
-                  {items.map(item => (
-                    <Link key={item.id} href={`/clientes/${slug}/conteudo/${item.id}`}>
-                      <Card className="hover:shadow-md cursor-pointer transition-all">
-                        <CardContent className="py-3 px-4">
-                          <div className="text-sm font-medium text-zinc-900 truncate">{item.titulo || 'Sem título'}</div>
-                          <div className="flex items-center gap-2 mt-2">
-                            <span className="text-xs">{TIPO_EMOJI[item.tipo] || '📄'}</span>
-                            <span className="text-xs text-zinc-400">{item.tipo}</span>
-                            {item.data_publicacao && (
-                              <span className="text-xs text-zinc-400 ml-auto">{formatDate(item.data_publicacao)}</span>
-                            )}
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </Link>
-                  ))}
-                  {items.length === 0 && (
-                    <div className="text-center py-8 text-xs text-zinc-400 border-2 border-dashed border-zinc-100 rounded-xl">
-                      Vazio
-                    </div>
-                  )}
-                </div>
-              </div>
             )
           })}
         </div>

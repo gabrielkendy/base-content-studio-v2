@@ -154,6 +154,7 @@ export default function AgendarPage() {
   const fileInputRef = useRef<HTMLInputElement>(null)
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const [dragOver, setDragOver] = useState(false)
+  const [previewIndex, setPreviewIndex] = useState(0)
 
   // ─── Load Clientes ──────────────────────────────────────────────
   useEffect(() => {
@@ -236,9 +237,9 @@ export default function AgendarPage() {
     if (!selectedCliente || !org) return
 
     const isVideo = file.type.startsWith('video/')
-    const maxSize = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024
+    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024
     if (file.size > maxSize) {
-      toast(`${file.name} excede o limite de ${isVideo ? '100MB' : '10MB'}`, 'error')
+      toast(`${file.name} excede o limite de ${isVideo ? '50MB' : '10MB'}`, 'error')
       return
     }
 
@@ -820,35 +821,74 @@ export default function AgendarPage() {
                           </div>
                         </div>
 
-                        {/* Media Preview */}
-                        {uploadedMedia.length > 0 && format && (
-                          <div
-                            className="relative bg-zinc-900 overflow-hidden"
-                            style={{
-                              aspectRatio: `${format.width}/${format.height}`,
-                              maxHeight: '280px',
-                            }}
-                          >
-                            {uploadedMedia[0].isVideo ? (
-                              <video
-                                src={uploadedMedia[0].url}
-                                className="w-full h-full object-cover"
-                                muted
-                              />
-                            ) : (
-                              <img
-                                src={uploadedMedia[0].preview || uploadedMedia[0].url}
-                                alt=""
-                                className="w-full h-full object-cover"
-                              />
-                            )}
-                            {uploadedMedia.length > 1 && (
-                              <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
-                                +{uploadedMedia.length - 1}
-                              </div>
-                            )}
-                          </div>
-                        )}
+                        {/* Media Preview with Carousel */}
+                        {uploadedMedia.length > 0 && format && (() => {
+                          const idx = Math.min(previewIndex, uploadedMedia.length - 1)
+                          const currentMedia = uploadedMedia[idx]
+                          return (
+                            <div
+                              className="relative bg-zinc-900 overflow-hidden group"
+                              style={{
+                                aspectRatio: `${format.width}/${format.height}`,
+                                maxHeight: '280px',
+                              }}
+                            >
+                              {currentMedia.isVideo ? (
+                                <video
+                                  src={currentMedia.url}
+                                  className="w-full h-full object-cover"
+                                  muted
+                                />
+                              ) : (
+                                <img
+                                  src={currentMedia.preview || currentMedia.url}
+                                  alt=""
+                                  className="w-full h-full object-cover"
+                                />
+                              )}
+
+                              {/* Navigation Arrows */}
+                              {uploadedMedia.length > 1 && (
+                                <>
+                                  {/* Left Arrow */}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setPreviewIndex(i => i <= 0 ? uploadedMedia.length - 1 : i - 1) }}
+                                    className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                    </svg>
+                                  </button>
+                                  {/* Right Arrow */}
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); setPreviewIndex(i => i >= uploadedMedia.length - 1 ? 0 : i + 1) }}
+                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+                                  >
+                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                    </svg>
+                                  </button>
+                                  {/* Dot Indicators */}
+                                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
+                                    {uploadedMedia.map((_, i) => (
+                                      <button
+                                        key={i}
+                                        onClick={(e) => { e.stopPropagation(); setPreviewIndex(i) }}
+                                        className={`w-1.5 h-1.5 rounded-full transition-all ${
+                                          i === idx ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/70'
+                                        }`}
+                                      />
+                                    ))}
+                                  </div>
+                                  {/* Counter Badge */}
+                                  <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
+                                    {idx + 1}/{uploadedMedia.length}
+                                  </div>
+                                </>
+                              )}
+                            </div>
+                          )
+                        })()}
 
                         {/* Caption Preview */}
                         <div className="p-3">

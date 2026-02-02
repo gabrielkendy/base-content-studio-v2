@@ -131,28 +131,99 @@ export default function RepositorioPage() {
     setUploading(true)
     setUploadProgress(0)
 
-    const formData = new FormData()
-    formData.append('clienteId', cliente.id)
-    formData.append('orgId', org.id)
-    formData.append('folder', currentFolder)
-    if (member?.user_id) formData.append('userId', member.user_id)
+    const fileArray = Array.from(files)
+    const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB per file
 
-    for (let i = 0; i < files.length; i++) {
-      formData.append('file', files[i])
-      setUploadProgress(Math.round(((i + 1) / files.length) * 50))
+    // Validate file sizes
+    const oversized = fileArray.filter(f => f.size > MAX_FILE_SIZE)
+    if (oversized.length > 0) {
+      toast(`${oversized.length} arquivo(s) excedem 50MB: ${oversized.map(f => f.name).join(', ')}`, 'error')
+      const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE)
+      if (validFiles.length === 0) {
+        setUploading(false)
+        return
+      }
     }
 
-    try {
-      const res = await fetch('/api/assets/upload', { method: 'POST', body: formData })
-      const json = await res.json()
+    const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE)
 
-      if (json.error) {
-        toast('Erro no upload: ' + json.error, 'error')
-      } else {
-        const count = json.data?.length || 0
-        toast(`${count} arquivo(s) enviado(s) com sucesso!`, 'success')
+    try {
+      // Step 1: Get presigned upload URLs from our API
+      setUploadProgress(5)
+      const presignRes = await fetch('/api/assets/presign', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: validFiles.map(f => ({ name: f.name, type: f.type, size: f.size })),
+          clienteId: cliente.id,
+          orgId: org.id,
+          folder: currentFolder,
+        }),
+      })
+      const presignData = await presignRes.json()
+
+      if (!presignRes.ok || !presignData.urls?.length) {
+        toast('Erro ao preparar upload: ' + (presignData.error || 'Tente novamente'), 'error')
+        setUploading(false)
+        return
       }
-    } catch {
+
+      // Step 2: Upload each file directly to Supabase Storage (bypasses Vercel 4.5MB limit)
+      const successUploads = []
+      for (let i = 0; i < validFiles.length; i++) {
+        const file = validFiles[i]
+        const urlInfo = presignData.urls[i]
+        if (!urlInfo) continue
+
+        setUploadProgress(10 + Math.round((i / validFiles.length) * 70))
+
+        try {
+          const uploadRes = await fetch(urlInfo.uploadUrl, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': file.type || 'application/octet-stream',
+            },
+            body: file,
+          })
+
+          if (uploadRes.ok) {
+            successUploads.push({
+              orgId: org.id,
+              clienteId: cliente.id,
+              fileName: file.name,
+              fileType: file.type,
+              fileSize: file.size,
+              publicUrl: urlInfo.publicUrl,
+              thumbnailUrl: urlInfo.thumbnailUrl,
+              folder: urlInfo.folder,
+            })
+          } else {
+            console.error(`Upload failed for ${file.name}:`, await uploadRes.text())
+          }
+        } catch (uploadErr) {
+          console.error(`Upload error for ${file.name}:`, uploadErr)
+        }
+      }
+
+      // Step 3: Register uploaded files in the database
+      if (successUploads.length > 0) {
+        setUploadProgress(85)
+        const registerRes = await fetch('/api/assets/register', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ assets: successUploads }),
+        })
+        const registerData = await registerRes.json()
+        const count = registerData.data?.length || successUploads.length
+        toast(`✅ ${count} arquivo(s) enviado(s) com sucesso!`, 'success')
+      }
+
+      if (successUploads.length < validFiles.length) {
+        const failed = validFiles.length - successUploads.length
+        toast(`⚠️ ${failed} arquivo(s) falharam no upload`, 'error')
+      }
+    } catch (err) {
+      console.error('Upload flow error:', err)
       toast('Erro ao enviar arquivos', 'error')
     }
 

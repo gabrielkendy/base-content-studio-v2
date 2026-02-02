@@ -22,20 +22,33 @@ export const TIPO_EMOJI: Record<string, string> = {
   'vídeo': '🎥',
 }
 
-export const STATUS_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
-  nova_solicitacao: { emoji: '📩', label: 'Nova Solicitação', color: '#8B5CF6' },
-  rascunho: { emoji: '📝', label: 'Rascunho', color: '#6B7280' },
-  producao: { emoji: '✍️', label: 'Produção', color: '#10B981' },
-  revisao: { emoji: '🔍', label: 'Revisão', color: '#06B6D4' },
-  design: { emoji: '🎨', label: 'Design', color: '#EC4899' },
-  aprovacao_cliente: { emoji: '👁️', label: 'Aprovação Cliente', color: '#F59E0B' },
-  ajuste: { emoji: '🔄', label: 'Ajuste', color: '#F97316' },
-  aprovado: { emoji: '✅', label: 'Aprovado', color: '#22C55E' },
-  agendado: { emoji: '📅', label: 'Agendado', color: '#3B82F6' },
-  publicado: { emoji: '🚀', label: 'Publicado', color: '#059669' },
+export const STATUS_CONFIG: Record<string, { emoji: string; label: string; color: string; description: string }> = {
+  nova_solicitacao: { emoji: '📩', label: 'Solicitação', color: '#8B5CF6', description: 'Demanda recebida do cliente ou equipe' },
+  rascunho:         { emoji: '📝', label: 'Rascunho', color: '#6B7280', description: 'Briefing e ideia registrada' },
+  producao:         { emoji: '⚙️', label: 'Produção', color: '#3B82F6', description: 'Copy + Design em andamento' },
+  aprovacao:        { emoji: '👁️', label: 'Aprovação', color: '#F59E0B', description: 'Aguardando aprovação do cliente' },
+  ajuste:           { emoji: '🔄', label: 'Ajuste', color: '#F97316', description: 'Cliente pediu alterações' },
+  aprovado:         { emoji: '✅', label: 'Aprovado', color: '#22C55E', description: 'Material aprovado pelo cliente' },
+  agendado:         { emoji: '📅', label: 'Agendado', color: '#6366F1', description: 'Data e hora de publicação definidos' },
+  publicado:        { emoji: '🚀', label: 'Publicado', color: '#059669', description: 'Conteúdo publicado nas redes' },
 }
 
-export type StatusConteudo = 'nova_solicitacao' | 'rascunho' | 'producao' | 'revisao' | 'design' | 'aprovacao_cliente' | 'ajuste' | 'aprovado' | 'agendado' | 'publicado'
+export type StatusConteudo = 'nova_solicitacao' | 'rascunho' | 'producao' | 'aprovacao' | 'ajuste' | 'aprovado' | 'agendado' | 'publicado'
+
+// Map ALL legacy/old status values to the new pipeline
+export const LEGACY_STATUS_MAP: Record<string, string> = {
+  conteudo: 'producao',
+  revisao: 'producao',
+  design: 'producao',
+  aprovacao_cliente: 'aprovacao',
+  ajustes: 'ajuste',
+  aprovado_agendado: 'aprovado',
+  concluido: 'publicado',
+}
+
+export function normalizeStatus(status: string): string {
+  return LEGACY_STATUS_MAP[status] || status
+}
 
 export const KANBAN_COLUMNS = Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({
   key: key as StatusConteudo,

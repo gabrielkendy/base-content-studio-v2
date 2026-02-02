@@ -10,22 +10,10 @@ import { Select, Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate } from '@/lib/utils'
+import { STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate, normalizeStatus } from '@/lib/utils'
 import { Search, X, Filter, Inbox } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/types/database'
-
-// Map legacy status values from old Conteúdos do Mês to STATUS_CONFIG keys
-const LEGACY_STATUS_MAP: Record<string, string> = {
-  conteudo: 'producao',
-  ajustes: 'ajuste',
-  aprovado_agendado: 'aprovado',
-  concluido: 'publicado',
-}
-
-function normalizeStatus(status: string): string {
-  return LEGACY_STATUS_MAP[status] || status
-}
 
 type KanbanItem = {
   id: string

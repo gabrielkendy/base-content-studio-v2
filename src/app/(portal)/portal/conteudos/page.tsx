@@ -6,17 +6,19 @@ import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/input'
+import { normalizeStatus } from '@/lib/utils'
 import { ArrowRight, Search, Filter } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente } from '@/types/database'
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'default' | 'info'; bg: string }> = {
-  aprovacao_cliente: { label: 'Aguardando', variant: 'warning', bg: 'from-amber-400 to-orange-500' },
-  aprovado_agendado: { label: 'Aprovado', variant: 'success', bg: 'from-green-400 to-emerald-500' },
-  ajustes: { label: 'Ajustes', variant: 'danger', bg: 'from-red-400 to-rose-500' },
-  concluido: { label: 'Concluído', variant: 'success', bg: 'from-green-400 to-emerald-500' },
-  em_producao: { label: 'Produção', variant: 'info', bg: 'from-blue-400 to-indigo-500' },
+  nova_solicitacao: { label: 'Solicitação', variant: 'default', bg: 'from-purple-400 to-violet-500' },
   rascunho: { label: 'Rascunho', variant: 'default', bg: 'from-gray-400 to-gray-500' },
+  producao: { label: 'Produção', variant: 'info', bg: 'from-blue-400 to-indigo-500' },
+  aprovacao: { label: 'Aguardando', variant: 'warning', bg: 'from-amber-400 to-orange-500' },
+  ajuste: { label: 'Ajuste', variant: 'danger', bg: 'from-red-400 to-rose-500' },
+  aprovado: { label: 'Aprovado', variant: 'success', bg: 'from-green-400 to-emerald-500' },
+  agendado: { label: 'Agendado', variant: 'success', bg: 'from-indigo-400 to-blue-500' },
   publicado: { label: 'Publicado', variant: 'success', bg: 'from-green-400 to-emerald-500' },
 }
 
@@ -64,7 +66,7 @@ export default function ConteudosPage() {
       filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
       order: [{ col: 'created_at', asc: false }],
     })
-    setConteudos((data as any) || [])
+    setConteudos(((data as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
     setLoading(false)
   }
 

@@ -6,15 +6,17 @@ import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
+import { normalizeStatus } from '@/lib/utils'
 import { CheckCircle, Clock, Eye, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente } from '@/types/database'
 
 const STATUS_LABELS: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'default' }> = {
-  aprovacao_cliente: { label: 'Aguardando aprovação', variant: 'warning' },
-  aprovado_agendado: { label: 'Aprovado', variant: 'success' },
-  ajustes: { label: 'Ajustes solicitados', variant: 'danger' },
-  concluido: { label: 'Concluído', variant: 'success' },
+  aprovacao: { label: 'Aguardando aprovação', variant: 'warning' },
+  aprovado: { label: 'Aprovado', variant: 'success' },
+  ajuste: { label: 'Ajuste solicitado', variant: 'danger' },
+  agendado: { label: 'Agendado', variant: 'success' },
+  publicado: { label: 'Publicado', variant: 'success' },
 }
 
 const TIPO_EMOJI: Record<string, string> = {
@@ -39,23 +41,23 @@ export default function AprovacoesListPage() {
       select: '*, empresa:clientes(id, nome, slug, cores)',
       filters: [
         { op: 'eq', col: 'org_id', val: org!.id },
-        { op: 'eq', col: 'status', val: 'aprovacao_cliente' },
+        { op: 'eq', col: 'status', val: 'aprovacao' },
       ],
       order: [{ col: 'updated_at', asc: false }],
     })
-    setPendentes((pend as any) || [])
+    setPendentes(((pend as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
 
     // Histórico (aprovados + ajustes)
     const { data: hist } = await db.select('conteudos', {
       select: '*, empresa:clientes(id, nome, slug, cores)',
       filters: [
         { op: 'eq', col: 'org_id', val: org!.id },
-        { op: 'in', col: 'status', val: ['aprovado_agendado', 'ajustes', 'concluido'] },
+        { op: 'in', col: 'status', val: ['aprovado', 'ajuste', 'agendado', 'publicado'] },
       ],
       order: [{ col: 'updated_at', asc: false }],
       limit: 20,
     })
-    setHistorico((hist as any) || [])
+    setHistorico(((hist as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
     setLoading(false)
   }
 

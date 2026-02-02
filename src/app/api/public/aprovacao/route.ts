@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { normalizeStatus } from '@/lib/utils'
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(request: NextRequest) {
@@ -84,7 +85,7 @@ export async function POST(request: NextRequest) {
     // Update content status
     const conteudo = aprovacao.conteudo as any
     if (conteudo) {
-      const newContentStatus = status === 'aprovado' ? 'aprovado_agendado' : 'ajustes'
+      const newContentStatus = status === 'aprovado' ? 'aprovado' : 'ajuste'
       await supabase
         .from('conteudos')
         .update({
@@ -109,7 +110,7 @@ export async function POST(request: NextRequest) {
               data: {
                 conteudo_id: conteudo.id,
                 titulo: conteudo.titulo,
-                new_status: status === 'aprovado' ? 'aprovado_agendado' : 'ajustes',
+                new_status: status === 'aprovado' ? 'aprovado' : 'ajuste',
                 comentario: comentario || null,
                 cliente_nome: cliente_nome || null,
               },

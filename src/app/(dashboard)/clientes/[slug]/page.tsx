@@ -16,17 +16,7 @@ import { useToast } from '@/components/ui/toast'
 import { ChevronLeft, ChevronRight, Plus, Calendar, Users, Trash2, Mail, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Member, MemberClient } from '@/types/database'
-
-// Map legacy status values to STATUS_CONFIG keys
-const LEGACY_STATUS_MAP: Record<string, string> = {
-  conteudo: 'producao',
-  ajustes: 'ajuste',
-  aprovado_agendado: 'aprovado',
-  concluido: 'publicado',
-}
-function normalizeStatus(status: string): string {
-  return LEGACY_STATUS_MAP[status] || status
-}
+import { normalizeStatus } from '@/lib/utils'
 
 export default function ClienteDetailPage() {
   const params = useParams()

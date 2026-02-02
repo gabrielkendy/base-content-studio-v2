@@ -8,7 +8,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import { Skeleton } from '@/components/ui/skeleton'
-import { STATUS_CONFIG, TIPO_EMOJI, formatDate } from '@/lib/utils'
+import { STATUS_CONFIG, TIPO_EMOJI, formatDate, normalizeStatus } from '@/lib/utils'
 import {
   FileText, CheckCircle, Clock, AlertTriangle, Inbox,
   ArrowRight, Bell, BellDot, Eye, Kanban, Calendar,
@@ -31,8 +31,8 @@ function timeAgo(dateStr: string) {
 export default function DashboardPage() {
   const { org, member, user, loading: authLoading } = useAuth()
   const [stats, setStats] = useState({
-    total: 0, producao: 0, revisao: 0, design: 0,
-    aprovacao: 0, atrasados: 0, aprovados: 0, concluidos_mes: 0,
+    total: 0, producao: 0, aprovacao: 0,
+    atrasados: 0, aprovados: 0, concluidos_mes: 0,
   })
   const [minhasTarefas, setMinhasTarefas] = useState<(Conteudo & { empresa?: Cliente })[]>([])
   const [proximos, setProximos] = useState<(Conteudo & { empresa?: Cliente })[]>([])
@@ -59,10 +59,10 @@ export default function DashboardPage() {
       order: [{ col: 'updated_at', asc: false }],
     })
 
-    const all: Conteudo[] = conteudos || []
+    const all: Conteudo[] = (conteudos || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) }))
 
     // Stats
-    const statusActive = ['producao', 'revisao', 'design', 'aprovacao_cliente', 'ajuste']
+    const statusActive = ['producao', 'aprovacao', 'ajuste']
     const atrasados = all.filter(c =>
       c.data_publicacao && c.data_publicacao < hoje &&
       !['aprovado', 'agendado', 'publicado'].includes(c.status)
@@ -75,9 +75,7 @@ export default function DashboardPage() {
     setStats({
       total: all.length,
       producao: all.filter(c => c.status === 'producao').length,
-      revisao: all.filter(c => c.status === 'revisao').length,
-      design: all.filter(c => c.status === 'design').length,
-      aprovacao: all.filter(c => c.status === 'aprovacao_cliente').length,
+      aprovacao: all.filter(c => c.status === 'aprovacao').length,
       atrasados: atrasados.length,
       aprovados: all.filter(c => c.status === 'aprovado').length,
       concluidos_mes: concluidos.length,
@@ -143,8 +141,8 @@ export default function DashboardPage() {
 
   const STAT_CARDS = [
     { label: 'Em Produção', value: stats.producao, icon: Flame, color: 'text-emerald-600', bg: 'bg-emerald-50', ring: 'ring-emerald-200' },
-    { label: 'Em Revisão', value: stats.revisao, icon: Eye, color: 'text-cyan-600', bg: 'bg-cyan-50', ring: 'ring-cyan-200' },
     { label: 'Aguardando Aprovação', value: stats.aprovacao, icon: Clock, color: 'text-amber-600', bg: 'bg-amber-50', ring: 'ring-amber-200' },
+    { label: 'Aprovados', value: stats.aprovados, icon: CheckCircle, color: 'text-green-600', bg: 'bg-green-50', ring: 'ring-green-200' },
     { label: 'Atrasados', value: stats.atrasados, icon: AlertTriangle, color: 'text-red-600', bg: 'bg-red-50', ring: 'ring-red-200' },
   ]
 
@@ -216,11 +214,10 @@ export default function DashboardPage() {
             />
           </div>
           <div className="flex gap-4 mt-2 text-[10px] text-zinc-400">
-            <span>✍️ Produção: {stats.producao}</span>
-            <span>🔍 Revisão: {stats.revisao}</span>
-            <span>🎨 Design: {stats.design}</span>
+            <span>⚙️ Produção: {stats.producao}</span>
             <span>👁️ Aprovação: {stats.aprovacao}</span>
             <span>✅ Aprovados: {stats.aprovados}</span>
+            <span>🚀 Concluídos: {stats.concluidos_mes}</span>
           </div>
         </CardContent>
       </Card>

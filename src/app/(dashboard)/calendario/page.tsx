@@ -8,7 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
-import { STATUS_CONFIG, TIPO_EMOJI, MESES } from '@/lib/utils'
+import { STATUS_CONFIG, TIPO_EMOJI, MESES, normalizeStatus } from '@/lib/utils'
 import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente } from '@/types/database'
@@ -60,7 +60,7 @@ export default function CalendarioPage() {
       filters: conteudoFilters,
       order: [{ col: 'data_publicacao', asc: true }],
     })
-    setConteudos((data as any) || [])
+    setConteudos(((data as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
 
     // Load scheduled posts for this month
     const startDate = `${ano}-${String(mes + 1).padStart(2, '0')}-01`
@@ -283,9 +283,9 @@ export default function CalendarioPage() {
                             <div className="text-xs text-zinc-500 mt-0.5">{p.empresa?.nome}</div>
                           </div>
                           <Badge variant={
-                            p.status === 'concluido' ? 'success' :
-                            p.status === 'aprovacao_cliente' ? 'warning' :
-                            p.status === 'ajustes' ? 'danger' : 'default'
+                            p.status === 'publicado' ? 'success' :
+                            p.status === 'aprovacao' ? 'warning' :
+                            p.status === 'ajuste' ? 'danger' : 'default'
                           } className="text-[10px] px-1.5 py-0.5">
                             {STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]?.label || p.status}
                           </Badge>

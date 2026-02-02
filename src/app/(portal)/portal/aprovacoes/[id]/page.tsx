@@ -15,6 +15,7 @@ import {
   ExternalLink, Hash
 } from 'lucide-react'
 import Link from 'next/link'
+import { normalizeStatus } from '@/lib/utils'
 import type { Conteudo, Cliente } from '@/types/database'
 
 const TIPO_EMOJI: Record<string, string> = {
@@ -63,7 +64,8 @@ export default function AprovacaoDetailPage() {
       return
     }
 
-    setConteudo(data)
+    const normalized = { ...data, status: normalizeStatus(data.status) }
+    setConteudo(normalized)
     setCliente((data as any).empresa)
     setLoading(false)
   }
@@ -78,7 +80,7 @@ export default function AprovacaoDetailPage() {
 
     try {
       // Atualizar status do conteúdo
-      const newStatus = aprovado ? 'aprovado_agendado' : 'ajustes'
+      const newStatus = aprovado ? 'aprovado' : 'ajuste'
       const { error } = await db.update('conteudos', {
         status: newStatus,
         updated_at: new Date().toISOString(),
@@ -213,8 +215,8 @@ export default function AprovacaoDetailPage() {
   const mediaUrls = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
   const promptsImg = Array.isArray(conteudo.prompts_imagem) ? conteudo.prompts_imagem : []
   const promptsVid = Array.isArray(conteudo.prompts_video) ? conteudo.prompts_video : []
-  const jaAprovado = ['aprovado_agendado', 'concluido'].includes(conteudo.status)
-  const pedidoAjuste = conteudo.status === 'ajustes'
+  const jaAprovado = ['aprovado', 'agendado', 'publicado'].includes(conteudo.status)
+  const pedidoAjuste = conteudo.status === 'ajuste'
 
   return (
     <div className="max-w-3xl mx-auto space-y-6 animate-fade-in">
@@ -386,7 +388,7 @@ export default function AprovacaoDetailPage() {
       )}
 
       {/* Formulário de aprovação */}
-      {conteudo.status === 'aprovacao_cliente' && (
+      {conteudo.status === 'aprovacao' && (
         <Card className="border-2 border-blue-200">
           <CardContent className="py-6">
             <h3 className="text-lg font-semibold text-gray-900 mb-4">✅ Sua Aprovação</h3>

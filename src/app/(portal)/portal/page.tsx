@@ -5,6 +5,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { normalizeStatus } from '@/lib/utils'
 import {
   Clock, CheckCircle, FileText, TrendingUp,
   ArrowRight, Eye, Zap, Calendar
@@ -13,22 +14,24 @@ import Link from 'next/link'
 import type { Conteudo, Solicitacao, Cliente, ActivityLog } from '@/types/database'
 
 const STATUS_COLORS: Record<string, string> = {
-  aprovado_agendado: '#22c55e',
-  concluido: '#22c55e',
-  aprovacao_cliente: '#eab308',
-  ajustes: '#eab308',
-  em_producao: '#3b82f6',
+  nova_solicitacao: '#8B5CF6',
   rascunho: '#3b82f6',
+  producao: '#3b82f6',
+  aprovacao: '#eab308',
+  ajuste: '#eab308',
+  aprovado: '#22c55e',
+  agendado: '#6366F1',
   publicado: '#22c55e',
 }
 
 const STATUS_LABELS: Record<string, string> = {
-  aprovacao_cliente: 'Pendente',
-  aprovado_agendado: 'Aprovado',
-  ajustes: 'Ajuste',
-  em_producao: 'Produção',
+  nova_solicitacao: 'Solicitação',
   rascunho: 'Rascunho',
-  concluido: 'Concluído',
+  producao: 'Produção',
+  aprovacao: 'Pendente',
+  ajuste: 'Ajuste',
+  aprovado: 'Aprovado',
+  agendado: 'Agendado',
   publicado: 'Publicado',
 }
 
@@ -75,7 +78,7 @@ export default function PortalHomePage() {
       }),
     ])
 
-    setConteudos((contRes.data as any) || [])
+    setConteudos(((contRes.data as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
     setSolicitacoes((solRes.data as any) || [])
     setLoading(false)
   }
@@ -88,9 +91,9 @@ export default function PortalHomePage() {
         const d = new Date(c.created_at)
         return d.getMonth() + 1 === m.month && d.getFullYear() === m.year
       })
-      const aprovados = monthConteudos.filter(c => ['aprovado_agendado', 'concluido', 'publicado'].includes(c.status)).length
-      const producao = monthConteudos.filter(c => ['em_producao', 'rascunho'].includes(c.status)).length
-      const pendentes = monthConteudos.filter(c => ['aprovacao_cliente', 'ajustes'].includes(c.status)).length
+      const aprovados = monthConteudos.filter(c => ['aprovado', 'agendado', 'publicado'].includes(c.status)).length
+      const producao = monthConteudos.filter(c => ['rascunho', 'producao'].includes(c.status)).length
+      const pendentes = monthConteudos.filter(c => ['aprovacao', 'ajuste'].includes(c.status)).length
       return { ...m, aprovados, producao, pendentes, total: aprovados + producao + pendentes }
     })
   }, [conteudos, months])
@@ -103,21 +106,21 @@ export default function PortalHomePage() {
     const d = new Date(c.created_at)
     return d.getMonth() === now.getMonth() && d.getFullYear() === now.getFullYear()
   })
-  const prontos = currentMonthConteudos.filter(c => ['aprovado_agendado', 'concluido', 'publicado'].includes(c.status)).length
+  const prontos = currentMonthConteudos.filter(c => ['aprovado', 'agendado', 'publicado'].includes(c.status)).length
   const totalMes = currentMonthConteudos.length
   const progressPercent = totalMes > 0 ? Math.round((prontos / totalMes) * 100) : 0
 
   // Summary cards
-  const pendentesAprovacao = conteudos.filter(c => c.status === 'aprovacao_cliente').length
-  const emProducao = conteudos.filter(c => ['em_producao', 'rascunho'].includes(c.status)).length
-  const publicadosMes = currentMonthConteudos.filter(c => ['concluido', 'publicado', 'aprovado_agendado'].includes(c.status)).length
+  const pendentesAprovacao = conteudos.filter(c => c.status === 'aprovacao').length
+  const emProducao = conteudos.filter(c => ['rascunho', 'producao'].includes(c.status)).length
+  const publicadosMes = currentMonthConteudos.filter(c => ['aprovado', 'agendado', 'publicado'].includes(c.status)).length
 
   // Timeline - combine recent conteudos and solicitacoes
   const timeline = useMemo(() => {
     const events: { id: string; type: string; title: string; desc: string; date: string; icon: string; color: string }[] = []
 
     conteudos.slice(0, 20).forEach(c => {
-      if (['aprovado_agendado', 'concluido'].includes(c.status)) {
+      if (['aprovado', 'agendado', 'publicado'].includes(c.status)) {
         events.push({
           id: c.id + '-apr',
           type: 'aprovacao',
@@ -128,7 +131,7 @@ export default function PortalHomePage() {
           color: 'bg-green-100 text-green-700',
         })
       }
-      if (c.status === 'aprovacao_cliente') {
+      if (c.status === 'aprovacao') {
         events.push({
           id: c.id + '-pend',
           type: 'pendente',

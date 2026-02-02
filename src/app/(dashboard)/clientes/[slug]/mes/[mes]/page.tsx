@@ -26,7 +26,7 @@ import {
 } from 'lucide-react'
 import type { Cliente, Conteudo, Member } from '@/types/database'
 import Link from 'next/link'
-import { MESES, TIPOS_CONTEUDO, CANAIS as CANAIS_CONFIG, STATUS_CONFIG } from '@/lib/utils'
+import { MESES, TIPOS_CONTEUDO, CANAIS as CANAIS_CONFIG, STATUS_CONFIG, normalizeStatus } from '@/lib/utils'
 import { dispatchWebhook } from '@/lib/webhooks'
 
 // Derive STATUS_OPTIONS from the single source of truth (STATUS_CONFIG)
@@ -34,12 +34,10 @@ import { dispatchWebhook } from '@/lib/webhooks'
 const STATUS_COLORS: Record<string, string> = {
   rascunho: 'bg-gray-100 text-gray-800',
   producao: 'bg-blue-100 text-blue-800',
-  revisao: 'bg-cyan-100 text-cyan-800',
-  design: 'bg-purple-100 text-purple-800',
-  aprovacao_cliente: 'bg-yellow-100 text-yellow-800',
+  aprovacao: 'bg-yellow-100 text-yellow-800',
   ajuste: 'bg-orange-100 text-orange-800',
   aprovado: 'bg-green-100 text-green-800',
-  agendado: 'bg-blue-100 text-blue-700',
+  agendado: 'bg-indigo-100 text-indigo-800',
   publicado: 'bg-emerald-100 text-emerald-800',
 }
 
@@ -51,17 +49,7 @@ const STATUS_OPTIONS = Object.entries(STATUS_CONFIG)
     color: STATUS_COLORS[key] || 'bg-gray-100 text-gray-800',
   }))
 
-// Map legacy status values to new ones
-const LEGACY_STATUS_MAP: Record<string, string> = {
-  conteudo: 'producao',
-  ajustes: 'ajuste',
-  aprovado_agendado: 'aprovado',
-  concluido: 'publicado',
-}
-
-function normalizeStatus(status: string): string {
-  return LEGACY_STATUS_MAP[status] || status
-}
+// normalizeStatus imported from @/lib/utils
 
 const CANAIS = CANAIS_CONFIG.map(c => ({ id: c.id, label: c.label, icon: c.icon }))
 
@@ -421,7 +409,7 @@ export default function ConteudosMesPage() {
   const getStatusIcon = (status: string) => {
     switch (status) {
       case 'publicado': return <CheckCircle className="w-4 h-4" />
-      case 'aprovacao_cliente': case 'ajuste': return <AlertTriangle className="w-4 h-4" />
+      case 'aprovacao': case 'ajuste': return <AlertTriangle className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
   }
@@ -616,7 +604,7 @@ export default function ConteudosMesPage() {
                         ))}
                       </select>
                       
-                      {conteudo.status === 'aprovacao_cliente' && (
+                      {conteudo.status === 'aprovacao' && (
                         <Button
                           size="sm"
                           onClick={() => generateApprovalLink(conteudo.id)}
@@ -625,7 +613,7 @@ export default function ConteudosMesPage() {
                           🔗 Link Aprovação
                         </Button>
                       )}
-                      {['aprovado_agendado', 'concluido'].includes(conteudo.status) && (
+                      {['aprovado', 'publicado'].includes(conteudo.status) && (
                         <Button
                           size="sm"
                           onClick={() => generateDeliveryLink(conteudo.id)}

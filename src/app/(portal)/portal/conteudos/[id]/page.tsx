@@ -15,6 +15,7 @@ import {
   ExternalLink, Hash, MessageSquare
 } from 'lucide-react'
 import Link from 'next/link'
+import { normalizeStatus } from '@/lib/utils'
 import type { Conteudo, Cliente, AprovacaoLink } from '@/types/database'
 
 const TIPO_EMOJI: Record<string, string> = {
@@ -22,12 +23,13 @@ const TIPO_EMOJI: Record<string, string> = {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; variant: 'warning' | 'success' | 'danger' | 'default' | 'info' }> = {
-  aprovacao_cliente: { label: 'Aguardando aprovação', variant: 'warning' },
-  aprovado_agendado: { label: 'Aprovado', variant: 'success' },
-  ajustes: { label: 'Ajustes solicitados', variant: 'danger' },
-  concluido: { label: 'Concluído', variant: 'success' },
-  em_producao: { label: 'Em produção', variant: 'info' },
+  nova_solicitacao: { label: 'Solicitação', variant: 'default' },
   rascunho: { label: 'Rascunho', variant: 'default' },
+  producao: { label: 'Produção', variant: 'info' },
+  aprovacao: { label: 'Aguardando aprovação', variant: 'warning' },
+  ajuste: { label: 'Ajuste solicitado', variant: 'danger' },
+  aprovado: { label: 'Aprovado', variant: 'success' },
+  agendado: { label: 'Agendado', variant: 'success' },
   publicado: { label: 'Publicado', variant: 'success' },
 }
 
@@ -77,7 +79,8 @@ export default function ConteudoDetailPage() {
     ])
 
     if (contRes.data) {
-      setConteudo(contRes.data)
+      const normalized = { ...contRes.data, status: normalizeStatus(contRes.data.status) }
+      setConteudo(normalized)
       setCliente((contRes.data as any).empresa)
     }
     setAprovacoes((apvRes.data as any) || [])
@@ -101,7 +104,7 @@ export default function ConteudoDetailPage() {
     setSubmitting(true)
     try {
       await db.update('conteudos', {
-        status: 'aprovado_agendado',
+        status: 'aprovado',
         updated_at: new Date().toISOString(),
       }, { id })
 
@@ -137,7 +140,7 @@ export default function ConteudoDetailPage() {
     setSubmitting(true)
     try {
       await db.update('conteudos', {
-        status: 'ajustes',
+        status: 'ajuste',
         updated_at: new Date().toISOString(),
       }, { id })
 
@@ -222,7 +225,7 @@ export default function ConteudoDetailPage() {
   const primaria = cliente?.cores?.primaria || '#6366F1'
   const canais = Array.isArray(conteudo.canais) ? conteudo.canais : []
   const st = STATUS_CONFIG[conteudo.status]
-  const canApprove = conteudo.status === 'aprovacao_cliente'
+  const canApprove = conteudo.status === 'aprovacao'
   const ajusteHistory = aprovacoes.filter(a => a.status === 'ajuste' && a.comentario_cliente)
 
   return (

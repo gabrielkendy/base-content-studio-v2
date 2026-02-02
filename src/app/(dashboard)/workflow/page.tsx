@@ -142,11 +142,13 @@ export default function WorkflowPage() {
 
   async function handleDrop(e: React.DragEvent, newStatus: string) {
     e.preventDefault()
+    e.stopPropagation()
     const rawId = e.dataTransfer.getData('text/plain')
-    if (!rawId) return
+    if (!rawId) { setDragging(null); return }
 
-    // Solicitação being dropped into rascunho = aceitar
-    if (rawId.startsWith('sol_') && newStatus !== 'nova_solicitacao') {
+    // Solicitação being dropped
+    if (rawId.startsWith('sol_')) {
+      if (newStatus === 'nova_solicitacao') { setDragging(null); return } // same column
       const solId = rawId.replace('sol_', '')
       if (newStatus !== 'rascunho') {
         toast('Arraste solicitações apenas para "Rascunho"', 'error')
@@ -165,12 +167,15 @@ export default function WorkflowPage() {
         toast('Erro ao aceitar solicitação', 'error')
       }
       setDragging(null)
-      loadData()
+      await loadData()
       return
     }
 
     // Regular conteúdo move
-    if (!rawId.startsWith('sol_')) {
+    const currentItem = kanbanItems.find(i => i.id === rawId)
+    if (currentItem && currentItem.status === newStatus) { setDragging(null); return } // same column
+
+    try {
       await db.update('conteudos', {
         status: newStatus,
         updated_at: new Date().toISOString()
@@ -178,9 +183,11 @@ export default function WorkflowPage() {
 
       const cfg = STATUS_CONFIG[newStatus]
       toast(`Movido para ${cfg?.label || newStatus}`, 'success')
-      setDragging(null)
-      loadData()
+    } catch (err) {
+      toast('Erro ao mover card', 'error')
     }
+    setDragging(null)
+    await loadData()
   }
 
   if (loading) {
@@ -260,9 +267,13 @@ export default function WorkflowPage() {
               </div>
 
               {/* Cards container */}
-              <div className={`flex-1 space-y-2 p-2 rounded-xl transition-colors min-h-[100px] ${
-                isDropTarget ? 'bg-zinc-50/80 border-2 border-dashed border-zinc-200' : 'bg-zinc-50/40'
-              }`}>
+              <div
+                className={`flex-1 space-y-2 p-2 rounded-xl transition-all min-h-[100px] ${
+                  isDropTarget ? 'bg-zinc-50/80 border-2 border-dashed border-zinc-300 shadow-inner' : 'bg-zinc-50/40 border-2 border-transparent'
+                }`}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                onDragEnter={e => e.preventDefault()}
+              >
                 {items.map(item => (
                   <KanbanCard
                     key={item.id}

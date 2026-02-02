@@ -777,130 +777,161 @@ export default function AgendarPage() {
         {/* ════════ COLUNA 3: Preview + Agendamento ════════ */}
         <div className="space-y-5">
 
-          {/* Preview */}
-          <Card>
-            <CardContent className="p-5">
-              <h2 className="font-semibold text-zinc-900 mb-3 text-sm uppercase tracking-wide">
-                👁️ Preview
-              </h2>
-
+          {/* Preview — Instagram-style realistic */}
+          <Card className="overflow-hidden">
+            <CardContent className="p-0">
               {selectedPlatforms.length === 0 ? (
-                <div className="text-center py-10">
-                  <div className="text-3xl mb-2 opacity-30">📱</div>
+                <div className="text-center py-14 px-5">
+                  <div className="text-4xl mb-3 opacity-20">📱</div>
                   <p className="text-xs text-zinc-400">Selecione perfis para ver o preview</p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div>
                   {selectedPlatforms.map(account => {
                     const platform = PLATFORMS.find(p => p.id === account.platform)
                     if (!platform) return null
                     const formatId = platformFormats.get(platform.id)
                     const format = platform.formats.find(f => f.id === formatId)
+                    const idx = Math.min(previewIndex, Math.max(uploadedMedia.length - 1, 0))
+                    const currentMedia = uploadedMedia[idx]
+                    const captionText = (customCaptions ? captionByPlatform[platform.id] : caption) || ''
 
                     return (
-                      <div key={account.id} className="rounded-xl border border-zinc-100 overflow-hidden">
-                        {/* Platform Header */}
-                        <div className="flex items-center gap-2 p-3 bg-zinc-50 border-b border-zinc-100">
-                          <div
-                            className="w-7 h-7 rounded-lg flex items-center justify-center text-sm"
-                            style={{ backgroundColor: platform.bgColor }}
-                          >
-                            {account.profile_avatar ? (
-                              <img src={account.profile_avatar} alt="" className="w-6 h-6 rounded-md object-cover" />
-                            ) : (
-                              platform.icon
-                            )}
+                      <div key={account.id} className="bg-white">
+                        {/* ── Instagram-style header ── */}
+                        <div className="flex items-center gap-2.5 px-3.5 py-2.5 border-b border-zinc-100">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 via-pink-500 to-purple-600 p-[2px]">
+                            <div className="w-full h-full rounded-full bg-white p-[1px]">
+                              {account.profile_avatar ? (
+                                <img src={account.profile_avatar} alt="" className="w-full h-full rounded-full object-cover" />
+                              ) : (
+                                <div className="w-full h-full rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500">
+                                  {(account.profile_name || platform.name).charAt(0).toUpperCase()}
+                                </div>
+                              )}
+                            </div>
                           </div>
-                          <div>
-                            <div className="text-xs font-semibold text-zinc-800">
+                          <div className="flex-1 min-w-0">
+                            <div className="text-[13px] font-semibold text-zinc-900 truncate">
                               {account.profile_name || platform.name}
                             </div>
                             <div className="text-[10px] text-zinc-400">
                               {format ? `${format.name} • ${format.aspectRatio}` : platform.name}
                             </div>
                           </div>
+                          <svg className="w-5 h-5 text-zinc-400" fill="currentColor" viewBox="0 0 24 24">
+                            <circle cx="12" cy="6" r="1.5" /><circle cx="12" cy="12" r="1.5" /><circle cx="12" cy="18" r="1.5" />
+                          </svg>
                         </div>
 
-                        {/* Media Preview with Carousel */}
-                        {uploadedMedia.length > 0 && format && (() => {
-                          const idx = Math.min(previewIndex, uploadedMedia.length - 1)
-                          const currentMedia = uploadedMedia[idx]
-                          return (
-                            <div
-                              className="relative bg-zinc-900 overflow-hidden group"
-                              style={{
-                                aspectRatio: `${format.width}/${format.height}`,
-                                maxHeight: '280px',
-                              }}
-                            >
-                              {currentMedia.isVideo ? (
-                                <video
-                                  src={currentMedia.url}
-                                  className="w-full h-full object-cover"
-                                  muted
-                                />
-                              ) : (
-                                <img
-                                  src={currentMedia.preview || currentMedia.url}
-                                  alt=""
-                                  className="w-full h-full object-cover"
-                                />
-                              )}
+                        {/* ── Media area — adapts to format aspect ratio ── */}
+                        {uploadedMedia.length > 0 && format ? (
+                          <div
+                            className="relative bg-black overflow-hidden group"
+                            style={{ aspectRatio: `${format.width}/${format.height}` }}
+                          >
+                            {currentMedia?.isVideo ? (
+                              <video
+                                src={currentMedia.url}
+                                className="w-full h-full object-contain bg-black"
+                                muted
+                                playsInline
+                              />
+                            ) : currentMedia ? (
+                              <img
+                                src={currentMedia.preview || currentMedia.url}
+                                alt=""
+                                className="w-full h-full object-contain bg-black"
+                              />
+                            ) : null}
 
-                              {/* Navigation Arrows */}
-                              {uploadedMedia.length > 1 && (
-                                <>
-                                  {/* Left Arrow */}
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setPreviewIndex(i => i <= 0 ? uploadedMedia.length - 1 : i - 1) }}
-                                    className="absolute left-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-                                    </svg>
-                                  </button>
-                                  {/* Right Arrow */}
-                                  <button
-                                    onClick={(e) => { e.stopPropagation(); setPreviewIndex(i => i >= uploadedMedia.length - 1 ? 0 : i + 1) }}
-                                    className="absolute right-1.5 top-1/2 -translate-y-1/2 w-7 h-7 rounded-full bg-black/50 hover:bg-black/70 text-white flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
-                                  >
-                                    <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
-                                      <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                                    </svg>
-                                  </button>
-                                  {/* Dot Indicators */}
-                                  <div className="absolute bottom-2 left-1/2 -translate-x-1/2 flex gap-1">
-                                    {uploadedMedia.map((_, i) => (
-                                      <button
-                                        key={i}
-                                        onClick={(e) => { e.stopPropagation(); setPreviewIndex(i) }}
-                                        className={`w-1.5 h-1.5 rounded-full transition-all ${
-                                          i === idx ? 'bg-white w-3' : 'bg-white/50 hover:bg-white/70'
-                                        }`}
-                                      />
-                                    ))}
-                                  </div>
-                                  {/* Counter Badge */}
-                                  <div className="absolute top-2 right-2 bg-black/60 text-white text-[10px] px-2 py-0.5 rounded-full backdrop-blur-sm">
-                                    {idx + 1}/{uploadedMedia.length}
-                                  </div>
-                                </>
-                              )}
-                            </div>
-                          )
-                        })()}
-
-                        {/* Caption Preview */}
-                        <div className="p-3">
-                          <p className="text-xs text-zinc-700 whitespace-pre-wrap line-clamp-4">
-                            {(customCaptions
-                              ? captionByPlatform[platform.id]
-                              : caption) || (
-                              <span className="text-zinc-300 italic">Sua legenda aparecerá aqui...</span>
+                            {/* Carousel arrows */}
+                            {uploadedMedia.length > 1 && (
+                              <>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setPreviewIndex(i => i <= 0 ? uploadedMedia.length - 1 : i - 1) }}
+                                  className="absolute left-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-zinc-700 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                                  </svg>
+                                </button>
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); setPreviewIndex(i => i >= uploadedMedia.length - 1 ? 0 : i + 1) }}
+                                  className="absolute right-2 top-1/2 -translate-y-1/2 w-8 h-8 rounded-full bg-white/90 hover:bg-white text-zinc-700 flex items-center justify-center shadow-lg opacity-0 group-hover:opacity-100 transition-all"
+                                >
+                                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}>
+                                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                                  </svg>
+                                </button>
+                                {/* Dots */}
+                                <div className="absolute bottom-3 left-1/2 -translate-x-1/2 flex gap-1.5">
+                                  {uploadedMedia.map((_, i) => (
+                                    <button
+                                      key={i}
+                                      onClick={(e) => { e.stopPropagation(); setPreviewIndex(i) }}
+                                      className={`rounded-full transition-all ${
+                                        i === idx ? 'w-2 h-2 bg-blue-500' : 'w-1.5 h-1.5 bg-white/60 hover:bg-white/80'
+                                      }`}
+                                    />
+                                  ))}
+                                </div>
+                                {/* Counter */}
+                                <div className="absolute top-3 right-3 bg-black/60 text-white text-[11px] font-medium px-2.5 py-1 rounded-full backdrop-blur-sm">
+                                  {idx + 1}/{uploadedMedia.length}
+                                </div>
+                              </>
                             )}
-                          </p>
+                          </div>
+                        ) : (
+                          <div
+                            className="bg-zinc-100 flex items-center justify-center"
+                            style={{ aspectRatio: format ? `${format.width}/${format.height}` : '1/1' }}
+                          >
+                            <div className="text-center">
+                              <div className="text-3xl mb-2 opacity-20">🖼️</div>
+                              <p className="text-[10px] text-zinc-300">Adicione mídia</p>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* ── Instagram action bar ── */}
+                        <div className="flex items-center justify-between px-3.5 py-2.5">
+                          <div className="flex items-center gap-4">
+                            <svg className="w-6 h-6 text-zinc-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                            </svg>
+                            <svg className="w-6 h-6 text-zinc-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                            </svg>
+                            <svg className="w-6 h-6 text-zinc-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8" />
+                            </svg>
+                          </div>
+                          <svg className="w-6 h-6 text-zinc-800" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.8}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 5a2 2 0 012-2h10a2 2 0 012 2v16l-7-3.5L5 21V5z" />
+                          </svg>
+                        </div>
+
+                        {/* ── Caption ── */}
+                        <div className="px-3.5 pb-3">
+                          {captionText ? (
+                            <p className="text-[13px] text-zinc-900 leading-[1.4]">
+                              <span className="font-semibold mr-1">{account.profile_name || platform.name}</span>
+                              <span className="whitespace-pre-wrap">{captionText}</span>
+                            </p>
+                          ) : (
+                            <p className="text-[13px] text-zinc-300 italic">Sua legenda aparecerá aqui...</p>
+                          )}
                           {hashtags && (
-                            <p className="text-xs text-blue-500 mt-1">{hashtags}</p>
+                            <p className="text-[13px] text-blue-500 mt-0.5">{hashtags}</p>
+                          )}
+                          {scheduledDate && scheduledTime && (
+                            <p className="text-[10px] text-zinc-300 mt-2 uppercase">
+                              Agendado para {new Date(`${scheduledDate}T${scheduledTime}`).toLocaleString('pt-BR', {
+                                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                              })}
+                            </p>
                           )}
                         </div>
                       </div>

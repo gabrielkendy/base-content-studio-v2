@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/input'
@@ -11,18 +12,18 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { Plus, ArrowRight } from 'lucide-react'
 import Link from 'next/link'
-import type { Cliente } from '@/types/database'
+import type { Cliente, MemberClient } from '@/types/database'
 
 export default function ClientesPage() {
-  const { org, supabase, loading: authLoading } = useAuth()
+  const { org, member: currentMember, loading: authLoading } = useAuth()
   const { toast } = useToast()
-  const [clientes, setClientes] = useState<(Cliente & { _count: number })[]>([])
+  const [clientes, setClientes] = useState<(Cliente & { _count: number; _hasAccess: boolean })[]>([])
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null)
 
   // Form
-  const [form, setForm] = useState({ nome: '', slug: '', primaria: '#6366F1', secundaria: '#818CF8', contato: '', notas: '' })
+  const [form, setForm] = useState({ nome: '', slug: '', primaria: '#6366F1', secundaria: '#818CF8', contato: '', notas: '', email_cliente: '' })
 
   useEffect(() => {
     if (!org) return
@@ -30,20 +31,35 @@ export default function ClientesPage() {
   }, [org])
 
   async function loadClientes() {
-    const { data: cls } = await supabase
-      .from('clientes')
-      .select('*')
-      .eq('org_id', org!.id)
-      .order('nome')
+    const { data: cls } = await db.select('clientes', {
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      order: [{ col: 'nome', asc: true }],
+    })
+
+    // Get member_clients to check who has access
+    const { data: memberClients } = await db.select('member_clients', {
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+    })
+
+    // Get pending invites to check who was invited
+    const { data: pendingInvites } = await db.select('invites', {
+      filters: [
+        { op: 'eq', col: 'org_id', val: org!.id },
+        { op: 'eq', col: 'role', val: 'cliente' },
+        { op: 'is', col: 'accepted_at', val: null },
+      ],
+    })
+
+    const clienteIdsWithAccess = new Set((memberClients || []).map((mc: any) => mc.cliente_id))
 
     // Get content counts
     const withCounts = await Promise.all(
-      (cls || []).map(async (c) => {
-        const { count } = await supabase
-          .from('conteudos')
-          .select('*', { count: 'exact', head: true })
-          .eq('empresa_id', c.id)
-        return { ...c, _count: count || 0 }
+      (cls || []).map(async (c: any) => {
+        const { data: countData } = await db.select('conteudos', {
+          select: 'id',
+          filters: [{ op: 'eq', col: 'empresa_id', val: c.id }],
+        })
+        return { ...c, _count: countData?.length || 0, _hasAccess: clienteIdsWithAccess.has(c.id) }
       })
     )
 
@@ -53,7 +69,7 @@ export default function ClientesPage() {
 
   function openNew() {
     setEditingCliente(null)
-    setForm({ nome: '', slug: '', primaria: '#6366F1', secundaria: '#818CF8', contato: '', notas: '' })
+    setForm({ nome: '', slug: '', primaria: '#6366F1', secundaria: '#818CF8', contato: '', notas: '', email_cliente: '' })
     setModalOpen(true)
   }
 
@@ -66,6 +82,7 @@ export default function ClientesPage() {
       secundaria: c.cores?.secundaria || '#818CF8',
       contato: c.contato || '',
       notas: c.notas || '',
+      email_cliente: '',
     })
     setModalOpen(true)
   }
@@ -84,13 +101,40 @@ export default function ClientesPage() {
     }
 
     if (editingCliente) {
-      const { error } = await supabase.from('clientes').update(payload).eq('id', editingCliente.id)
+      const { error } = await db.update('clientes', payload, { id: editingCliente.id })
       if (error) { toast('Erro ao salvar', 'error'); return }
       toast('Cliente atualizado!', 'success')
     } else {
-      const { error } = await supabase.from('clientes').insert(payload)
+      const { data: newCliente, error } = await db.insert('clientes', payload, { select: '*', single: true })
       if (error) { toast('Erro ao criar cliente', 'error'); return }
-      toast('Cliente criado!', 'success')
+
+      // Auto-invite if email provided
+      if (form.email_cliente && newCliente) {
+        const token = Array.from({ length: 32 }, () =>
+          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
+        ).join('')
+
+        const { data: invite } = await db.insert('invites', {
+          org_id: org!.id,
+          email: form.email_cliente,
+          role: 'cliente',
+          token,
+          invited_by: currentMember?.user_id,
+        }, { select: '*', single: true })
+
+        // Link the invite to this client
+        if (invite) {
+          await db.insert('member_clients', {
+            member_id: invite.id,
+            cliente_id: newCliente.id,
+            org_id: org!.id,
+          })
+        }
+
+        toast('Cliente criado + convite enviado!', 'success')
+      } else {
+        toast('Cliente criado!', 'success')
+      }
     }
 
     setModalOpen(false)
@@ -149,7 +193,14 @@ export default function ClientesPage() {
                       ✏️
                     </button>
                   </div>
-                  <h3 className="font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors">{c.nome}</h3>
+                  <div className="flex items-center gap-2 mb-1">
+                    <h3 className="font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors">{c.nome}</h3>
+                    {c._hasAccess ? (
+                      <span className="inline-flex items-center text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">Convidado ✓</span>
+                    ) : (
+                      <span className="inline-flex items-center text-[10px] font-medium text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded-full">Sem acesso</span>
+                    )}
+                  </div>
                   <p className="text-xs text-zinc-400 mb-3">@{c.slug}</p>
                   <div className="flex items-center justify-between">
                     <span className="text-sm text-zinc-500">{c._count} conteúdos</span>
@@ -197,6 +248,18 @@ export default function ClientesPage() {
             <Label>Notas</Label>
             <Textarea value={form.notas} onChange={e => setForm({ ...form, notas: e.target.value })} placeholder="Observações sobre o cliente..." rows={3} />
           </div>
+          {!editingCliente && (
+            <div className="border-t border-zinc-100 pt-4">
+              <Label>📧 Email do cliente (opcional)</Label>
+              <Input
+                type="email"
+                value={form.email_cliente}
+                onChange={e => setForm({ ...form, email_cliente: e.target.value })}
+                placeholder="cliente@empresa.com"
+              />
+              <p className="text-xs text-zinc-400 mt-1">Se preenchido, um convite de acesso será enviado automaticamente</p>
+            </div>
+          )}
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setModalOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="primary">💾 Salvar</Button>

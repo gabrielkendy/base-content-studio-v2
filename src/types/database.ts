@@ -6,8 +6,18 @@ export interface Organization {
   slug: string
   logo_url: string | null
   plan: string
+  brand_color: string
+  accent_color: string
+  favicon_url: string | null
   created_at: string
   updated_at: string
+}
+
+export interface NotificationPreferences {
+  new_requests: boolean
+  pending_approvals: boolean
+  chat_messages: boolean
+  upcoming_deadlines: boolean
 }
 
 export interface Member {
@@ -66,6 +76,7 @@ export interface Conteudo {
   midia_urls: string[]
   canais: string[]
   assigned_to: string | null
+  solicitacao_id?: string
   created_at: string
   updated_at: string
   // Joined
@@ -146,6 +157,15 @@ export interface ActivityLog {
   created_at: string
   // Joined
   user?: Member
+}
+
+// Member-Client access mapping
+export interface MemberClient {
+  id: string
+  member_id: string
+  cliente_id: string
+  org_id: string
+  created_at: string
 }
 
 // Solicitações

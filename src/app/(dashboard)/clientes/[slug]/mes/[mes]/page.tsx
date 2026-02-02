@@ -3,6 +3,7 @@
 import { useState, useEffect, DragEvent } from 'react'
 import { useParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -25,13 +26,8 @@ import {
 } from 'lucide-react'
 import type { Cliente, Conteudo, Member } from '@/types/database'
 import Link from 'next/link'
-
-const MESES = [
-  'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
-  'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
-]
-
-const TIPOS_CONTEUDO = ['carrossel', 'post', 'stories', 'reels', 'igtv', 'feed']
+import { MESES, TIPOS_CONTEUDO, CANAIS as CANAIS_CONFIG } from '@/lib/utils'
+import { dispatchWebhook } from '@/lib/webhooks'
 
 const STATUS_OPTIONS = [
   { value: 'rascunho', label: 'Rascunho', color: 'bg-gray-100 text-gray-800' },
@@ -43,20 +39,13 @@ const STATUS_OPTIONS = [
   { value: 'concluido', label: 'Concluído', color: 'bg-emerald-100 text-emerald-800' }
 ]
 
-const CANAIS = [
-  { id: 'instagram', label: 'Instagram', icon: '📷' },
-  { id: 'facebook', label: 'Facebook', icon: '📘' },
-  { id: 'tiktok', label: 'TikTok', icon: '🎵' },
-  { id: 'youtube', label: 'YouTube', icon: '🔴' },
-  { id: 'linkedin', label: 'LinkedIn', icon: '💼' },
-  { id: 'twitter', label: 'Twitter/X', icon: '🐦' }
-]
+const CANAIS = CANAIS_CONFIG.map(c => ({ id: c.id, label: c.label, icon: c.icon }))
 
 export default function ConteudosMesPage() {
   const params = useParams()
   const slug = params.slug as string
   const mes = parseInt(params.mes as string)
-  const { org, member, supabase } = useAuth()
+  const { org, member } = useAuth()
   
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [conteudos, setConteudos] = useState<Conteudo[]>([])
@@ -100,14 +89,15 @@ export default function ConteudosMesPage() {
 
   const loadCliente = async () => {
     try {
-      const { data, error } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('org_id', org?.id)
-        .eq('slug', slug)
-        .single()
+      const { data, error } = await db.select('clientes', {
+        filters: [
+          { op: 'eq', col: 'org_id', val: org?.id },
+          { op: 'eq', col: 'slug', val: slug },
+        ],
+        single: true,
+      })
 
-      if (error) throw error
+      if (error) throw new Error(error)
       setCliente(data)
     } catch (error) {
       console.error('Erro ao carregar cliente:', error)
@@ -116,14 +106,15 @@ export default function ConteudosMesPage() {
 
   const loadMembers = async () => {
     try {
-      const { data, error } = await supabase
-        .from('members')
-        .select('*')
-        .eq('org_id', org?.id)
-        .eq('status', 'active')
-        .order('display_name')
+      const { data, error } = await db.select('members', {
+        filters: [
+          { op: 'eq', col: 'org_id', val: org?.id },
+          { op: 'eq', col: 'status', val: 'active' },
+        ],
+        order: [{ col: 'display_name', asc: true }],
+      })
 
-      if (error) throw error
+      if (error) throw new Error(error)
       setMembers(data || [])
     } catch (error) {
       console.error('Erro ao carregar membros:', error)
@@ -133,19 +124,18 @@ export default function ConteudosMesPage() {
   const loadConteudos = async () => {
     try {
       setLoading(true)
-      const { data, error } = await supabase
-        .from('conteudos')
-        .select(`
-          *,
-          assignee:members!assigned_to(id, display_name)
-        `)
-        .eq('org_id', org?.id)
-        .eq('empresa_id', cliente?.id)
-        .eq('mes', mes)
-        .eq('ano', ano)
-        .order('ordem')
+      const { data, error } = await db.select('conteudos', {
+        select: '*',
+        filters: [
+          { op: 'eq', col: 'org_id', val: org?.id },
+          { op: 'eq', col: 'empresa_id', val: cliente?.id },
+          { op: 'eq', col: 'mes', val: mes },
+          { op: 'eq', col: 'ano', val: ano },
+        ],
+        order: [{ col: 'ordem', asc: true }],
+      })
 
-      if (error) throw error
+      if (error) throw new Error(error)
       setConteudos(data || [])
     } catch (error) {
       console.error('Erro ao carregar conteúdos:', error)
@@ -163,7 +153,7 @@ export default function ConteudosMesPage() {
     try {
       const slides = formData.slides.filter(slide => slide.trim())
       
-      const payload = {
+      const payload: any = {
         org_id: org.id,
         empresa_id: cliente.id,
         mes,
@@ -173,31 +163,32 @@ export default function ConteudosMesPage() {
         descricao: formData.descricao || null,
         data_publicacao: formData.data_publicacao || null,
         badge: formData.badge || null,
-        canais: JSON.stringify(formData.canais),
+        canais: formData.canais,
         status: formData.status,
         assigned_to: formData.assigned_to || null,
-        slides: JSON.stringify(slides),
-        prompts_imagem: JSON.stringify([formData.prompt_imagem].filter(Boolean)),
-        prompts_video: JSON.stringify([formData.prompt_video].filter(Boolean)),
+        slides: slides,
+        prompts_imagem: [formData.prompt_imagem].filter(Boolean),
+        prompts_video: [formData.prompt_video].filter(Boolean),
         legenda: formData.legenda || null,
-        midia_urls: JSON.stringify(formData.midia_urls),
-        ordem: editingId ? undefined : conteudos.length + 1,
+        midia_urls: formData.midia_urls,
         updated_at: new Date().toISOString()
       }
 
+      const previousStatus = editingId ? conteudos.find(c => c.id === editingId)?.status : null
+
       if (editingId) {
-        const { error } = await supabase
-          .from('conteudos')
-          .update(payload)
-          .eq('id', editingId)
-
-        if (error) throw error
+        const { error } = await db.update('conteudos', payload, { id: editingId })
+        if (error) throw new Error(error)
+        // Dispatch webhook for status change
+        if (previousStatus && previousStatus !== formData.status) {
+          dispatchWebhook(org.id, 'content.status_changed', { conteudo_id: editingId, old_status: previousStatus, new_status: formData.status, titulo: formData.titulo })
+        }
       } else {
-        const { error } = await supabase
-          .from('conteudos')
-          .insert(payload)
-
-        if (error) throw error
+        payload.ordem = conteudos.length + 1
+        const { data: inserted, error } = await db.insert('conteudos', payload, { select: 'id', single: true })
+        if (error) throw new Error(error)
+        // Dispatch webhook for content created
+        dispatchWebhook(org.id, 'content.created', { conteudo_id: inserted?.id, titulo: formData.titulo, tipo: formData.tipo })
       }
 
       setShowModal(false)
@@ -235,18 +226,14 @@ export default function ConteudosMesPage() {
       descricao: conteudo.descricao || '',
       data_publicacao: conteudo.data_publicacao || '',
       badge: conteudo.badge || '',
-      canais: typeof conteudo.canais === 'string' ? JSON.parse(conteudo.canais || '[]') : conteudo.canais || [],
+      canais: Array.isArray(conteudo.canais) ? conteudo.canais : [],
       status: conteudo.status,
       assigned_to: conteudo.assigned_to || '',
-      slides: typeof conteudo.slides === 'string' ? JSON.parse(conteudo.slides || '[]') : conteudo.slides || [''],
-      prompt_imagem: typeof conteudo.prompts_imagem === 'string' 
-        ? JSON.parse(conteudo.prompts_imagem || '[]')[0] || ''
-        : conteudo.prompts_imagem?.[0] || '',
-      prompt_video: typeof conteudo.prompts_video === 'string'
-        ? JSON.parse(conteudo.prompts_video || '[]')[0] || ''
-        : conteudo.prompts_video?.[0] || '',
+      slides: Array.isArray(conteudo.slides) && conteudo.slides.length > 0 ? conteudo.slides : [''],
+      prompt_imagem: Array.isArray(conteudo.prompts_imagem) ? conteudo.prompts_imagem[0] || '' : '',
+      prompt_video: Array.isArray(conteudo.prompts_video) ? conteudo.prompts_video[0] || '' : '',
       legenda: conteudo.legenda || '',
-      midia_urls: typeof conteudo.midia_urls === 'string' ? JSON.parse(conteudo.midia_urls || '[]') : conteudo.midia_urls || []
+      midia_urls: Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
     })
     setEditingId(conteudo.id)
     setShowModal(true)
@@ -256,12 +243,8 @@ export default function ConteudosMesPage() {
     if (!confirm('Tem certeza que deseja excluir este conteúdo?')) return
 
     try {
-      const { error } = await supabase
-        .from('conteudos')
-        .delete()
-        .eq('id', id)
-
-      if (error) throw error
+      const { error } = await db.delete('conteudos', { id })
+      if (error) throw new Error(error)
       loadConteudos()
     } catch (error) {
       console.error('Erro ao excluir conteúdo:', error)
@@ -271,12 +254,12 @@ export default function ConteudosMesPage() {
 
   const updateStatus = async (id: string, status: string) => {
     try {
-      const { error } = await supabase
-        .from('conteudos')
-        .update({ status, updated_at: new Date().toISOString() })
-        .eq('id', id)
-
-      if (error) throw error
+      const oldStatus = conteudos.find(c => c.id === id)?.status
+      const { error } = await db.update('conteudos', { status, updated_at: new Date().toISOString() }, { id })
+      if (error) throw new Error(error)
+      if (org?.id && oldStatus !== status) {
+        dispatchWebhook(org.id, 'content.status_changed', { conteudo_id: id, old_status: oldStatus, new_status: status })
+      }
       loadConteudos()
     } catch (error) {
       console.error('Erro ao atualizar status:', error)
@@ -288,22 +271,53 @@ export default function ConteudosMesPage() {
     try {
       const token = Array.from({ length: 32 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]).join('')
       
-      const { error } = await supabase
-        .from('aprovacoes_links')
-        .insert({
-          conteudo_id: id,
-          empresa_id: cliente?.id,
-          token,
-          status: 'pendente'
-        })
+      const { error } = await db.insert('aprovacoes_links', {
+        conteudo_id: id,
+        empresa_id: cliente?.id,
+        token,
+        status: 'pendente',
+        expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+      })
 
-      if (error) throw error
+      if (error) throw new Error(error)
 
       const link = `${window.location.origin}/aprovacao?token=${token}`
       await navigator.clipboard.writeText(link)
       alert('Link de aprovação copiado para área de transferência!')
     } catch (error) {
       console.error('Erro ao gerar link de aprovação:', error)
+      alert(`Erro ao gerar link: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
+    }
+  }
+
+  const generateDeliveryLink = async (id: string) => {
+    try {
+      // Reusar ou criar token de aprovação pra link de entrega
+      const { data: existing } = await db.select('aprovacoes_links', {
+        filters: [{ op: 'eq', col: 'conteudo_id', val: id }],
+        order: [{ col: 'created_at', asc: false }],
+        limit: 1,
+      })
+
+      let token: string
+      if (existing && existing.length > 0) {
+        token = existing[0].token
+      } else {
+        token = Array.from({ length: 32 }, () => 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]).join('')
+        await db.insert('aprovacoes_links', {
+          conteudo_id: id,
+          empresa_id: cliente?.id,
+          token,
+          status: 'pendente',
+          expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+        })
+      }
+
+      const link = `${window.location.origin}/entrega?token=${token}`
+      await navigator.clipboard.writeText(link)
+      alert('Link de entrega copiado! Envie pro cliente para download dos materiais.')
+    } catch (error) {
+      console.error('Erro ao gerar link:', error)
       alert(`Erro ao gerar link: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
     }
   }
@@ -353,10 +367,7 @@ export default function ConteudosMesPage() {
 
     // Update ordem in database
     const updatePromises = newConteudos.map((conteudo, index) =>
-      supabase
-        .from('conteudos')
-        .update({ ordem: index + 1 })
-        .eq('id', conteudo.id)
+      db.update('conteudos', { ordem: index + 1 }, { id: conteudo.id })
     )
 
     try {
@@ -455,9 +466,7 @@ export default function ConteudosMesPage() {
         <div className="space-y-3">
           {conteudos.map(conteudo => {
             const statusConfig = getStatusConfig(conteudo.status)
-            const canais = typeof conteudo.canais === 'string' 
-              ? JSON.parse(conteudo.canais || '[]') 
-              : conteudo.canais || []
+            const canais = Array.isArray(conteudo.canais) ? conteudo.canais : []
 
             return (
               <Card 
@@ -505,8 +514,17 @@ export default function ConteudosMesPage() {
                           variant="ghost"
                           size="sm"
                           onClick={() => generateApprovalLink(conteudo.id)}
+                          title="Link de Aprovação"
                         >
                           <LinkIcon className="w-4 h-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => generateDeliveryLink(conteudo.id)}
+                          title="Link de Entrega (download)"
+                        >
+                          <Download className="w-4 h-4 text-green-600" />
                         </Button>
                         <Button
                           variant="ghost"
@@ -575,7 +593,16 @@ export default function ConteudosMesPage() {
                           onClick={() => generateApprovalLink(conteudo.id)}
                           className="bg-yellow-600 hover:bg-yellow-700"
                         >
-                          Gerar Link
+                          🔗 Link Aprovação
+                        </Button>
+                      )}
+                      {['aprovado_agendado', 'concluido'].includes(conteudo.status) && (
+                        <Button
+                          size="sm"
+                          onClick={() => generateDeliveryLink(conteudo.id)}
+                          className="bg-green-600 hover:bg-green-700"
+                        >
+                          📦 Link Entrega
                         </Button>
                       )}
                     </div>
@@ -620,7 +647,7 @@ export default function ConteudosMesPage() {
                 onChange={(e) => setFormData(prev => ({ ...prev, tipo: e.target.value }))}
                 className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
               >
-                {TIPOS_CONTEUDO.map(tipo => (
+                {TIPOS_CONTEUDO.map((tipo: string) => (
                   <option key={tipo} value={tipo}>
                     {tipo.charAt(0).toUpperCase() + tipo.slice(1)}
                   </option>
@@ -814,9 +841,11 @@ export default function ConteudosMesPage() {
               Mídia
             </label>
             <MediaUpload
+              orgId={org?.id}
+              conteudoId={editingId || undefined}
               existingUrls={formData.midia_urls}
               onUpload={(urls) => setFormData(prev => ({ ...prev, midia_urls: urls }))}
-              maxFiles={5}
+              maxFiles={10}
             />
           </div>
 

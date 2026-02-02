@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -11,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { Plus, Trash2, Webhook, ToggleLeft, ToggleRight } from 'lucide-react'
 import type { WebhookConfig } from '@/types/database'
+import { useRoleGuard } from '@/hooks/use-role-guard'
 
 const EVENTS = [
   'content.created', 'content.status_changed', 'content.approved',
@@ -18,7 +20,8 @@ const EVENTS = [
 ]
 
 export default function WebhooksPage() {
-  const { org, supabase } = useAuth()
+  const { org } = useAuth()
+  const { allowed, loading: roleLoading } = useRoleGuard(['admin'])
   const { toast } = useToast()
   const [webhooks, setWebhooks] = useState<WebhookConfig[]>([])
   const [loading, setLoading] = useState(true)
@@ -31,14 +34,16 @@ export default function WebhooksPage() {
   }, [org])
 
   async function loadData() {
-    const { data } = await supabase.from('webhook_configs').select('*').eq('org_id', org!.id)
+    const { data } = await db.select('webhook_configs', {
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+    })
     setWebhooks(data || [])
     setLoading(false)
   }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault()
-    const { error } = await supabase.from('webhook_configs').insert({
+    const { error } = await db.insert('webhook_configs', {
       org_id: org!.id, url: form.url, events: form.events, active: true,
     })
     if (error) { toast('Erro ao salvar', 'error'); return }
@@ -49,19 +54,19 @@ export default function WebhooksPage() {
   }
 
   async function toggleActive(id: string, active: boolean) {
-    await supabase.from('webhook_configs').update({ active: !active }).eq('id', id)
+    await db.update('webhook_configs', { active: !active }, { id })
     toast(active ? 'Webhook desativado' : 'Webhook ativado', 'success')
     loadData()
   }
 
   async function handleDelete(id: string) {
     if (!confirm('Excluir este webhook?')) return
-    await supabase.from('webhook_configs').delete().eq('id', id)
+    await db.delete('webhook_configs', { id })
     toast('Webhook excluído', 'success')
     loadData()
   }
 
-  if (loading) {
+  if (loading || roleLoading || !allowed) {
     return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-64 rounded-xl" /></div>
   }
 

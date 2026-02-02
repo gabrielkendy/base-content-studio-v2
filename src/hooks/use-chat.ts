@@ -1,6 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { db } from '@/lib/api'
 import { useEffect, useState, useCallback } from 'react'
 import type { Message } from '@/types/database'
 
@@ -18,24 +19,26 @@ export function useChat({ orgId, conteudoId, clienteId, channelType }: UseChatOp
 
   useEffect(() => {
     async function fetch() {
-      let query = supabase
-        .from('messages')
-        .select('*, sender:members!messages_sender_id_fkey(display_name, avatar_url, role)')
-        .eq('org_id', orgId)
-        .eq('channel_type', channelType)
-        .order('created_at', { ascending: true })
-        .limit(100)
+      const filters: any[] = [
+        { op: 'eq', col: 'org_id', val: orgId },
+        { op: 'eq', col: 'channel_type', val: channelType },
+      ]
 
-      if (conteudoId) query = query.eq('conteudo_id', conteudoId)
-      if (clienteId) query = query.eq('cliente_id', clienteId)
+      if (conteudoId) filters.push({ op: 'eq', col: 'conteudo_id', val: conteudoId })
+      if (clienteId) filters.push({ op: 'eq', col: 'cliente_id', val: clienteId })
 
-      const { data } = await query
+      const { data } = await db.select('messages', {
+        select: '*',
+        filters,
+        order: [{ col: 'created_at', asc: true }],
+        limit: 100,
+      })
       setMessages(data || [])
       setLoading(false)
     }
     fetch()
 
-    // Realtime
+    // Realtime - keep using supabase client for subscriptions
     const filter = conteudoId 
       ? `conteudo_id=eq.${conteudoId}` 
       : clienteId 
@@ -51,12 +54,12 @@ export function useChat({ orgId, conteudoId, clienteId, channelType }: UseChatOp
         filter,
       }, async (payload) => {
         const newMsg = payload.new as Message
-        // Fetch sender info
-        const { data: sender } = await supabase
-          .from('members')
-          .select('display_name, avatar_url, role')
-          .eq('user_id', newMsg.sender_id)
-          .single()
+        // Fetch sender info via proxy
+        const { data: sender } = await db.select('members', {
+          select: 'display_name, avatar_url, role',
+          filters: [{ op: 'eq', col: 'user_id', val: newMsg.sender_id }],
+          single: true,
+        })
         setMessages(prev => [...prev, { ...newMsg, sender: sender as any }])
       })
       .subscribe()
@@ -65,10 +68,11 @@ export function useChat({ orgId, conteudoId, clienteId, channelType }: UseChatOp
   }, [orgId, conteudoId, clienteId, channelType])
 
   const sendMessage = useCallback(async (text: string, attachments: string[] = []) => {
+    // Keep using supabase.auth for getting the user
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return
 
-    const { error } = await supabase.from('messages').insert({
+    const { error } = await db.insert('messages', {
       org_id: orgId,
       conteudo_id: conteudoId || null,
       cliente_id: clienteId || null,

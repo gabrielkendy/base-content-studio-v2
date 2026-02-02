@@ -10,28 +10,32 @@ export const MESES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ]
 
-export const TIPOS_CONTEUDO = ['carrossel', 'reels', 'stories', 'estático', 'vídeo'] as const
+export const TIPOS_CONTEUDO = ['carrossel', 'post', 'stories', 'reels', 'feed', 'vídeo'] as const
 export type TipoConteudo = typeof TIPOS_CONTEUDO[number]
 
 export const TIPO_EMOJI: Record<string, string> = {
   'carrossel': '📑',
-  'reels': '🎬',
+  'post': '📝',
   'stories': '📱',
-  'estático': '🖼️',
-  'vídeo': '🎥'
+  'reels': '🎬',
+  'feed': '🏠',
+  'vídeo': '🎥',
 }
 
-export const STATUS_CONFIG = {
+export const STATUS_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
+  nova_solicitacao: { emoji: '📩', label: 'Nova Solicitação', color: '#8B5CF6' },
   rascunho: { emoji: '📝', label: 'Rascunho', color: '#6B7280' },
-  conteudo: { emoji: '🎨', label: 'Conteúdo', color: '#10B981' },
-  aprovacao_cliente: { emoji: '👁️', label: 'Aprovação do cliente', color: '#F59E0B' },
-  ajustes: { emoji: '🔧', label: 'Ajustes', color: '#EAB308' },
-  aguardando: { emoji: '⏳', label: 'Aguardando', color: '#F97316' },
-  aprovado_agendado: { emoji: '✅', label: 'Aprovado e agendado', color: '#3B82F6' },
-  concluido: { emoji: '✔️', label: 'Concluídos', color: '#22C55E' }
-} as const
+  producao: { emoji: '✍️', label: 'Produção', color: '#10B981' },
+  revisao: { emoji: '🔍', label: 'Revisão', color: '#06B6D4' },
+  design: { emoji: '🎨', label: 'Design', color: '#EC4899' },
+  aprovacao_cliente: { emoji: '👁️', label: 'Aprovação Cliente', color: '#F59E0B' },
+  ajuste: { emoji: '🔄', label: 'Ajuste', color: '#F97316' },
+  aprovado: { emoji: '✅', label: 'Aprovado', color: '#22C55E' },
+  agendado: { emoji: '📅', label: 'Agendado', color: '#3B82F6' },
+  publicado: { emoji: '🚀', label: 'Publicado', color: '#059669' },
+}
 
-export type StatusConteudo = keyof typeof STATUS_CONFIG
+export type StatusConteudo = 'nova_solicitacao' | 'rascunho' | 'producao' | 'revisao' | 'design' | 'aprovacao_cliente' | 'ajuste' | 'aprovado' | 'agendado' | 'publicado'
 
 export const KANBAN_COLUMNS = Object.entries(STATUS_CONFIG).map(([key, cfg]) => ({
   key: key as StatusConteudo,

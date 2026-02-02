@@ -1,153 +1,384 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useAuth } from '@/hooks/use-auth'
-import { Card, CardContent } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
+import { db } from '@/lib/api'
 import { Badge } from '@/components/ui/badge'
-import { Select } from '@/components/ui/input'
+import { Select, Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { STATUS_CONFIG, TIPO_EMOJI, MESES, formatDate } from '@/lib/utils'
-import type { Conteudo, Cliente } from '@/types/database'
+import { STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate } from '@/lib/utils'
+import { Search } from 'lucide-react'
+import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/types/database'
+
+type KanbanItem = {
+  id: string
+  titulo: string
+  tipo: string
+  status: string
+  empresa?: Cliente
+  assignee?: Member
+  data_publicacao?: string | null
+  isSolicitacao?: boolean
+  solicitacaoData?: Solicitacao
+  ajusteComentario?: string | null
+}
 
 export default function WorkflowPage() {
-  const { org, supabase } = useAuth()
+  const { org } = useAuth()
   const { toast } = useToast()
-  const [conteudos, setConteudos] = useState<(Conteudo & { empresa?: Cliente })[]>([])
+  const [conteudos, setConteudos] = useState<(Conteudo & { empresa?: Cliente; assignee?: Member })[]>([])
+  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
+  const [aprovacoes, setAprovacoes] = useState<AprovacaoLink[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
-  const [filtroCliente, setFiltroCliente] = useState('todos')
-  const [filtroMes, setFiltroMes] = useState('todos')
+  const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [dragging, setDragging] = useState<string | null>(null)
+
+  // Filtros
+  const [filtroCliente, setFiltroCliente] = useState('todos')
+  const [filtroMes, setFiltroMes] = useState('todos')
+  const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
+  const [filtroTipo, setFiltroTipo] = useState('todos')
+  const [busca, setBusca] = useState('')
 
   useEffect(() => {
     if (!org) return
     loadData()
-  }, [org, filtroCliente, filtroMes])
+  }, [org])
 
-  async function loadData() {
-    const { data: cls } = await supabase.from('clientes').select('*').eq('org_id', org!.id)
-    setClientes(cls || [])
+  const loadData = useCallback(async () => {
+    if (!org) return
 
-    let query = supabase
-      .from('conteudos')
-      .select('*, empresa:clientes(id, nome, slug, cores)')
-      .eq('org_id', org!.id)
-      .order('ordem')
+    const [clsRes, membersRes, conteudosRes, solsRes, aprovRes] = await Promise.all([
+      db.select('clientes', {
+        filters: [{ op: 'eq', col: 'org_id', val: org.id }],
+        order: [{ col: 'nome', asc: true }],
+      }),
+      db.select('members', {
+        filters: [{ op: 'eq', col: 'org_id', val: org.id }, { op: 'eq', col: 'status', val: 'active' }],
+      }),
+      db.select('conteudos', {
+        select: '*, empresa:clientes(id, nome, slug, cores), assignee:members!conteudos_assigned_to_fkey(id, display_name, avatar_url, user_id)',
+        filters: [{ op: 'eq', col: 'org_id', val: org.id }],
+        order: [{ col: 'ordem', asc: true }],
+      }),
+      db.select('solicitacoes', {
+        select: '*, cliente:clientes(id, nome, slug, cores)',
+        filters: [
+          { op: 'eq', col: 'org_id', val: org.id },
+          { op: 'in', col: 'status', val: ['nova', 'em_analise', 'aprovada'] },
+        ],
+        order: [{ col: 'created_at', asc: false }],
+      }),
+      db.select('aprovacoes_links', {
+        filters: [{ op: 'eq', col: 'status', val: 'ajuste' }],
+      }),
+    ])
 
-    if (filtroCliente !== 'todos') query = query.eq('empresa_id', filtroCliente)
-    if (filtroMes !== 'todos') query = query.eq('mes', parseInt(filtroMes))
-
-    const { data } = await query
-    setConteudos((data as any) || [])
+    setClientes(clsRes.data || [])
+    setMembers(membersRes.data || [])
+    setConteudos((conteudosRes.data as any) || [])
+    setSolicitacoes((solsRes.data as any) || [])
+    setAprovacoes((aprovRes.data as any) || [])
     setLoading(false)
-  }
+  }, [org])
+
+  // Build kanban items
+  const kanbanItems: KanbanItem[] = []
+
+  // Add solicitações as nova_solicitacao items
+  solicitacoes.forEach(sol => {
+    // Apply filters
+    if (filtroCliente !== 'todos' && sol.cliente_id !== filtroCliente) return
+    if (busca && !sol.titulo.toLowerCase().includes(busca.toLowerCase())) return
+
+    kanbanItems.push({
+      id: `sol_${sol.id}`,
+      titulo: sol.titulo,
+      tipo: 'post',
+      status: 'nova_solicitacao',
+      empresa: sol.cliente as Cliente | undefined,
+      isSolicitacao: true,
+      solicitacaoData: sol,
+    })
+  })
+
+  // Add conteúdos
+  conteudos.forEach(c => {
+    // Apply filters
+    if (filtroCliente !== 'todos' && c.empresa_id !== filtroCliente) return
+    if (filtroMes !== 'todos' && c.mes !== parseInt(filtroMes)) return
+    if (filtroResponsavel !== 'todos' && c.assigned_to !== filtroResponsavel) return
+    if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) return
+    if (busca && !(c.titulo || '').toLowerCase().includes(busca.toLowerCase())) return
+
+    // Find ajuste comment
+    const ajusteLink = c.status === 'ajuste'
+      ? aprovacoes.find(a => a.conteudo_id === c.id && a.status === 'ajuste')
+      : null
+
+    kanbanItems.push({
+      id: c.id,
+      titulo: c.titulo || 'Sem título',
+      tipo: c.tipo,
+      status: c.status || 'rascunho',
+      empresa: c.empresa,
+      assignee: c.assignee,
+      data_publicacao: c.data_publicacao,
+      ajusteComentario: ajusteLink?.comentario_cliente,
+    })
+  })
+
+  // Group by status
+  const porStatus: Record<string, KanbanItem[]> = {}
+  Object.keys(STATUS_CONFIG).forEach(s => { porStatus[s] = [] })
+  kanbanItems.forEach(item => {
+    const s = item.status
+    if (porStatus[s]) porStatus[s].push(item)
+    else if (porStatus['rascunho']) porStatus['rascunho'].push(item)
+  })
 
   async function handleDrop(e: React.DragEvent, newStatus: string) {
     e.preventDefault()
-    const id = e.dataTransfer.getData('text/plain')
-    if (!id) return
+    const rawId = e.dataTransfer.getData('text/plain')
+    if (!rawId) return
 
-    await supabase.from('conteudos').update({
-      status: newStatus,
-      updated_at: new Date().toISOString()
-    }).eq('id', id)
+    // Solicitação being dropped into rascunho = aceitar
+    if (rawId.startsWith('sol_') && newStatus !== 'nova_solicitacao') {
+      const solId = rawId.replace('sol_', '')
+      if (newStatus !== 'rascunho') {
+        toast('Arraste solicitações apenas para "Rascunho"', 'error')
+        setDragging(null)
+        return
+      }
+      try {
+        const res = await fetch(`/api/solicitacoes/${solId}/aceitar`, { method: 'POST' })
+        const json = await res.json()
+        if (!res.ok) {
+          toast(`Erro: ${json.error}`, 'error')
+        } else {
+          toast('✅ Solicitação aceita → Conteúdo criado!', 'success')
+        }
+      } catch {
+        toast('Erro ao aceitar solicitação', 'error')
+      }
+      setDragging(null)
+      loadData()
+      return
+    }
 
-    toast(`Movido para ${STATUS_CONFIG[newStatus as keyof typeof STATUS_CONFIG]?.label}`, 'success')
-    setDragging(null)
-    loadData()
+    // Regular conteúdo move
+    if (!rawId.startsWith('sol_')) {
+      await db.update('conteudos', {
+        status: newStatus,
+        updated_at: new Date().toISOString()
+      }, { id: rawId })
+
+      const cfg = STATUS_CONFIG[newStatus]
+      toast(`Movido para ${cfg?.label || newStatus}`, 'success')
+      setDragging(null)
+      loadData()
+    }
   }
 
   if (loading) {
-    return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-[70vh] rounded-xl" /></div>
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <Skeleton className="h-12 w-full rounded-xl" />
+        <Skeleton className="h-[70vh] rounded-xl" />
+      </div>
+    )
   }
 
-  const porStatus: Record<string, typeof conteudos> = {}
-  Object.keys(STATUS_CONFIG).forEach(s => porStatus[s] = [])
-  conteudos.forEach(c => {
-    const s = c.status || 'rascunho'
-    if (porStatus[s]) porStatus[s].push(c)
-  })
+  const totalItems = kanbanItems.length
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start">
-        <div>
-          <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
-          <p className="text-sm text-zinc-500 max-sm:text-xs">{conteudos.length} conteúdos</p>
-        </div>
-        <div className="flex gap-2 max-sm:flex-col max-sm:w-full">
-          <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-40 max-sm:w-full">
-            <option value="todos">Todos clientes</option>
-            {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-          </Select>
-          <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="w-36 max-sm:w-full">
-            <option value="todos">Todos meses</option>
-            {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-          </Select>
-        </div>
+    <div className="space-y-4 animate-fade-in">
+      {/* Header */}
+      <div>
+        <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
+        <p className="text-sm text-zinc-500 max-sm:text-xs">{totalItems} itens no board</p>
       </div>
 
-      {/* Kanban board */}
-      <div className="flex gap-4 overflow-x-auto pb-4 scroll-smooth snap-x snap-mandatory scrollbar-thin max-sm:gap-3" style={{ minHeight: '70vh' }}>
+      {/* Filtros */}
+      <div className="flex flex-wrap gap-2 items-center max-sm:flex-col max-sm:items-stretch">
+        <div className="relative flex-1 min-w-[180px] max-sm:w-full">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
+          <Input
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+            placeholder="Buscar por título..."
+            className="pl-10"
+          />
+        </div>
+        <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-40 max-sm:w-full">
+          <option value="todos">Todos clientes</option>
+          {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+        </Select>
+        <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="w-36 max-sm:w-full">
+          <option value="todos">Todos meses</option>
+          {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+        </Select>
+        <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)} className="w-40 max-sm:w-full">
+          <option value="todos">Responsável</option>
+          {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
+        </Select>
+        <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="w-36 max-sm:w-full">
+          <option value="todos">Todos tipos</option>
+          {TIPOS_CONTEUDO.map(t => <option key={t} value={t}>{TIPO_EMOJI[t] || '📄'} {t}</option>)}
+        </Select>
+      </div>
+
+      {/* Kanban Board */}
+      <div
+        className="flex gap-3 overflow-x-auto pb-4 scroll-smooth scrollbar-thin"
+        style={{ minHeight: '72vh' }}
+      >
         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
           const items = porStatus[key] || []
+          const isDropTarget = dragging !== null
           return (
             <div
               key={key}
-              className="min-w-[280px] w-[280px] flex-shrink-0 flex flex-col snap-start max-sm:min-w-[240px] max-sm:w-[240px]"
+              className="min-w-[270px] w-[270px] flex-shrink-0 flex flex-col max-sm:min-w-[240px] max-sm:w-[240px]"
               onDragOver={e => e.preventDefault()}
               onDrop={e => handleDrop(e, key)}
             >
               {/* Column header */}
-              <div className="flex items-center gap-2 mb-3 px-1">
-                <div className="w-3 h-3 rounded-full" style={{ backgroundColor: cfg.color }} />
-                <span className="text-sm font-semibold text-zinc-700">{cfg.label}</span>
-                <Badge className="ml-auto">{items.length}</Badge>
+              <div className="flex items-center gap-2 mb-2 px-1 sticky top-0 bg-white z-10 py-1">
+                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />
+                <span className="text-xs font-semibold text-zinc-700 truncate">{cfg.label}</span>
+                <span
+                  className="ml-auto text-[10px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
+                  style={{ backgroundColor: cfg.color + '20', color: cfg.color }}
+                >
+                  {items.length}
+                </span>
               </div>
 
-              {/* Cards */}
-              <div className={`flex-1 space-y-2 p-2 rounded-xl transition-colors ${
-                dragging ? 'bg-zinc-50 border-2 border-dashed border-zinc-200' : ''
+              {/* Cards container */}
+              <div className={`flex-1 space-y-2 p-2 rounded-xl transition-colors min-h-[100px] ${
+                isDropTarget ? 'bg-zinc-50/80 border-2 border-dashed border-zinc-200' : 'bg-zinc-50/40'
               }`}>
                 {items.map(item => (
-                  <div
+                  <KanbanCard
                     key={item.id}
-                    draggable
-                    onDragStart={e => {
-                      e.dataTransfer.setData('text/plain', item.id)
-                      setDragging(item.id)
-                    }}
+                    item={item}
+                    isDragging={dragging === item.id}
+                    onDragStart={() => setDragging(item.id)}
                     onDragEnd={() => setDragging(null)}
-                    className={`bg-white rounded-lg border border-zinc-100 p-3 cursor-grab active:cursor-grabbing
-                      hover:shadow-md transition-all touch-manipulation max-sm:p-2 ${dragging === item.id ? 'opacity-50' : ''}`}
-                  >
-                    <div className="flex items-start justify-between mb-2">
-                      <span className="text-sm font-medium text-zinc-900 line-clamp-2 flex-1 max-sm:text-xs">
-                        {item.titulo || 'Sem título'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 flex-wrap max-sm:gap-1">
-                      {item.empresa && (
-                        <Avatar name={item.empresa.nome} color={item.empresa.cores?.primaria} size="sm" className="w-5 h-5 text-[8px] max-sm:w-4 max-sm:h-4" />
-                      )}
-                      <span className="text-[10px] text-zinc-400 max-sm:text-[9px]">{item.empresa?.nome}</span>
-                      <span className="text-xs ml-auto max-sm:text-[10px]">{TIPO_EMOJI[item.tipo] || '📄'}</span>
-                      {item.data_publicacao && (
-                        <span className="text-[10px] text-zinc-400 max-sm:text-[9px]">{formatDate(item.data_publicacao)}</span>
-                      )}
-                    </div>
-                  </div>
+                  />
                 ))}
                 {items.length === 0 && (
-                  <div className="text-center py-8 text-xs text-zinc-300">Arraste cards aqui</div>
+                  <div className="text-center py-8 text-xs text-zinc-300">
+                    Arraste cards aqui
+                  </div>
                 )}
               </div>
             </div>
           )
         })}
+      </div>
+    </div>
+  )
+}
+
+function KanbanCard({
+  item,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+}: {
+  item: KanbanItem
+  isDragging: boolean
+  onDragStart: () => void
+  onDragEnd: () => void
+}) {
+  const isSol = item.isSolicitacao
+  const [showTooltip, setShowTooltip] = useState(false)
+
+  return (
+    <div
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('text/plain', item.id)
+        onDragStart()
+      }}
+      onDragEnd={onDragEnd}
+      className={`
+        bg-white rounded-lg p-3 cursor-grab active:cursor-grabbing
+        hover:shadow-md transition-all touch-manipulation max-sm:p-2
+        ${isDragging ? 'opacity-40 scale-95' : ''}
+        ${isSol
+          ? 'border-2 border-purple-300 shadow-purple-100 shadow-sm'
+          : 'border border-zinc-100'
+        }
+      `}
+    >
+      {/* Solicitação badge */}
+      {isSol && (
+        <div className="flex items-center gap-1 mb-1.5">
+          <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">
+            📩 Solicitação
+          </span>
+        </div>
+      )}
+
+      {/* Ajuste badge */}
+      {item.ajusteComentario && (
+        <div
+          className="relative mb-1.5"
+          onMouseEnter={() => setShowTooltip(true)}
+          onMouseLeave={() => setShowTooltip(false)}
+        >
+          <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full cursor-help">
+            🔄 Ajuste solicitado
+          </span>
+          {showTooltip && (
+            <div className="absolute z-50 left-0 top-full mt-1 bg-zinc-900 text-white text-xs rounded-lg p-2 max-w-[220px] shadow-lg">
+              {item.ajusteComentario}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Title */}
+      <div className="text-sm font-medium text-zinc-900 line-clamp-2 mb-2 max-sm:text-xs">
+        {item.titulo}
+      </div>
+
+      {/* Meta row */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {item.empresa && (
+          <>
+            <Avatar
+              name={item.empresa.nome}
+              color={item.empresa.cores?.primaria}
+              size="sm"
+              className="w-5 h-5 text-[8px] flex-shrink-0"
+            />
+            <span className="text-[10px] text-zinc-400 truncate max-w-[80px]">
+              {item.empresa.nome}
+            </span>
+          </>
+        )}
+
+        <span className="text-xs ml-auto">{TIPO_EMOJI[item.tipo] || '📄'}</span>
+
+        {item.assignee && (
+          <Avatar
+            name={item.assignee.display_name}
+            size="sm"
+            className="w-5 h-5 text-[8px] flex-shrink-0"
+          />
+        )}
+
+        {item.data_publicacao && (
+          <span className="text-[10px] text-zinc-400">{formatDate(item.data_publicacao)}</span>
+        )}
       </div>
     </div>
   )

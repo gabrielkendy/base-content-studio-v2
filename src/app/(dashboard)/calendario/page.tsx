@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { Card } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -12,9 +13,20 @@ import { ChevronLeft, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente } from '@/types/database'
 
+interface ScheduledPost {
+  id: string
+  cliente_id: string
+  platforms: string[]
+  caption: string
+  scheduled_at: string
+  status: string
+  cliente?: Cliente
+}
+
 export default function CalendarioPage() {
-  const { org, supabase } = useAuth()
+  const { org } = useAuth()
   const [conteudos, setConteudos] = useState<(Conteudo & { empresa?: Cliente })[]>([])
+  const [scheduledPosts, setScheduledPosts] = useState<ScheduledPost[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [filtroCliente, setFiltroCliente] = useState('todos')
   const [mes, setMes] = useState(new Date().getMonth())
@@ -27,22 +39,56 @@ export default function CalendarioPage() {
   }, [org, mes, ano, filtroCliente])
 
   async function loadData() {
-    const { data: cls } = await supabase.from('clientes').select('*').eq('org_id', org!.id)
+    const { data: cls } = await db.select('clientes', {
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+    })
     setClientes(cls || [])
 
-    let query = supabase
-      .from('conteudos')
-      .select('*, empresa:clientes(id, nome, slug, cores)')
-      .eq('org_id', org!.id)
-      .eq('mes', mes + 1)
-      .eq('ano', ano)
+    // Load regular conteudos
+    const conteudoFilters: any[] = [
+      { op: 'eq', col: 'org_id', val: org!.id },
+      { op: 'eq', col: 'mes', val: mes + 1 },
+      { op: 'eq', col: 'ano', val: ano },
+    ]
 
     if (filtroCliente !== 'todos') {
-      query = query.eq('empresa_id', filtroCliente)
+      conteudoFilters.push({ op: 'eq', col: 'empresa_id', val: filtroCliente })
     }
 
-    const { data } = await query.order('data_publicacao')
+    const { data } = await db.select('conteudos', {
+      select: '*, empresa:clientes(id, nome, slug, cores)',
+      filters: conteudoFilters,
+      order: [{ col: 'data_publicacao', asc: true }],
+    })
     setConteudos((data as any) || [])
+
+    // Load scheduled posts for this month
+    const startDate = `${ano}-${String(mes + 1).padStart(2, '0')}-01`
+    const endDate = `${ano}-${String(mes + 2).padStart(2, '0')}-01` // Next month start
+
+    const scheduledFilters: any[] = [
+      { op: 'eq', col: 'org_id', val: org!.id },
+      { op: 'gte', col: 'scheduled_at', val: startDate },
+      { op: 'lt', col: 'scheduled_at', val: endDate },
+    ]
+
+    if (filtroCliente !== 'todos') {
+      scheduledFilters.push({ op: 'eq', col: 'cliente_id', val: filtroCliente })
+    }
+
+    const { data: scheduledData } = await db.select('scheduled_posts', {
+      filters: scheduledFilters,
+      order: [{ col: 'scheduled_at', asc: true }],
+    })
+
+    // Process scheduled posts to include client data
+    const processedScheduled = (scheduledData || []).map((post: any) => ({
+      ...post,
+      platforms: typeof post.platforms === 'string' ? JSON.parse(post.platforms) : post.platforms,
+      cliente: (cls || []).find((c: Cliente) => c.id === post.cliente_id)
+    }))
+
+    setScheduledPosts(processedScheduled)
     setLoading(false)
   }
 
@@ -52,12 +98,13 @@ export default function CalendarioPage() {
   const startDay = firstDay.getDay() // 0=Sun
   const totalDays = lastDay.getDate()
 
-  const days: { day: number; posts: typeof conteudos }[] = []
+  const days: { day: number; posts: typeof conteudos; scheduledPosts: ScheduledPost[] }[] = []
   for (let d = 1; d <= totalDays; d++) {
     const dateStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
     days.push({
       day: d,
-      posts: conteudos.filter(c => c.data_publicacao === dateStr)
+      posts: conteudos.filter(c => c.data_publicacao === dateStr),
+      scheduledPosts: scheduledPosts.filter(sp => sp.scheduled_at.startsWith(dateStr))
     })
   }
 
@@ -83,7 +130,7 @@ export default function CalendarioPage() {
       <div className="flex items-center justify-between flex-wrap gap-4 max-sm:flex-col max-sm:items-start">
         <div>
           <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Calendário Editorial</h1>
-          <p className="text-sm text-zinc-500 max-sm:text-xs">{conteudos.length} conteúdos em {MESES[mes]} {ano}</p>
+          <p className="text-sm text-zinc-500 max-sm:text-xs">{conteudos.length} conteúdos • {scheduledPosts.length} posts agendados em {MESES[mes]} {ano}</p>
         </div>
         <div className="flex items-center gap-3 max-sm:flex-col max-sm:w-full max-sm:gap-2">
           <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-44 max-sm:w-full">
@@ -114,54 +161,98 @@ export default function CalendarioPage() {
             <div key={`empty-${i}`} className="min-h-[100px] border-b border-r border-zinc-50 bg-zinc-25" />
           ))}
 
-          {days.map(({ day, posts }) => (
-            <div
-              key={day}
-              className={`min-h-[100px] border-b border-r border-zinc-50 p-1 ${
-                isToday(day) ? 'bg-blue-50/50' : 'hover:bg-zinc-50'
-              }`}
-            >
-              <div className={`text-xs font-medium mb-1 px-1 ${
-                isToday(day) ? 'text-blue-600' : 'text-zinc-400'
-              }`}>
-                {day}
+          {days.map(({ day, posts, scheduledPosts: dayScheduled }) => {
+            const totalItems = posts.length + dayScheduled.length
+            const allItems = [
+              ...posts.map(p => ({ type: 'conteudo', data: p })),
+              ...dayScheduled.map(sp => ({ type: 'scheduled', data: sp }))
+            ]
+            
+            return (
+              <div
+                key={day}
+                className={`min-h-[100px] border-b border-r border-zinc-50 p-1 ${
+                  isToday(day) ? 'bg-blue-50/50' : 'hover:bg-zinc-50'
+                }`}
+              >
+                <div className={`text-xs font-medium mb-1 px-1 ${
+                  isToday(day) ? 'text-blue-600' : 'text-zinc-400'
+                }`}>
+                  {day}
+                </div>
+                <div className="space-y-1">
+                  {allItems.slice(0, 3).map((item, idx) => {
+                    if (item.type === 'conteudo') {
+                      const p = item.data as Conteudo & { empresa?: Cliente }
+                      const cfg = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]
+                      return (
+                        <Link
+                          key={`conteudo-${p.id}`}
+                          href={`/clientes/${p.empresa?.slug}/conteudo/${p.id}`}
+                          className="block"
+                        >
+                          <div
+                            className="text-[10px] px-1.5 py-1 rounded cursor-pointer truncate hover:opacity-80"
+                            style={{ 
+                              backgroundColor: (p.empresa?.cores?.primaria || '#6366F1') + '15',
+                              borderLeft: `2px solid ${cfg?.color || '#ccc'}`
+                            }}
+                            title={`${p.titulo} (${p.empresa?.nome})`}
+                          >
+                            {TIPO_EMOJI[p.tipo] || '📄'} {p.titulo || 'Sem título'}
+                          </div>
+                        </Link>
+                      )
+                    } else {
+                      const sp = item.data as ScheduledPost
+                      const statusColors = {
+                        scheduled: '#3B82F6',
+                        published: '#22C55E',
+                        failed: '#EF4444',
+                        publishing: '#F59E0B'
+                      }
+                      const statusEmoji = {
+                        scheduled: '📅',
+                        published: '🚀',
+                        failed: '❌',
+                        publishing: '⏳'
+                      }
+                      
+                      return (
+                        <div
+                          key={`scheduled-${sp.id}`}
+                          className="text-[10px] px-1.5 py-1 rounded cursor-pointer truncate hover:opacity-80"
+                          style={{ 
+                            backgroundColor: (sp.cliente?.cores?.primaria || '#6366F1') + '15',
+                            borderLeft: `2px solid ${statusColors[sp.status as keyof typeof statusColors] || '#ccc'}`
+                          }}
+                          title={`${sp.caption.substring(0, 50)}... (${sp.cliente?.nome}) - ${sp.platforms.join(', ')}`}
+                        >
+                          {statusEmoji[sp.status as keyof typeof statusEmoji] || '📅'} {sp.caption.substring(0, 20)}...
+                        </div>
+                      )
+                    }
+                  })}
+                  {totalItems > 3 && (
+                    <div className="text-[10px] text-zinc-400 px-1">+{totalItems - 3} mais</div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-1">
-                {posts.slice(0, 3).map(p => {
-                  const cfg = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]
-                  return (
-                    <div
-                      key={p.id}
-                      className="text-[10px] px-1.5 py-1 rounded cursor-pointer truncate hover:opacity-80"
-                      style={{ 
-                        backgroundColor: (p.empresa?.cores?.primaria || '#6366F1') + '15',
-                        borderLeft: `2px solid ${cfg?.color || '#ccc'}`
-                      }}
-                      title={`${p.titulo} (${p.empresa?.nome})`}
-                    >
-                      {TIPO_EMOJI[p.tipo] || '📄'} {p.titulo || 'Sem título'}
-                    </div>
-                  )
-                })}
-                {posts.length > 3 && (
-                  <div className="text-[10px] text-zinc-400 px-1">+{posts.length - 3} mais</div>
-                )}
-              </div>
-            </div>
-          ))}
+            )
+          })}
         </div>
       </Card>
 
       {/* Mobile Agenda View */}
       <div className="md:hidden space-y-3">
-        {days.filter(d => d.posts.length > 0).length === 0 ? (
+        {days.filter(d => d.posts.length > 0 || d.scheduledPosts.length > 0).length === 0 ? (
           <Card>
             <div className="p-6 text-center text-zinc-400">
               <p>Nenhum conteúdo agendado para este mês</p>
             </div>
           </Card>
         ) : (
-          days.filter(d => d.posts.length > 0).map(({ day, posts }) => (
+          days.filter(d => d.posts.length > 0 || d.scheduledPosts.length > 0).map(({ day, posts, scheduledPosts: dayScheduled }) => (
             <Card key={day}>
               <div className="p-4">
                 <div className={`text-sm font-semibold mb-3 flex items-center gap-2 ${
@@ -175,6 +266,7 @@ export default function CalendarioPage() {
                   {['Domingo', 'Segunda', 'Terça', 'Quarta', 'Quinta', 'Sexta', 'Sábado'][new Date(ano, mes, day).getDay()]}, {day} de {MESES[mes]}
                 </div>
                 <div className="space-y-2">
+                  {/* Regular conteudos */}
                   {posts.map(p => {
                     const cfg = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]
                     return (
@@ -199,6 +291,66 @@ export default function CalendarioPage() {
                           </Badge>
                         </div>
                       </Link>
+                    )
+                  })}
+                  
+                  {/* Scheduled posts */}
+                  {dayScheduled.map(sp => {
+                    const statusColors = {
+                      scheduled: '#3B82F6',
+                      published: '#22C55E',
+                      failed: '#EF4444',
+                      publishing: '#F59E0B'
+                    }
+                    const statusLabels = {
+                      scheduled: 'Agendado',
+                      published: 'Publicado',
+                      failed: 'Falhou',
+                      publishing: 'Publicando'
+                    }
+                    const statusEmoji = {
+                      scheduled: '📅',
+                      published: '🚀',
+                      failed: '❌',
+                      publishing: '⏳'
+                    }
+                    
+                    const time = new Date(sp.scheduled_at).toLocaleTimeString('pt-BR', { 
+                      hour: '2-digit', 
+                      minute: '2-digit' 
+                    })
+                    
+                    return (
+                      <div
+                        key={sp.id}
+                        className="block p-3 rounded-lg border border-zinc-100"
+                        style={{ 
+                          borderLeftColor: statusColors[sp.status as keyof typeof statusColors] || '#ccc', 
+                          borderLeftWidth: '3px' 
+                        }}
+                      >
+                        <div className="flex items-start gap-3">
+                          <div className="text-lg">{statusEmoji[sp.status as keyof typeof statusEmoji] || '📅'}</div>
+                          <div className="flex-1 min-w-0">
+                            <div className="text-sm font-medium text-zinc-900 line-clamp-2">{sp.caption}</div>
+                            <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-2">
+                              <span>{sp.cliente?.nome}</span>
+                              <span>•</span>
+                              <span>{time}</span>
+                              <span>•</span>
+                              <span>{sp.platforms.join(', ')}</span>
+                            </div>
+                          </div>
+                          <Badge variant={
+                            sp.status === 'published' ? 'success' :
+                            sp.status === 'scheduled' ? 'default' :
+                            sp.status === 'publishing' ? 'warning' :
+                            'danger'
+                          } className="text-[10px] px-1.5 py-0.5">
+                            {statusLabels[sp.status as keyof typeof statusLabels] || sp.status}
+                          </Badge>
+                        </div>
+                      </div>
                     )
                   })}
                 </div>

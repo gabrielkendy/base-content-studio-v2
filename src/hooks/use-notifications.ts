@@ -1,6 +1,7 @@
 'use client'
 
 import { createClient } from '@/lib/supabase/client'
+import { db } from '@/lib/api'
 import { useEffect, useState } from 'react'
 import type { Notification } from '@/types/database'
 
@@ -12,23 +13,22 @@ export function useNotifications(userId: string | undefined) {
   useEffect(() => {
     if (!userId) return
 
-    // Fetch initial
+    // Fetch initial via proxy
     async function fetch() {
-      const { data } = await supabase
-        .from('notifications')
-        .select('*')
-        .eq('user_id', userId)
-        .order('created_at', { ascending: false })
-        .limit(20)
+      const { data } = await db.select('notifications', {
+        filters: [{ op: 'eq', col: 'user_id', val: userId }],
+        order: [{ col: 'created_at', asc: false }],
+        limit: 20,
+      })
 
       if (data) {
         setNotifications(data)
-        setUnreadCount(data.filter(n => !n.read).length)
+        setUnreadCount(data.filter((n: any) => !n.read).length)
       }
     }
     fetch()
 
-    // Realtime subscription
+    // Realtime subscription - keep using supabase client
     const channel = supabase
       .channel('notifications')
       .on('postgres_changes', {
@@ -47,14 +47,16 @@ export function useNotifications(userId: string | undefined) {
   }, [userId])
 
   const markAsRead = async (id: string) => {
-    await supabase.from('notifications').update({ read: true }).eq('id', id)
+    await db.update('notifications', { read: true }, { id })
     setNotifications(prev => prev.map(n => n.id === id ? { ...n, read: true } : n))
     setUnreadCount(prev => Math.max(0, prev - 1))
   }
 
   const markAllRead = async () => {
     if (!userId) return
-    await supabase.from('notifications').update({ read: true }).eq('user_id', userId).eq('read', false)
+    // For markAllRead, we need to update multiple rows matching user_id + read=false
+    // The proxy matches on all keys in the match object
+    await db.update('notifications', { read: true }, { user_id: userId, read: false })
     setNotifications(prev => prev.map(n => ({ ...n, read: true })))
     setUnreadCount(0)
   }

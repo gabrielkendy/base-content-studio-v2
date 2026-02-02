@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { ChatPanel } from '@/components/chat/chat-panel'
 import { Card } from '@/components/ui/card'
 import { Avatar } from '@/components/ui/avatar'
@@ -9,7 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import type { Cliente } from '@/types/database'
 
 export default function ChatPage() {
-  const { org, supabase } = useAuth()
+  const { org } = useAuth()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [selectedCliente, setSelectedCliente] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
@@ -17,7 +18,10 @@ export default function ChatPage() {
   useEffect(() => {
     if (!org) return
     async function load() {
-      const { data } = await supabase.from('clientes').select('*').eq('org_id', org!.id).order('nome')
+      const { data } = await db.select('clientes', {
+        filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+        order: [{ col: 'nome', asc: true }],
+      })
       setClientes(data || [])
       setLoading(false)
     }

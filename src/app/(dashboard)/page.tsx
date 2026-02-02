@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
@@ -15,7 +16,7 @@ import Link from 'next/link'
 import type { Conteudo, ActivityLog, Cliente } from '@/types/database'
 
 export default function DashboardPage() {
-  const { org, member, supabase, loading: authLoading } = useAuth()
+  const { org, member, loading: authLoading } = useAuth()
   const [stats, setStats] = useState({ total: 0, pendentes: 0, atrasados: 0, concluidos: 0 })
   const [proximos, setProximos] = useState<(Conteudo & { empresa: Cliente })[]>([])
   const [atividades, setAtividades] = useState<ActivityLog[]>([])
@@ -27,53 +28,51 @@ export default function DashboardPage() {
 
     async function load() {
       const now = new Date()
-      const mesAtual = now.getMonth() + 1
-      const anoAtual = now.getFullYear()
+      const hoje = now.toISOString().split('T')[0]
 
       // Stats
-      const { data: conteudos } = await supabase
-        .from('conteudos')
-        .select('id, status, data_publicacao')
-        .eq('org_id', org!.id)
+      const { data: conteudos } = await db.select('conteudos', {
+        select: 'id, status, data_publicacao',
+        filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      })
 
       const all = conteudos || []
-      const hoje = now.toISOString().split('T')[0]
 
       setStats({
         total: all.length,
-        pendentes: all.filter(c => ['rascunho', 'conteudo', 'aprovacao_cliente'].includes(c.status)).length,
-        atrasados: all.filter(c => c.data_publicacao && c.data_publicacao < hoje && !['concluido', 'aprovado_agendado'].includes(c.status)).length,
-        concluidos: all.filter(c => c.status === 'concluido').length,
+        pendentes: all.filter((c: any) => ['rascunho', 'conteudo', 'aprovacao_cliente'].includes(c.status)).length,
+        atrasados: all.filter((c: any) => c.data_publicacao && c.data_publicacao < hoje && !['concluido', 'aprovado_agendado'].includes(c.status)).length,
+        concluidos: all.filter((c: any) => c.status === 'concluido').length,
       })
 
       // Próximos conteúdos
-      const { data: prox } = await supabase
-        .from('conteudos')
-        .select('*, empresa:clientes(*)')
-        .eq('org_id', org!.id)
-        .gte('data_publicacao', hoje)
-        .not('status', 'eq', 'concluido')
-        .order('data_publicacao', { ascending: true })
-        .limit(6)
+      const { data: prox } = await db.select('conteudos', {
+        select: '*, empresa:clientes(*)',
+        filters: [
+          { op: 'eq', col: 'org_id', val: org!.id },
+          { op: 'gte', col: 'data_publicacao', val: hoje },
+          { op: 'not', col: 'status', val: 'concluido', nop: 'eq' },
+        ],
+        order: [{ col: 'data_publicacao', asc: true }],
+        limit: 6,
+      })
 
       setProximos((prox as any) || [])
 
       // Clientes
-      const { data: cls } = await supabase
-        .from('clientes')
-        .select('*')
-        .eq('org_id', org!.id)
-        .order('nome')
+      const { data: cls } = await db.select('clientes', {
+        filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+        order: [{ col: 'nome', asc: true }],
+      })
 
       setClientes(cls || [])
 
       // Atividade recente
-      const { data: acts } = await supabase
-        .from('activity_log')
-        .select('*')
-        .eq('org_id', org!.id)
-        .order('created_at', { ascending: false })
-        .limit(10)
+      const { data: acts } = await db.select('activity_log', {
+        filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+        order: [{ col: 'created_at', asc: false }],
+        limit: 10,
+      })
 
       setAtividades(acts || [])
       setLoading(false)

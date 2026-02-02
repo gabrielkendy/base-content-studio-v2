@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -9,7 +10,8 @@ import { Modal } from '@/components/ui/modal'
 import { Input, Label, Textarea, Select } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Calendar, Clock, MessageSquare } from 'lucide-react'
+import { Plus, Search, Calendar, Clock, MessageSquare, CheckCircle } from 'lucide-react'
+import { useRouter } from 'next/navigation'
 import type { Solicitacao, SolicitacaoStatus, SolicitacaoPrioridade, Cliente } from '@/types/database'
 
 const PRIORIDADE_CONFIG: Record<SolicitacaoPrioridade, { label: string; color: string; emoji: string }> = {
@@ -29,8 +31,9 @@ const STATUS_SOL_CONFIG: Record<SolicitacaoStatus, { label: string; color: strin
 }
 
 export default function SolicitacoesPage() {
-  const { org, member, supabase, loading: authLoading } = useAuth()
+  const { org, member, loading: authLoading } = useAuth()
   const { toast } = useToast()
+  const router = useRouter()
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
@@ -52,16 +55,19 @@ export default function SolicitacoesPage() {
   }, [org])
 
   async function loadData() {
-    const { data: cls } = await supabase.from('clientes').select('*').eq('org_id', org!.id).order('nome')
+    const { data: cls } = await db.select('clientes', {
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      order: [{ col: 'nome', asc: true }],
+    })
     setClientes(cls || [])
 
-    const { data: sols, error } = await supabase
-      .from('solicitacoes')
-      .select('*, cliente:clientes(id, nome, slug, cores)')
-      .eq('org_id', org!.id)
-      .order('created_at', { ascending: false })
+    const { data: sols, error } = await db.select('solicitacoes', {
+      select: '*, cliente:clientes(id, nome, slug, cores)',
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      order: [{ col: 'created_at', asc: false }],
+    })
 
-    if (error) console.error('Erro solicitações:', error.message)
+    if (error) console.error('Erro solicitações:', error)
     setSolicitacoes((sols as any) || [])
     setLoading(false)
   }
@@ -75,7 +81,7 @@ export default function SolicitacoesPage() {
     e.preventDefault()
     const refs = form.referencias.split('\n').filter(s => s.trim())
 
-    const { error } = await supabase.from('solicitacoes').insert({
+    const { error } = await db.insert('solicitacoes', {
       org_id: org!.id,
       cliente_id: form.cliente_id,
       titulo: form.titulo,
@@ -85,7 +91,7 @@ export default function SolicitacoesPage() {
       prazo_desejado: form.prazo_desejado || null,
     })
 
-    if (error) { toast(`Erro: ${error.message}`, 'error'); return }
+    if (error) { toast(`Erro: ${error}`, 'error'); return }
     toast('Solicitação criada!', 'success')
     setModalOpen(false)
     loadData()
@@ -95,22 +101,38 @@ export default function SolicitacoesPage() {
     const updates: Record<string, any> = { status, updated_at: new Date().toISOString() }
     if (status !== 'nova') updates.respondido_por = member?.user_id
 
-    const { error } = await supabase.from('solicitacoes').update(updates).eq('id', id)
-    if (error) { toast(`Erro: ${error.message}`, 'error'); return }
+    const { error } = await db.update('solicitacoes', updates, { id })
+    if (error) { toast(`Erro: ${error}`, 'error'); return }
     toast(`Status → ${STATUS_SOL_CONFIG[status].label}`, 'success')
     setDetailId(null)
     loadData()
   }
 
   async function salvarResposta(id: string) {
-    const { error } = await supabase.from('solicitacoes').update({
+    const { error } = await db.update('solicitacoes', {
       resposta: respostaText,
       respondido_por: member?.user_id,
       updated_at: new Date().toISOString(),
-    }).eq('id', id)
-    if (error) { toast(`Erro: ${error.message}`, 'error'); return }
+    }, { id })
+    if (error) { toast(`Erro: ${error}`, 'error'); return }
     toast('Resposta salva!', 'success')
     loadData()
+  }
+
+  async function aceitarSolicitacao(id: string, e?: React.MouseEvent) {
+    if (e) e.stopPropagation()
+    try {
+      const res = await fetch(`/api/solicitacoes/${id}/aceitar`, { method: 'POST' })
+      const json = await res.json()
+      if (!res.ok) {
+        toast(`Erro: ${json.error}`, 'error')
+        return
+      }
+      toast('✅ Solicitação aceita! Conteúdo criado.', 'success')
+      router.push('/workflow')
+    } catch {
+      toast('Erro ao aceitar solicitação', 'error')
+    }
   }
 
   const filtered = solicitacoes.filter(s => {
@@ -202,6 +224,16 @@ export default function SolicitacoesPage() {
                     <div className="flex items-center gap-2 max-sm:w-full max-sm:justify-between">
                       <Badge style={{ backgroundColor: pcfg.color + '15', color: pcfg.color }}>{pcfg.emoji} {pcfg.label}</Badge>
                       <Badge style={{ backgroundColor: scfg.color + '15', color: scfg.color }}>{scfg.emoji} {scfg.label}</Badge>
+                      {(sol.status === 'nova' || sol.status === 'em_analise' || sol.status === 'aprovada') && (
+                        <Button
+                          size="sm"
+                          variant="primary"
+                          onClick={(e) => aceitarSolicitacao(sol.id, e)}
+                          className="ml-1"
+                        >
+                          <CheckCircle className="w-3 h-3" /> Aceitar
+                        </Button>
+                      )}
                     </div>
                   </div>
                 </CardContent>

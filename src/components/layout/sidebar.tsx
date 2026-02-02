@@ -3,10 +3,12 @@
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
+import { useAuth } from '@/hooks/use-auth'
 import {
   LayoutDashboard,
   Users,
   Calendar,
+  CalendarPlus,
   Kanban,
   MessageSquare,
   Settings,
@@ -15,6 +17,9 @@ import {
   ChevronLeft,
   Menu,
   FileText,
+  LogOut,
+  User,
+  BarChart3,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -22,6 +27,7 @@ const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/solicitacoes', label: 'Solicitações', icon: FileText },
+  { href: '/agendar', label: 'Agendar Post', icon: CalendarPlus },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/workflow', label: 'Workflow', icon: Kanban },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
@@ -34,8 +40,11 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   const pathname = usePathname()
+  const { org, member, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(false)
   const [mobileOpen, setMobileOpen] = useState(false)
+
+  const brandColor = org?.brand_color || '#6366F1'
 
   return (
     <>
@@ -65,14 +74,25 @@ export function Sidebar() {
           mobileOpen && 'max-md:translate-x-0'
         )}
       >
-        {/* Logo */}
+        {/* Logo / Org Header */}
         <div className="flex items-center gap-3 px-4 py-5 border-b border-zinc-100">
-          <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0">
-            B
-          </div>
+          {org?.logo_url ? (
+            <img
+              src={org.logo_url}
+              alt={org.name}
+              className="w-8 h-8 rounded-lg object-cover shrink-0"
+            />
+          ) : (
+            <div
+              className="w-8 h-8 rounded-lg flex items-center justify-center text-white font-bold text-sm shrink-0"
+              style={{ backgroundColor: brandColor }}
+            >
+              {(org?.name || 'B').charAt(0).toUpperCase()}
+            </div>
+          )}
           {!collapsed && (
-            <div>
-              <div className="font-bold text-zinc-900 text-sm">BASE</div>
+            <div className="min-w-0">
+              <div className="font-bold text-zinc-900 text-sm truncate">{org?.name || 'BASE'}</div>
               <div className="text-[10px] text-zinc-400">Content Studio</div>
             </div>
           )}
@@ -103,9 +123,17 @@ export function Sidebar() {
                 className={cn(
                   'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
                   active
-                    ? 'bg-blue-50 text-blue-600 font-medium'
+                    ? 'font-medium'
                     : 'text-zinc-600 hover:bg-zinc-50 hover:text-zinc-900'
                 )}
+                style={
+                  active
+                    ? {
+                        backgroundColor: `${brandColor}15`,
+                        color: brandColor,
+                      }
+                    : undefined
+                }
               >
                 <Icon className="w-5 h-5 shrink-0" />
                 {!collapsed && <span>{item.label}</span>}
@@ -114,12 +142,53 @@ export function Sidebar() {
           })}
         </nav>
 
-        {/* Footer */}
-        {!collapsed && (
-          <div className="px-4 py-3 border-t border-zinc-100">
+        {/* Footer with member info */}
+        <div className="px-3 py-3 border-t border-zinc-100">
+          {member && !collapsed && (
+            <div className="flex items-center gap-3 mb-2">
+              {member.avatar_url ? (
+                <img
+                  src={member.avatar_url}
+                  alt={member.display_name}
+                  className="w-8 h-8 rounded-full object-cover shrink-0"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-zinc-200 flex items-center justify-center shrink-0">
+                  <User className="w-4 h-4 text-zinc-500" />
+                </div>
+              )}
+              <div className="min-w-0 flex-1">
+                <div className="text-sm font-medium text-zinc-900 truncate">{member.display_name}</div>
+                <div className="text-[10px] text-zinc-400 capitalize">{member.role}</div>
+              </div>
+              <button
+                onClick={() => signOut()}
+                className="p-1.5 rounded-lg hover:bg-zinc-100 transition-colors"
+                title="Sair"
+              >
+                <LogOut className="w-4 h-4 text-zinc-400" />
+              </button>
+            </div>
+          )}
+          {member && collapsed && (
+            <div className="flex justify-center mb-2">
+              {member.avatar_url ? (
+                <img
+                  src={member.avatar_url}
+                  alt={member.display_name}
+                  className="w-8 h-8 rounded-full object-cover"
+                />
+              ) : (
+                <div className="w-8 h-8 rounded-full bg-zinc-200 flex items-center justify-center">
+                  <User className="w-4 h-4 text-zinc-500" />
+                </div>
+              )}
+            </div>
+          )}
+          {!collapsed && (
             <div className="text-[10px] text-zinc-400">BASE Content Studio v2.0</div>
-          </div>
-        )}
+          )}
+        </div>
       </aside>
     </>
   )

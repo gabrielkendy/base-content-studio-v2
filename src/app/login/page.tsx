@@ -29,7 +29,18 @@ export default function LoginPage() {
       return
     }
 
-    router.push('/')
+    // Verificar role pra redirecionar
+    try {
+      const res = await fetch('/api/auth/me')
+      const data = await res.json()
+      if (data.member?.role === 'cliente') {
+        router.push('/portal')
+      } else {
+        router.push('/')
+      }
+    } catch {
+      router.push('/')
+    }
     router.refresh()
   }
 

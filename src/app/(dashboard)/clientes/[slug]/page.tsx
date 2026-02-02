@@ -13,7 +13,7 @@ import { MESES, STATUS_CONFIG, TIPO_EMOJI, formatDate } from '@/lib/utils'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { ChevronLeft, ChevronRight, Plus, Calendar, Kanban, Users, Trash2, Mail, BarChart3 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Calendar, Users, Trash2, Mail, BarChart3 } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Member, MemberClient } from '@/types/database'
 
@@ -197,11 +197,6 @@ export default function ClienteDetailPage() {
         >
           <Calendar className="w-4 h-4" /> Visão Anual
         </Button>
-        <Link href={`/workflow?cliente=${cliente.id}`}>
-          <Button size="sm" variant="outline">
-            <Kanban className="w-4 h-4" /> Workflow
-          </Button>
-        </Link>
         <Button
           size="sm"
           variant={view === 'acessos' ? 'primary' : 'outline'}

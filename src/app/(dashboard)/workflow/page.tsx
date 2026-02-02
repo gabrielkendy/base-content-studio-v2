@@ -296,30 +296,30 @@ function WorkflowContent() {
         )}
       </div>
 
-      {/* Filtros */}
-      <div className="flex flex-wrap gap-2 items-center bg-zinc-50/50 rounded-xl p-2.5 border border-zinc-100 max-sm:flex-col max-sm:items-stretch">
-        <div className="relative flex-1 min-w-[180px] max-sm:w-full">
+      {/* Filtros — single row */}
+      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center max-lg:grid-cols-[1fr_1fr] max-sm:grid-cols-1">
+        <div className="relative">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <Input
             value={busca}
             onChange={e => setBusca(e.target.value)}
             placeholder="Buscar por título..."
-            className="pl-10 bg-white"
+            className="pl-10"
           />
         </div>
-        <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="min-w-[150px] bg-white max-sm:w-full">
+        <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}>
           <option value="todos">Todos clientes</option>
           {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </Select>
-        <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="min-w-[130px] bg-white max-sm:w-full">
+        <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)}>
           <option value="todos">Todos meses</option>
           {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </Select>
-        <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)} className="min-w-[140px] bg-white max-sm:w-full">
+        <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)}>
           <option value="todos">Responsável</option>
           {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
         </Select>
-        <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="min-w-[130px] bg-white max-sm:w-full">
+        <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
           <option value="todos">Todos tipos</option>
           {TIPOS_CONTEUDO.map(t => <option key={t} value={t}>{TIPO_EMOJI[t] || '📄'} {t}</option>)}
         </Select>

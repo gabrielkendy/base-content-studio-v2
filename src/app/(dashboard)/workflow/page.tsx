@@ -49,6 +49,7 @@ function WorkflowContent() {
   const [filtroResponsavel, setFiltroResponsavel] = useState('todos')
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [busca, setBusca] = useState('')
+  const [showFilters, setShowFilters] = useState(false)
 
   // Nome do cliente filtrado
   const clienteFiltrado = filtroCliente !== 'todos'
@@ -289,41 +290,66 @@ function WorkflowContent() {
             </p>
           </div>
         </div>
-        {hasFilters && (
-          <Button size="sm" variant="ghost" onClick={clearFilters} className="text-zinc-500 hover:text-zinc-700">
-            <X className="w-4 h-4" /> Limpar filtros
-          </Button>
-        )}
+        {/* Limpar filtros moved inline next to filter button */}
       </div>
 
-      {/* Filtros — single row */}
-      <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center max-lg:grid-cols-[1fr_1fr] max-sm:grid-cols-1">
-        <div className="relative">
+      {/* Filtros — compact: search + toggle */}
+      <div className="flex items-center gap-2">
+        <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <Input
             value={busca}
             onChange={e => setBusca(e.target.value)}
-            placeholder="Buscar por título..."
-            className="pl-10"
+            placeholder="Buscar..."
+            className="pl-10 h-9 text-sm"
           />
         </div>
-        <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)}>
-          <option value="todos">Todos clientes</option>
-          {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-        </Select>
-        <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)}>
-          <option value="todos">Todos meses</option>
-          {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
-        </Select>
-        <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)}>
-          <option value="todos">Responsável</option>
-          {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
-        </Select>
-        <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)}>
-          <option value="todos">Todos tipos</option>
-          {TIPOS_CONTEUDO.map(t => <option key={t} value={t}>{TIPO_EMOJI[t] || '📄'} {t}</option>)}
-        </Select>
+        <button
+          onClick={() => setShowFilters(!showFilters)}
+          className={`flex items-center gap-1.5 px-3 h-9 rounded-lg border text-sm font-medium transition-all ${
+            hasFilters
+              ? 'bg-blue-50 border-blue-200 text-blue-700'
+              : showFilters
+                ? 'bg-zinc-100 border-zinc-200 text-zinc-700'
+                : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+          }`}
+        >
+          <Filter className="w-3.5 h-3.5" />
+          Filtros
+          {hasFilters && (
+            <span className="w-5 h-5 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold">
+              {[filtroCliente, filtroMes, filtroResponsavel, filtroTipo].filter(f => f !== 'todos').length}
+            </span>
+          )}
+        </button>
+        {hasFilters && (
+          <button onClick={clearFilters} className="text-xs text-zinc-400 hover:text-zinc-600 transition-colors">
+            Limpar
+          </button>
+        )}
       </div>
+
+      {/* Filtros expandidos */}
+      {showFilters && (
+        <div className="flex flex-wrap gap-2 items-center bg-zinc-50 rounded-xl p-3 border border-zinc-100 animate-fade-in">
+          <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="text-sm h-9">
+            <option value="todos">Todos clientes</option>
+            {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+          </Select>
+          <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="text-sm h-9">
+            <option value="todos">Todos meses</option>
+            {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
+          </Select>
+          <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)} className="text-sm h-9">
+            <option value="todos">Responsável</option>
+            {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
+          </Select>
+          <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="text-sm h-9">
+            <option value="todos">Todos tipos</option>
+            {TIPOS_CONTEUDO.map(t => <option key={t} value={t}>{TIPO_EMOJI[t] || '📄'} {t}</option>)}
+          </Select>
+        </div>
+      )}
 
       {/* Kanban Board */}
       <div

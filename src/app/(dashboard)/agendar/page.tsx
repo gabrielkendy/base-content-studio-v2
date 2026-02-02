@@ -237,35 +237,68 @@ export default function AgendarPage() {
     if (!selectedCliente || !org) return
 
     const isVideo = file.type.startsWith('video/')
-    const maxSize = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024
+    const maxSize = isVideo ? 500 * 1024 * 1024 : 10 * 1024 * 1024
     if (file.size > maxSize) {
-      toast(`${file.name} excede o limite de ${isVideo ? '100MB' : '10MB'}`, 'error')
+      toast(`${file.name} excede o limite de ${isVideo ? '500MB' : '10MB'}`, 'error')
       return
     }
 
     setUploading(true)
     try {
-      const formData = new FormData()
-      formData.append('file', file)
-      formData.append('clienteId', selectedCliente.id)
+      let result: any
 
-      const res = await fetch('/api/media/upload', {
-        method: 'POST',
-        body: formData,
-      })
-      const json = await res.json()
+      // Files > 4MB: use presigned URL (direct upload to storage, bypasses Vercel body limit)
+      if (file.size > 4 * 1024 * 1024) {
+        // Step 1: Get presigned URL
+        const presignRes = await fetch('/api/media/presign', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            filename: file.name,
+            contentType: file.type,
+            clienteId: selectedCliente.id,
+          }),
+        })
+        const presign = await presignRes.json()
+        if (!presignRes.ok) throw new Error(presign.error || 'Erro ao gerar URL de upload')
 
-      if (!res.ok) {
-        throw new Error(json.error || 'Erro no upload')
+        // Step 2: Upload directly to Supabase Storage
+        const uploadRes = await fetch(presign.signedUrl, {
+          method: 'PUT',
+          headers: { 'Content-Type': file.type },
+          body: file,
+        })
+        if (!uploadRes.ok) throw new Error('Erro no upload direto')
+
+        result = {
+          url: presign.publicUrl,
+          filename: file.name,
+          size: file.size,
+          type: file.type,
+          path: presign.path,
+          isVideo,
+        }
+      } else {
+        // Small files: use regular API route
+        const formData = new FormData()
+        formData.append('file', file)
+        formData.append('clienteId', selectedCliente.id)
+
+        const res = await fetch('/api/media/upload', {
+          method: 'POST',
+          body: formData,
+        })
+        result = await res.json()
+        if (!res.ok) throw new Error(result.error || 'Erro no upload')
       }
 
       // Create preview for images
       let preview: string | undefined
-      if (!json.isVideo) {
+      if (!isVideo) {
         preview = URL.createObjectURL(file)
       }
 
-      setUploadedMedia(prev => [...prev, { ...json, preview }])
+      setUploadedMedia(prev => [...prev, { ...result, preview }])
       toast(`${file.name} enviado com sucesso!`, 'success')
     } catch (error: any) {
       toast(error.message || 'Erro ao enviar arquivo', 'error')
@@ -731,7 +764,7 @@ export default function AgendarPage() {
                   {uploading ? 'Enviando...' : 'Arraste arquivos ou clique para selecionar'}
                 </p>
                 <p className="text-xs text-zinc-400 mt-1">
-                  Imagens até 10MB • Vídeos até 100MB • JPG, PNG, WebP, GIF, MP4
+                  Imagens até 10MB • Vídeos até 500MB • JPG, PNG, WebP, GIF, MP4
                 </p>
               </div>
 

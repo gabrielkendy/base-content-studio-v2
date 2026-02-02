@@ -263,64 +263,75 @@ function WorkflowContent() {
   const totalSolicitacoes = solicitacoes.filter(s => pendingSolStatuses.includes(s.status)).length
 
   return (
-    <div className="space-y-4 animate-fade-in">
+    <div className="space-y-5 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <div className="flex items-center gap-3">
-            <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
-            {clienteFiltrado && (
-              <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-lg px-3 py-1">
-                <Avatar
-                  name={clienteFiltrado.nome}
-                  color={clienteFiltrado.cores?.primaria}
-                  size="sm"
-                  className="w-5 h-5 text-[8px]"
-                />
-                <span className="text-sm font-medium text-blue-700">{clienteFiltrado.nome}</span>
-                <button onClick={() => { setFiltroCliente('todos'); router.replace('/workflow') }}
-                  className="text-blue-400 hover:text-blue-600">
-                  <X className="w-3.5 h-3.5" />
-                </button>
-              </div>
-            )}
+      <div className="flex items-center justify-between flex-wrap gap-3">
+        <div className="flex items-center gap-4">
+          <div className="p-2.5 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 shadow-lg shadow-indigo-500/20">
+            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M9 17V7m0 10a2 2 0 01-2 2H5a2 2 0 01-2-2V7a2 2 0 012-2h2a2 2 0 012 2m0 10a2 2 0 002 2h2a2 2 0 002-2M9 7a2 2 0 012-2h2a2 2 0 012 2m0 10V7m0 10a2 2 0 002 2h2a2 2 0 002-2V7a2 2 0 00-2-2h-2a2 2 0 00-2 2" />
+            </svg>
           </div>
-          <p className="text-sm text-zinc-500 max-sm:text-xs">
-            {totalItems} itens no board
-            {totalSolicitacoes > 0 && ` • ${totalSolicitacoes} solicitações pendentes`}
-          </p>
+          <div>
+            <div className="flex items-center gap-3">
+              <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Workflow</h1>
+              {clienteFiltrado && (
+                <div className="flex items-center gap-2 bg-blue-50 border border-blue-200 rounded-full px-3 py-1">
+                  <Avatar
+                    name={clienteFiltrado.nome}
+                    color={clienteFiltrado.cores?.primaria}
+                    size="sm"
+                    className="w-5 h-5 text-[8px]"
+                  />
+                  <span className="text-sm font-medium text-blue-700">{clienteFiltrado.nome}</span>
+                  <button onClick={() => { setFiltroCliente('todos'); router.replace('/workflow') }}
+                    className="text-blue-400 hover:text-blue-600 transition-colors">
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                </div>
+              )}
+            </div>
+            <p className="text-sm text-zinc-500 max-sm:text-xs">
+              {totalItems} {totalItems === 1 ? 'item' : 'itens'} no board
+              {totalSolicitacoes > 0 && (
+                <span className="ml-1.5 inline-flex items-center gap-1 text-purple-600 font-medium">
+                  • {totalSolicitacoes} {totalSolicitacoes === 1 ? 'solicitação pendente' : 'solicitações pendentes'}
+                </span>
+              )}
+            </p>
+          </div>
         </div>
         {hasFilters && (
-          <Button size="sm" variant="ghost" onClick={clearFilters}>
+          <Button size="sm" variant="ghost" onClick={clearFilters} className="text-zinc-500 hover:text-zinc-700">
             <X className="w-4 h-4" /> Limpar filtros
           </Button>
         )}
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2 items-center max-sm:flex-col max-sm:items-stretch">
+      <div className="flex flex-wrap gap-2 items-center bg-zinc-50/50 rounded-xl p-2.5 border border-zinc-100 max-sm:flex-col max-sm:items-stretch">
         <div className="relative flex-1 min-w-[180px] max-sm:w-full">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
           <Input
             value={busca}
             onChange={e => setBusca(e.target.value)}
             placeholder="Buscar por título..."
-            className="pl-10"
+            className="pl-10 bg-white"
           />
         </div>
-        <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-40 max-sm:w-full">
+        <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="min-w-[150px] bg-white max-sm:w-full">
           <option value="todos">Todos clientes</option>
           {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
         </Select>
-        <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="w-36 max-sm:w-full">
+        <Select value={filtroMes} onChange={e => setFiltroMes(e.target.value)} className="min-w-[130px] bg-white max-sm:w-full">
           <option value="todos">Todos meses</option>
           {MESES.map((m, i) => <option key={i} value={i + 1}>{m}</option>)}
         </Select>
-        <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)} className="w-40 max-sm:w-full">
+        <Select value={filtroResponsavel} onChange={e => setFiltroResponsavel(e.target.value)} className="min-w-[140px] bg-white max-sm:w-full">
           <option value="todos">Responsável</option>
           {members.map(m => <option key={m.user_id} value={m.user_id}>{m.display_name}</option>)}
         </Select>
-        <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="w-36 max-sm:w-full">
+        <Select value={filtroTipo} onChange={e => setFiltroTipo(e.target.value)} className="min-w-[130px] bg-white max-sm:w-full">
           <option value="todos">Todos tipos</option>
           {TIPOS_CONTEUDO.map(t => <option key={t} value={t}>{TIPO_EMOJI[t] || '📄'} {t}</option>)}
         </Select>
@@ -328,35 +339,40 @@ function WorkflowContent() {
 
       {/* Kanban Board */}
       <div
-        className="flex gap-3 overflow-x-auto pb-4 scroll-smooth scrollbar-thin"
+        className="flex gap-4 overflow-x-auto pb-6 scroll-smooth"
         style={{ minHeight: '72vh' }}
       >
         {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
           const items = porStatus[key] || []
-          const isDropTarget = dragging !== null
+          const isDragActive = dragging !== null
           return (
             <div
               key={key}
-              className="min-w-[270px] w-[270px] flex-shrink-0 flex flex-col max-sm:min-w-[240px] max-sm:w-[240px]"
+              className="min-w-[260px] w-[260px] flex-shrink-0 flex flex-col max-sm:min-w-[230px] max-sm:w-[230px]"
               onDragOver={e => e.preventDefault()}
               onDrop={e => handleDrop(e, key)}
             >
-              {/* Column header */}
-              <div className="flex items-center gap-2 mb-2 px-1 sticky top-0 bg-white z-10 py-1">
-                <div className="w-3 h-3 rounded-full flex-shrink-0" style={{ backgroundColor: cfg.color }} />
-                <span className="text-xs font-semibold text-zinc-700 truncate">{cfg.label}</span>
-                <span
-                  className="ml-auto text-[10px] font-bold rounded-full px-2 py-0.5 flex-shrink-0"
-                  style={{ backgroundColor: cfg.color + '20', color: cfg.color }}
-                >
-                  {items.length}
-                </span>
+              {/* Column header — colored top bar */}
+              <div className="rounded-t-xl overflow-hidden">
+                <div className="h-1" style={{ backgroundColor: cfg.color }} />
+                <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-x border-zinc-100">
+                  <span className="text-sm">{cfg.emoji}</span>
+                  <span className="text-xs font-bold text-zinc-800 truncate flex-1">{cfg.label}</span>
+                  <span
+                    className="text-[11px] font-bold rounded-md px-2 py-0.5 min-w-[24px] text-center flex-shrink-0"
+                    style={{ backgroundColor: cfg.color + '15', color: cfg.color }}
+                  >
+                    {items.length}
+                  </span>
+                </div>
               </div>
 
               {/* Cards container */}
               <div
-                className={`flex-1 space-y-2 p-2 rounded-xl transition-all min-h-[100px] ${
-                  isDropTarget ? 'bg-zinc-50/80 border-2 border-dashed border-zinc-300 shadow-inner' : 'bg-zinc-50/40 border-2 border-transparent'
+                className={`flex-1 space-y-2.5 p-2.5 rounded-b-xl border-x border-b transition-all min-h-[80px] ${
+                  isDragActive
+                    ? 'bg-zinc-50 border-dashed border-zinc-300'
+                    : 'bg-zinc-50/30 border-zinc-100'
                 }`}
                 onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
                 onDragEnter={e => e.preventDefault()}
@@ -371,16 +387,24 @@ function WorkflowContent() {
                     clienteSlug={(item.empresa as any)?.slug}
                   />
                 ))}
-                {items.length === 0 && (
-                  <div className="text-center py-8 text-xs text-zinc-300">
+                {items.length === 0 && !isDragActive && (
+                  <div className="flex flex-col items-center justify-center py-10 text-zinc-300">
                     {key === 'nova_solicitacao' ? (
-                      <div className="flex flex-col items-center gap-1">
-                        <Inbox className="w-5 h-5" />
-                        <span>Sem solicitações</span>
-                      </div>
+                      <>
+                        <Inbox className="w-6 h-6 mb-1.5" />
+                        <span className="text-[11px] font-medium">Sem solicitações</span>
+                      </>
                     ) : (
-                      'Arraste cards aqui'
+                      <span className="text-[11px]">—</span>
                     )}
+                  </div>
+                )}
+                {items.length === 0 && isDragActive && (
+                  <div className="flex items-center justify-center py-10 border-2 border-dashed rounded-lg transition-colors"
+                    style={{ borderColor: cfg.color + '40' }}>
+                    <span className="text-[11px] font-medium" style={{ color: cfg.color }}>
+                      Soltar aqui
+                    </span>
                   </div>
                 )}
               </div>
@@ -425,90 +449,100 @@ function KanbanCard({
       }}
       onDragEnd={onDragEnd}
       className={`
-        bg-white rounded-lg p-3 cursor-grab active:cursor-grabbing
-        hover:shadow-md transition-all touch-manipulation max-sm:p-2
-        ${isDragging ? 'opacity-40 scale-95' : ''}
+        bg-white rounded-xl p-3 cursor-grab active:cursor-grabbing
+        hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 touch-manipulation
+        ${isDragging ? 'opacity-30 scale-95 rotate-1' : 'shadow-sm'}
         ${isSol
-          ? 'border-2 border-purple-300 shadow-purple-100 shadow-sm'
-          : 'border border-zinc-100'
+          ? 'border-l-[3px] border-l-purple-500 border border-purple-100'
+          : 'border border-zinc-150'
         }
       `}
     >
-      {/* Solicitação badge + prioridade */}
-      {isSol && (
-        <div className="flex items-center gap-1.5 mb-1.5 flex-wrap">
-          <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded-full">
+      {/* Badges row */}
+      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+        {/* Type badge */}
+        <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
+          {TIPO_EMOJI[item.tipo] || '📄'} {item.tipo}
+        </span>
+
+        {/* Solicitação badge */}
+        {isSol && (
+          <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
             📩 Solicitação
           </span>
-          {item.prioridade && item.prioridade !== 'normal' && (
-            <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-full border ${PRIORIDADE_STYLE[item.prioridade] || ''}`}>
-              {item.prioridade === 'urgente' ? '🔴' : item.prioridade === 'alta' ? '🟠' : '⚪'} {item.prioridade}
-            </span>
-          )}
-        </div>
-      )}
+        )}
 
-      {/* From solicitação badge */}
-      {!isSol && item.fromSolicitacao && (
-        <div className="flex items-center gap-1 mb-1.5">
-          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded-full">
-            📋 Demanda do cliente
+        {/* Priority */}
+        {isSol && item.prioridade && item.prioridade !== 'normal' && (
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${PRIORIDADE_STYLE[item.prioridade] || ''}`}>
+            {item.prioridade === 'urgente' ? '🔴' : '🟠'} {item.prioridade}
           </span>
-        </div>
-      )}
+        )}
 
-      {/* Ajuste badge */}
+        {/* From solicitação */}
+        {!isSol && item.fromSolicitacao && (
+          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+            📋 Demanda
+          </span>
+        )}
+      </div>
+
+      {/* Ajuste tooltip */}
       {item.ajusteComentario && (
         <div
-          className="relative mb-1.5"
+          className="relative mb-2"
           onMouseEnter={() => setShowTooltip(true)}
           onMouseLeave={() => setShowTooltip(false)}
         >
-          <span className="text-[10px] font-semibold text-orange-600 bg-orange-50 px-1.5 py-0.5 rounded-full cursor-help">
-            🔄 Ajuste solicitado
-          </span>
-          {showTooltip && (
-            <div className="absolute z-50 left-0 top-full mt-1 bg-zinc-900 text-white text-xs rounded-lg p-2 max-w-[220px] shadow-lg">
-              {item.ajusteComentario}
-            </div>
-          )}
+          <div className="text-[11px] text-orange-600 bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100 cursor-help">
+            🔄 <span className="font-medium">Ajuste:</span> <span className="text-orange-500 line-clamp-2">{item.ajusteComentario}</span>
+          </div>
         </div>
       )}
 
       {/* Title */}
-      <div className="text-sm font-medium text-zinc-900 line-clamp-2 mb-2 max-sm:text-xs">
+      <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2.5 leading-snug">
         {item.titulo}
-      </div>
+      </h4>
 
-      {/* Meta row */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      {/* Footer */}
+      <div className="flex items-center gap-2 pt-2 border-t border-zinc-50">
         {item.empresa && (
-          <>
+          <div className="flex items-center gap-1.5 flex-1 min-w-0">
             <Avatar
               name={item.empresa.nome}
               color={item.empresa.cores?.primaria}
               size="sm"
-              className="w-5 h-5 text-[8px] flex-shrink-0"
+              className="w-5 h-5 text-[7px] flex-shrink-0"
             />
-            <span className="text-[10px] text-zinc-400 truncate max-w-[80px]">
+            <span className="text-[10px] text-zinc-400 truncate">
               {item.empresa.nome}
             </span>
-          </>
+          </div>
         )}
 
-        <span className="text-xs ml-auto">{TIPO_EMOJI[item.tipo] || '📄'}</span>
+        <div className="flex items-center gap-1.5 flex-shrink-0">
+          {item.assignee && (
+            <div className="relative group/avatar">
+              <Avatar
+                name={item.assignee.display_name}
+                size="sm"
+                className="w-5 h-5 text-[7px] ring-2 ring-white"
+              />
+              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/avatar:block z-50">
+                <div className="bg-zinc-900 text-white text-[10px] px-2 py-1 rounded-md whitespace-nowrap shadow-lg">
+                  {item.assignee.display_name}
+                </div>
+              </div>
+            </div>
+          )}
 
-        {item.assignee && (
-          <Avatar
-            name={item.assignee.display_name}
-            size="sm"
-            className="w-5 h-5 text-[8px] flex-shrink-0"
-          />
-        )}
-
-        {item.data_publicacao && (
-          <span className="text-[10px] text-zinc-400">{formatDate(item.data_publicacao)}</span>
-        )}
+          {item.data_publicacao && (
+            <span className="text-[10px] text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded">
+              📅 {formatDate(item.data_publicacao)}
+            </span>
+          )}
+        </div>
       </div>
     </div>
   )

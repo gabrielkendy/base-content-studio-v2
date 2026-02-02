@@ -31,8 +31,7 @@ async function getUserMembership(userId: string) {
   return data
 }
 
-const MAX_IMAGE_SIZE = 50 * 1024 * 1024   // 50MB
-const MAX_VIDEO_SIZE = 2 * 1024 * 1024 * 1024  // 2GB
+// No size limits — presigned URL handles large files directly to storage
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm']
 
@@ -69,14 +68,7 @@ export async function POST(request: NextRequest) {
       }, { status: 400 })
     }
 
-    const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE
-    if (file.size > maxSize) {
-      const maxMB = maxSize / (1024 * 1024)
-      return NextResponse.json({ 
-        error: `Arquivo muito grande. Máximo: ${maxMB}MB para ${isVideo ? 'vídeos' : 'imagens'}.` 
-      }, { status: 400 })
-    }
-
+    // No size check — large files use presigned URL (bypasses this route)
     const admin = createServiceClient()
 
     // Verify client belongs to org

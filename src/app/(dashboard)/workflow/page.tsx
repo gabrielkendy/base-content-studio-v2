@@ -15,6 +15,18 @@ import { Search, X, Filter, Inbox } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/types/database'
 
+// Map legacy status values from old Conteúdos do Mês to STATUS_CONFIG keys
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  conteudo: 'producao',
+  ajustes: 'ajuste',
+  aprovado_agendado: 'aprovado',
+  concluido: 'publicado',
+}
+
+function normalizeStatus(status: string): string {
+  return LEGACY_STATUS_MAP[status] || status
+}
+
 type KanbanItem = {
   id: string
   titulo: string
@@ -93,9 +105,11 @@ function WorkflowContent() {
     const membersData = membersRes.data || []
     setMembers(membersData)
 
-    // Map assignee from members by user_id (since assigned_to references auth.users, not members)
+    // Map assignee + normalize legacy statuses
     const rawConteudos = (conteudosRes.data as any) || []
     const conteudosWithAssignee = rawConteudos.map((c: any) => {
+      // Normalize legacy status values
+      c.status = normalizeStatus(c.status || 'rascunho')
       if (c.assigned_to) {
         const assignee = membersData.find((m: any) => m.user_id === c.assigned_to)
         if (assignee) c.assignee = assignee

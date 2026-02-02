@@ -29,15 +29,29 @@ import Link from 'next/link'
 import { MESES, TIPOS_CONTEUDO, CANAIS as CANAIS_CONFIG } from '@/lib/utils'
 import { dispatchWebhook } from '@/lib/webhooks'
 
+// Aligned with STATUS_CONFIG from utils.ts so Workflow kanban works
 const STATUS_OPTIONS = [
   { value: 'rascunho', label: 'Rascunho', color: 'bg-gray-100 text-gray-800' },
-  { value: 'conteudo', label: 'Conteúdo', color: 'bg-blue-100 text-blue-800' },
+  { value: 'producao', label: 'Produção', color: 'bg-blue-100 text-blue-800' },
+  { value: 'revisao', label: 'Revisão', color: 'bg-cyan-100 text-cyan-800' },
   { value: 'design', label: 'Design', color: 'bg-purple-100 text-purple-800' },
   { value: 'aprovacao_cliente', label: 'Aprovação Cliente', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'ajustes', label: 'Ajustes', color: 'bg-orange-100 text-orange-800' },
-  { value: 'aprovado_agendado', label: 'Aprovado/Agendado', color: 'bg-green-100 text-green-800' },
-  { value: 'concluido', label: 'Concluído', color: 'bg-emerald-100 text-emerald-800' }
+  { value: 'ajuste', label: 'Ajuste', color: 'bg-orange-100 text-orange-800' },
+  { value: 'aprovado', label: 'Aprovado/Agendado', color: 'bg-green-100 text-green-800' },
+  { value: 'publicado', label: 'Concluído', color: 'bg-emerald-100 text-emerald-800' }
 ]
+
+// Map legacy status values to new ones
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  conteudo: 'producao',
+  ajustes: 'ajuste',
+  aprovado_agendado: 'aprovado',
+  concluido: 'publicado',
+}
+
+function normalizeStatus(status: string): string {
+  return LEGACY_STATUS_MAP[status] || status
+}
 
 const CANAIS = CANAIS_CONFIG.map(c => ({ id: c.id, label: c.label, icon: c.icon }))
 
@@ -136,7 +150,12 @@ export default function ConteudosMesPage() {
       })
 
       if (error) throw new Error(error)
-      setConteudos(data || [])
+      // Normalize legacy statuses to match STATUS_CONFIG
+      const normalized = (data || []).map((c: any) => ({
+        ...c,
+        status: normalizeStatus(c.status || 'rascunho'),
+      }))
+      setConteudos(normalized)
     } catch (error) {
       console.error('Erro ao carregar conteúdos:', error)
       alert(`Erro ao carregar conteúdos: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)

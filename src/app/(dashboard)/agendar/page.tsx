@@ -237,9 +237,9 @@ export default function AgendarPage() {
     if (!selectedCliente || !org) return
 
     const isVideo = file.type.startsWith('video/')
-    const maxSize = isVideo ? 50 * 1024 * 1024 : 10 * 1024 * 1024
+    const maxSize = isVideo ? 100 * 1024 * 1024 : 10 * 1024 * 1024
     if (file.size > maxSize) {
-      toast(`${file.name} excede o limite de ${isVideo ? '50MB' : '10MB'}`, 'error')
+      toast(`${file.name} excede o limite de ${isVideo ? '100MB' : '10MB'}`, 'error')
       return
     }
 

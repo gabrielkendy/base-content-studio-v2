@@ -26,20 +26,30 @@ import {
 } from 'lucide-react'
 import type { Cliente, Conteudo, Member } from '@/types/database'
 import Link from 'next/link'
-import { MESES, TIPOS_CONTEUDO, CANAIS as CANAIS_CONFIG } from '@/lib/utils'
+import { MESES, TIPOS_CONTEUDO, CANAIS as CANAIS_CONFIG, STATUS_CONFIG } from '@/lib/utils'
 import { dispatchWebhook } from '@/lib/webhooks'
 
-// Aligned with STATUS_CONFIG from utils.ts so Workflow kanban works
-const STATUS_OPTIONS = [
-  { value: 'rascunho', label: 'Rascunho', color: 'bg-gray-100 text-gray-800' },
-  { value: 'producao', label: 'Produção', color: 'bg-blue-100 text-blue-800' },
-  { value: 'revisao', label: 'Revisão', color: 'bg-cyan-100 text-cyan-800' },
-  { value: 'design', label: 'Design', color: 'bg-purple-100 text-purple-800' },
-  { value: 'aprovacao_cliente', label: 'Aprovação Cliente', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'ajuste', label: 'Ajuste', color: 'bg-orange-100 text-orange-800' },
-  { value: 'aprovado', label: 'Aprovado/Agendado', color: 'bg-green-100 text-green-800' },
-  { value: 'publicado', label: 'Concluído', color: 'bg-emerald-100 text-emerald-800' }
-]
+// Derive STATUS_OPTIONS from the single source of truth (STATUS_CONFIG)
+// Skip 'nova_solicitacao' — that's Workflow-only (solicitações, not conteúdos)
+const STATUS_COLORS: Record<string, string> = {
+  rascunho: 'bg-gray-100 text-gray-800',
+  producao: 'bg-blue-100 text-blue-800',
+  revisao: 'bg-cyan-100 text-cyan-800',
+  design: 'bg-purple-100 text-purple-800',
+  aprovacao_cliente: 'bg-yellow-100 text-yellow-800',
+  ajuste: 'bg-orange-100 text-orange-800',
+  aprovado: 'bg-green-100 text-green-800',
+  agendado: 'bg-blue-100 text-blue-700',
+  publicado: 'bg-emerald-100 text-emerald-800',
+}
+
+const STATUS_OPTIONS = Object.entries(STATUS_CONFIG)
+  .filter(([key]) => key !== 'nova_solicitacao')
+  .map(([key, cfg]) => ({
+    value: key,
+    label: cfg.label,
+    color: STATUS_COLORS[key] || 'bg-gray-100 text-gray-800',
+  }))
 
 // Map legacy status values to new ones
 const LEGACY_STATUS_MAP: Record<string, string> = {
@@ -410,8 +420,8 @@ export default function ConteudosMesPage() {
 
   const getStatusIcon = (status: string) => {
     switch (status) {
-      case 'concluido': return <CheckCircle className="w-4 h-4" />
-      case 'aprovacao_cliente': case 'ajustes': return <AlertTriangle className="w-4 h-4" />
+      case 'publicado': return <CheckCircle className="w-4 h-4" />
+      case 'aprovacao_cliente': case 'ajuste': return <AlertTriangle className="w-4 h-4" />
       default: return <Clock className="w-4 h-4" />
     }
   }

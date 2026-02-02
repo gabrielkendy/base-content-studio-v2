@@ -17,6 +17,17 @@ import { ChevronLeft, ChevronRight, Plus, Calendar, Users, Trash2, Mail, BarChar
 import Link from 'next/link'
 import type { Cliente, Conteudo, Member, MemberClient } from '@/types/database'
 
+// Map legacy status values to STATUS_CONFIG keys
+const LEGACY_STATUS_MAP: Record<string, string> = {
+  conteudo: 'producao',
+  ajustes: 'ajuste',
+  aprovado_agendado: 'aprovado',
+  concluido: 'publicado',
+}
+function normalizeStatus(status: string): string {
+  return LEGACY_STATUS_MAP[status] || status
+}
+
 export default function ClienteDetailPage() {
   const params = useParams()
   const slug = params.slug as string
@@ -60,7 +71,9 @@ export default function ClienteDetailPage() {
       order: [{ col: 'ordem', asc: true }, { col: 'data_publicacao', asc: true }],
     })
 
-    setConteudos(conts || [])
+    // Normalize legacy statuses
+    const normalized = (conts || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status || 'rascunho') }))
+    setConteudos(normalized)
     setLoading(false)
 
     // Load access data

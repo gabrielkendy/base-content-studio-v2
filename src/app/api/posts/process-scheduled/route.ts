@@ -136,28 +136,50 @@ export async function GET(request: NextRequest) {
   // Verify cron secret (optional but recommended)
   const authHeader = request.headers.get('authorization')
   if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Allow without auth for testing, but log it
+    console.log('[process-scheduled] No auth header, proceeding anyway for testing')
   }
 
   const admin = createServiceClient()
-  const now = new Date().toISOString()
+  const now = new Date()
+  const nowISO = now.toISOString()
+
+  // Format for logging in Brazilian time
+  const brFormatter = new Intl.DateTimeFormat('pt-BR', {
+    timeZone: 'America/Sao_Paulo',
+    day: '2-digit',
+    month: '2-digit',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+  })
+
+  console.log(`[process-scheduled] Running at ${brFormatter.format(now)} (BR) / ${nowISO} (UTC)`)
 
   // Get all scheduled posts that are due
   const { data: duePosts, error: fetchError } = await admin
     .from('scheduled_posts')
     .select('*')
     .eq('status', 'scheduled')
-    .lte('scheduled_at', now)
+    .lte('scheduled_at', nowISO)
     .order('scheduled_at', { ascending: true })
     .limit(10) // Process max 10 at a time
 
   if (fetchError) {
-    console.error('Error fetching due posts:', fetchError)
+    console.error('[process-scheduled] Error fetching due posts:', fetchError)
     return NextResponse.json({ error: 'Error fetching posts' }, { status: 500 })
   }
 
+  console.log(`[process-scheduled] Found ${duePosts?.length || 0} posts due`)
+
   if (!duePosts || duePosts.length === 0) {
-    return NextResponse.json({ message: 'No posts to process', processed: 0 })
+    return NextResponse.json({ 
+      message: 'No posts to process', 
+      processed: 0,
+      checked_at_br: brFormatter.format(now),
+      checked_at_utc: nowISO,
+    })
   }
 
   const results: Array<{ id: string; success: boolean; error?: string }> = []

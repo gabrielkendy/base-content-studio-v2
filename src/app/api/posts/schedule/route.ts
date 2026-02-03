@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { buildUsername, ensureProfile } from '@/lib/upload-post'
 
 interface SchedulePostRequest {
   cliente_id: string
@@ -11,6 +12,7 @@ interface SchedulePostRequest {
   media_urls?: string[]
   hashtags?: string[]
   scheduled_at: string
+  timezone?: string // e.g., 'America/Sao_Paulo'
 }
 
 async function getAuthUser() {
@@ -94,23 +96,35 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Verify platforms connected
+    // Verify platforms connected (case-insensitive)
+    const platformStringsLower = platformStrings.map(p => p.toLowerCase())
     const { data: connectedAccounts } = await admin
       .from('social_accounts')
-      .select('platform')
+      .select('platform, upload_post_user_id')
       .eq('cliente_id', cliente_id)
       .eq('status', 'active')
-      .in('platform', platformStrings)
 
-    const connectedPlatforms = (connectedAccounts || []).map(acc => acc.platform)
-    const missingPlatforms = platformStrings.filter(p => !connectedPlatforms.includes(p))
+    const connectedPlatformsLower = (connectedAccounts || []).map(acc => acc.platform.toLowerCase())
+    const missingPlatforms = platformStringsLower.filter(p => !connectedPlatformsLower.includes(p))
     
     if (missingPlatforms.length > 0) {
       return NextResponse.json({ 
-        error: `Plataformas não conectadas: ${missingPlatforms.join(', ')}` 
+        error: `Plataformas não conectadas: ${missingPlatforms.join(', ')}. Conecte em Redes Sociais primeiro.` 
       }, { status: 400 })
     }
 
+    // Ensure Upload-Post profile exists
+    const username = buildUsername(membership.org_id, cliente_id)
+    const profileResult = await ensureProfile(username)
+    if (!profileResult.success) {
+      console.error('Failed to ensure Upload-Post profile:', profileResult.error)
+      // Continue anyway, profile might exist
+    }
+
+    // Parse and validate scheduled datetime
+    // The frontend sends ISO string which is already in UTC
+    const scheduledDateUTC = new Date(scheduled_at)
+    
     // Create scheduled post with full platform+format info
     const { data: scheduledPost, error: insertError } = await admin
       .from('scheduled_posts')
@@ -122,9 +136,9 @@ export async function POST(request: NextRequest) {
         caption,
         media_urls,
         hashtags,
-        scheduled_at,
+        scheduled_at: scheduledDateUTC.toISOString(), // Store in UTC
         status: 'scheduled',
-        created_by: user.id
+        created_by: user.id,
       })
       .select('*')
       .single()
@@ -134,9 +148,20 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao agendar post' }, { status: 500 })
     }
 
+    // Format for Brazilian display
+    const brFormatter = new Intl.DateTimeFormat('pt-BR', {
+      timeZone: 'America/Sao_Paulo',
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
     return NextResponse.json({ 
       data: scheduledPost,
-      message: 'Post agendado com sucesso!'
+      scheduled_at_br: brFormatter.format(scheduledDateUTC),
+      message: `Post agendado para ${brFormatter.format(scheduledDateUTC)} (horário de Brasília)!`
     })
   } catch (error: any) {
     console.error('Schedule post error:', error)

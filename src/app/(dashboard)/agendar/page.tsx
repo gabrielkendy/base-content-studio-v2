@@ -363,21 +363,25 @@ export default function AgendarPage() {
     if (!validate()) return
     setScheduling(true)
     try {
+      // Create date in local timezone (Brazil)
+      const localDateTime = new Date(`${scheduledDate}T${scheduledTime}`)
+      
       const res = await fetch('/api/posts/schedule', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           cliente_id: selectedCliente!.id,
           platforms: getPlatformFormatsArray(),
-          caption: caption,
+          caption: customCaptions ? Object.values(captionByPlatform).join('\n---\n') : caption,
           hashtags: hashtags.split(/\s+/).filter(t => t.startsWith('#')),
           media_urls: uploadedMedia.map(m => m.url),
-          scheduled_at: new Date(`${scheduledDate}T${scheduledTime}`).toISOString(),
+          scheduled_at: localDateTime.toISOString(),
+          timezone: 'America/Sao_Paulo',
         })
       })
       const json = await res.json()
       if (!res.ok) throw new Error(json.error)
-      toast('Post agendado com sucesso! 📅', 'success')
+      toast(json.message || 'Post agendado com sucesso! 📅', 'success')
       resetForm()
     } catch (error: any) {
       toast(error.message || 'Erro ao agendar', 'error')

@@ -63,6 +63,8 @@ export async function GET(request: NextRequest) {
     // Get profile from Upload-Post
     const profileResult = await getProfile(username)
 
+    console.log('[social/status] Profile result:', JSON.stringify(profileResult, null, 2))
+
     if (!profileResult.success || !profileResult.profile) {
       // Profile doesn't exist yet - return empty accounts
       return NextResponse.json({
@@ -70,11 +72,16 @@ export async function GET(request: NextRequest) {
         profile_exists: false,
         accounts: [],
         username,
+        debug: { error: profileResult.error, profile: profileResult.profile }
       })
     }
 
+    console.log('[social/status] Raw social_accounts:', JSON.stringify(profileResult.profile.social_accounts, null, 2))
+
     // Parse connected accounts
     const connectedAccounts = parseSocialAccounts(profileResult.profile.social_accounts)
+    
+    console.log('[social/status] Parsed accounts:', JSON.stringify(connectedAccounts, null, 2))
 
     // Sync to Supabase: upsert connected accounts, mark missing as disconnected
     const now = new Date().toISOString()
@@ -145,6 +152,10 @@ export async function GET(request: NextRequest) {
       accounts: syncedAccounts || [],
       upload_post_accounts: connectedAccounts,
       username,
+      debug: {
+        raw_social_accounts: profileResult.profile.social_accounts,
+        parsed_count: connectedAccounts.length,
+      }
     })
   } catch (error: any) {
     console.error('Status error:', error)

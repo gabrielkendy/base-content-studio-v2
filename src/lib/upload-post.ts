@@ -151,7 +151,7 @@ export async function deleteProfile(username: string): Promise<{ success: boolea
  * Parse social_accounts from Upload-Post into a normalized array
  */
 export function parseSocialAccounts(
-  socialAccounts: Record<string, UploadPostSocialAccount | string | null>
+  socialAccounts: Record<string, UploadPostSocialAccount | string | null> | null | undefined
 ): Array<{
   platform: string
   display_name: string | null
@@ -167,17 +167,39 @@ export function parseSocialAccounts(
     connected: boolean
   }> = []
 
+  if (!socialAccounts || typeof socialAccounts !== 'object') {
+    return result
+  }
+
   for (const [platform, value] of Object.entries(socialAccounts)) {
-    if (value && typeof value === 'object' && (value.display_name || value.username)) {
+    // Skip null, undefined, or empty strings
+    if (!value) continue
+    
+    // Handle string values (some APIs return just the username as string)
+    if (typeof value === 'string' && value.trim()) {
       result.push({
-        platform,
-        display_name: value.display_name || null,
-        avatar_url: value.social_images || null,
-        username: value.username || null,
+        platform: platform.toLowerCase(),
+        display_name: value,
+        avatar_url: null,
+        username: value,
         connected: true,
       })
+      continue
     }
-    // Skip empty strings, nulls, or objects without any useful data
+    
+    // Handle object values - accept if ANY meaningful data exists
+    if (typeof value === 'object') {
+      const hasData = value.display_name || value.username || value.social_images
+      if (hasData) {
+        result.push({
+          platform: platform.toLowerCase(),
+          display_name: value.display_name || value.username || platform,
+          avatar_url: value.social_images || null,
+          username: value.username || null,
+          connected: true,
+        })
+      }
+    }
   }
 
   return result

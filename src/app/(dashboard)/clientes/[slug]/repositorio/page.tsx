@@ -114,11 +114,7 @@ export default function RepositorioPage() {
       setAssets(json.data || [])
 
       // Merge default folders with discovered folders
-      const discoveredFolders = json.folders || []
-      const allFolders = currentFolder === '/'
-        ? [...new Set([...DEFAULT_FOLDERS, ...discoveredFolders])]
-        : discoveredFolders
-      setFolders(allFolders)
+      setFolders(json.folders || [])
     } catch (err) {
       console.error('Load assets error:', err)
     }
@@ -131,21 +127,7 @@ export default function RepositorioPage() {
     setUploading(true)
     setUploadProgress(0)
 
-    const fileArray = Array.from(files)
-    const MAX_FILE_SIZE = 50 * 1024 * 1024 // 50MB per file
-
-    // Validate file sizes
-    const oversized = fileArray.filter(f => f.size > MAX_FILE_SIZE)
-    if (oversized.length > 0) {
-      toast(`${oversized.length} arquivo(s) excedem 50MB: ${oversized.map(f => f.name).join(', ')}`, 'error')
-      const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE)
-      if (validFiles.length === 0) {
-        setUploading(false)
-        return
-      }
-    }
-
-    const validFiles = fileArray.filter(f => f.size <= MAX_FILE_SIZE)
+    const validFiles = Array.from(files)
 
     try {
       // Step 1: Get presigned upload URLs from our API
@@ -292,7 +274,7 @@ export default function RepositorioPage() {
 
   async function handleCreateFolder(e: React.FormEvent) {
     e.preventDefault()
-    if (!newFolderName.trim()) return
+    if (!newFolderName.trim() || !cliente || !org) return
 
     try {
       const res = await fetch('/api/assets/folder', {
@@ -301,15 +283,20 @@ export default function RepositorioPage() {
         body: JSON.stringify({
           folderName: newFolderName,
           parentFolder: currentFolder,
+          clienteId: cliente.id,
+          orgId: org.id,
         }),
       })
       const json = await res.json()
+      if (json.error) {
+        toast(`Erro: ${json.error}`, 'error')
+        return
+      }
       if (json.folder) {
-        toast(`Pasta "${json.name}" criada`, 'success')
+        toast(json.existing ? `Pasta "${json.name}" já existe` : `Pasta "${json.name}" criada`, json.existing ? 'info' : 'success')
         setNewFolderOpen(false)
         setNewFolderName('')
-        // Navigate into it
-        setCurrentFolder(json.folder)
+        await loadAssets()
       }
     } catch {
       toast('Erro ao criar pasta', 'error')

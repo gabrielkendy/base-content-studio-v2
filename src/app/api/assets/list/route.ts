@@ -14,11 +14,13 @@ export async function GET(req: NextRequest) {
 
     const supabase = createServiceClient()
 
+    // Get actual files in current folder (exclude folder markers)
     let query = supabase
       .from('client_assets')
       .select('*')
       .eq('cliente_id', clienteId)
       .eq('folder', folder)
+      .neq('file_type', 'folder')
       .order('created_at', { ascending: false })
 
     if (search) {
@@ -32,38 +34,47 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: error.message }, { status: 500 })
     }
 
-    // Also get distinct folders (subfolders of current path)
+    // Get persisted folder markers in current folder
+    const { data: folderMarkers } = await supabase
+      .from('client_assets')
+      .select('filename')
+      .eq('cliente_id', clienteId)
+      .eq('file_type', 'folder')
+      .eq('folder', folder)
+
+    const persistedFolders = new Set((folderMarkers || []).map(f => f.filename))
+
+    // Also discover folders from files that are inside subfolders of current path
     const { data: allAssets } = await supabase
       .from('client_assets')
       .select('folder')
       .eq('cliente_id', clienteId)
+      .neq('file_type', 'folder')
 
-    const folders = new Set<string>()
+    const discoveredFolders = new Set<string>()
     const currentDepth = folder === '/' ? 0 : folder.split('/').filter(Boolean).length
 
     allAssets?.forEach(a => {
       const parts = a.folder.split('/').filter(Boolean)
       if (parts.length > currentDepth) {
-        // Check if this folder is a direct child
-        const parentPath = folder === '/'
-          ? '/'
-          : folder
-
         if (folder === '/') {
-          folders.add(parts[0])
+          discoveredFolders.add(parts[0])
         } else {
           const folderParts = folder.split('/').filter(Boolean)
           const isChild = folderParts.every((p, i) => parts[i] === p) && parts.length > folderParts.length
           if (isChild) {
-            folders.add(parts[folderParts.length])
+            discoveredFolders.add(parts[folderParts.length])
           }
         }
       }
     })
 
+    // Merge: persisted folders + discovered folders (from files)
+    const allFolders = [...new Set([...persistedFolders, ...discoveredFolders])].sort()
+
     return NextResponse.json({
       data: data || [],
-      folders: Array.from(folders).sort(),
+      folders: allFolders,
     })
   } catch (err: unknown) {
     console.error('List route error:', err)

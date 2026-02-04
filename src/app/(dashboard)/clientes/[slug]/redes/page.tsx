@@ -153,8 +153,8 @@ export default function RedesSociaisPage() {
         return
       }
 
-      // Abrir popup centralizado (igual mLabs)
-      const width = 600
+      // Abrir painel do Upload-Post em nova aba
+      const width = 1000
       const height = 700
       const left = window.screenX + (window.outerWidth - width) / 2
       const top = window.screenY + (window.outerHeight - height) / 2
@@ -165,7 +165,12 @@ export default function RedesSociaisPage() {
         `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
       )
 
-      // Polling pra detectar quando popup fecha ou redirect acontece
+      // Mostra instruções se tiver username no response (modo sem Whitelabel)
+      if (data.username) {
+        toast(`Procure pelo perfil no painel e conecte as redes. Depois feche a janela e clique em "Atualizar".`, 'success')
+      }
+
+      // Polling pra detectar quando popup fecha
       const pollTimer = setInterval(async () => {
         try {
           if (popup?.closed) {

@@ -80,7 +80,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
 
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload`, {
         method: 'POST',
-        headers: { 'Authorization': `ApiKey ${UPLOAD_POST_API_KEY}` },
+        headers: { 'Authorization': `Apikey ${UPLOAD_POST_API_KEY}` },
         body: formData,
       })
       publishResponse = await res.json()
@@ -103,7 +103,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
 
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload_photos`, {
         method: 'POST',
-        headers: { 'Authorization': `ApiKey ${UPLOAD_POST_API_KEY}` },
+        headers: { 'Authorization': `Apikey ${UPLOAD_POST_API_KEY}` },
         body: formData,
       })
       publishResponse = await res.json()
@@ -113,7 +113,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload_text`, {
         method: 'POST',
         headers: { 
-          'Authorization': `ApiKey ${UPLOAD_POST_API_KEY}`,
+          'Authorization': `Apikey ${UPLOAD_POST_API_KEY}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({

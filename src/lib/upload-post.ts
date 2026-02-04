@@ -8,7 +8,7 @@ const API_KEY = process.env.UPLOAD_POST_API_KEY!
 
 function headers(): Record<string, string> {
   return {
-    'Authorization': `ApiKey ${API_KEY}`,
+    'Authorization': `Apikey ${API_KEY}`,
     'Content-Type': 'application/json',
   }
 }

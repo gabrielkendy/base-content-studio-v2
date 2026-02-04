@@ -53,7 +53,7 @@ async function fetchUploadPostAnalytics(profileUsername: string): Promise<Analyt
     const res = await fetch(`${API_URL}/api/analytics/${encodeURIComponent(profileUsername)}`, {
       method: 'GET',
       headers: {
-        'Authorization': `ApiKey ${API_KEY}`,
+        'Authorization': `Apikey ${API_KEY}`,
         'Content-Type': 'application/json',
       },
       next: { revalidate: 0 },

@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect } from 'react'
+import { Suspense, useEffect } from 'react'
 import { useSearchParams } from 'next/navigation'
 
-export default function SocialCallbackPage() {
+function CallbackContent() {
   const searchParams = useSearchParams()
   const connected = searchParams.get('connected')
   const clienteSlug = searchParams.get('cliente')
@@ -29,5 +29,17 @@ export default function SocialCallbackPage() {
         <div className="animate-spin w-6 h-6 border-2 border-green-500 border-t-transparent rounded-full mx-auto"></div>
       </div>
     </div>
+  )
+}
+
+export default function SocialCallbackPage() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-2 border-green-500 border-t-transparent rounded-full"></div>
+      </div>
+    }>
+      <CallbackContent />
+    </Suspense>
   )
 }

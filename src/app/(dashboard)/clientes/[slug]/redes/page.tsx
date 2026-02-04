@@ -79,6 +79,19 @@ export default function RedesSociaisPage() {
     }
   }, [searchParams])
 
+  // Escuta mensagem do popup quando conexão é feita
+  useEffect(() => {
+    function handleMessage(event: MessageEvent) {
+      if (event.data?.type === 'social-connected' && event.data?.connected) {
+        toast('Rede social conectada! Sincronizando...', 'success')
+        setConnecting(false)
+        fetchStatus(true)
+      }
+    }
+    window.addEventListener('message', handleMessage)
+    return () => window.removeEventListener('message', handleMessage)
+  }, [fetchStatus, toast])
+
   async function loadData() {
     setLoading(true)
     

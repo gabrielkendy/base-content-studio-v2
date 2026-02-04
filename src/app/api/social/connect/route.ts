@@ -72,9 +72,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: profileResult.error || 'Erro ao criar perfil' }, { status: 500 })
     }
 
-    // Generate JWT URL
+    // Generate JWT URL - redireciona pra callback que fecha o popup
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const redirectUrl = `${appUrl}/clientes/${cliente.slug}/redes?connected=true`
+    const redirectUrl = `${appUrl}/auth/social-callback?connected=true&cliente=${cliente.slug}`
 
     const jwtResult = await generateJwtUrl({
       username,

@@ -136,15 +136,44 @@ export default function RedesSociaisPage() {
       
       if (!res.ok || !data.access_url) {
         toast(data.error || 'Erro ao gerar link de conexão', 'error')
+        setConnecting(false)
         return
       }
 
-      // Open Upload-Post connect page in new tab
-      window.open(data.access_url, '_blank')
-      toast('Janela de conexão aberta. Complete o processo e volte aqui.', 'success')
+      // Abrir popup centralizado (igual mLabs)
+      const width = 600
+      const height = 700
+      const left = window.screenX + (window.outerWidth - width) / 2
+      const top = window.screenY + (window.outerHeight - height) / 2
+      
+      const popup = window.open(
+        data.access_url,
+        'conectar-redes',
+        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
+      )
+
+      // Polling pra detectar quando popup fecha ou redirect acontece
+      const pollTimer = setInterval(async () => {
+        try {
+          if (popup?.closed) {
+            clearInterval(pollTimer)
+            setConnecting(false)
+            toast('Sincronizando contas...', 'success')
+            await fetchStatus(true)
+          }
+        } catch (e) {
+          // Cross-origin error - popup ainda aberto
+        }
+      }, 500)
+
+      // Timeout de segurança (5 min)
+      setTimeout(() => {
+        clearInterval(pollTimer)
+        setConnecting(false)
+      }, 300000)
+
     } catch (error) {
       toast('Erro ao conectar. Tente novamente.', 'error')
-    } finally {
       setConnecting(false)
     }
   }

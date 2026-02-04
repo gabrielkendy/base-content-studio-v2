@@ -105,35 +105,38 @@ export default function ClientesPage() {
       if (error) { toast('Erro ao salvar', 'error'); return }
       toast('Cliente atualizado!', 'success')
     } else {
-      const { data: newCliente, error } = await db.insert('clientes', payload, { select: '*', single: true })
-      if (error) { toast('Erro ao criar cliente', 'error'); return }
+      // Usar nova API que cria no Supabase + Upload-Post automaticamente
+      try {
+        const res = await fetch('/api/clientes/create', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            nome: form.nome,
+            slug,
+            cores: { primaria: form.primaria, secundaria: form.secundaria },
+            contato: form.contato || null,
+            notas: form.notas || null,
+            email_cliente: form.email_cliente || null,
+          }),
+        })
 
-      // Auto-invite if email provided
-      if (form.email_cliente && newCliente) {
-        const token = Array.from({ length: 32 }, () =>
-          'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
-        ).join('')
+        const data = await res.json()
 
-        const { data: invite } = await db.insert('invites', {
-          org_id: org!.id,
-          email: form.email_cliente,
-          role: 'cliente',
-          token,
-          invited_by: currentMember?.user_id,
-        }, { select: '*', single: true })
-
-        // Link the invite to this client
-        if (invite) {
-          await db.insert('member_clients', {
-            member_id: invite.id,
-            cliente_id: newCliente.id,
-            org_id: org!.id,
-          })
+        if (!res.ok) {
+          toast(data.error || 'Erro ao criar cliente', 'error')
+          return
         }
 
-        toast('Cliente criado + convite enviado!', 'success')
-      } else {
-        toast('Cliente criado!', 'success')
+        if (data.invite_sent) {
+          toast('Cliente criado + convite enviado! ✅', 'success')
+        } else if (data.upload_post_created) {
+          toast('Cliente criado + Upload-Post configurado! 🚀', 'success')
+        } else {
+          toast('Cliente criado!', 'success')
+        }
+      } catch (err) {
+        toast('Erro ao criar cliente', 'error')
+        return
       }
     }
 

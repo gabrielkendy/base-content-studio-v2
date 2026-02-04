@@ -116,6 +116,7 @@ export async function GET(request: NextRequest) {
         await admin
           .from('social_accounts')
           .insert({
+            org_id: cliente.org_id,
             cliente_id: cliente.id,
             platform: account.platform,
             profile_id: account.username || `${account.platform}_${Date.now()}`,

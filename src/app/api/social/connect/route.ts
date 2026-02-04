@@ -86,8 +86,16 @@ export async function POST(request: NextRequest) {
       show_calendar: false,
     })
 
+    // Se JWT falhar (plano Basic sem Whitelabel), redireciona pro painel do Upload-Post
     if (!jwtResult.success) {
-      return NextResponse.json({ error: jwtResult.error || 'Erro ao gerar URL de conexão' }, { status: 500 })
+      // Fallback: redireciona pro painel do Upload-Post diretamente
+      const fallbackUrl = `https://app.upload-post.com/dashboard/managed-users?profile=${encodeURIComponent(username)}&redirect=${encodeURIComponent(redirectUrl)}`
+      return NextResponse.json({
+        success: true,
+        access_url: fallbackUrl,
+        fallback: true,
+        message: 'Redirecionando para o painel do Upload-Post. Conecte as redes e volte para sincronizar.'
+      })
     }
 
     return NextResponse.json({

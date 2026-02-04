@@ -58,7 +58,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    const username = buildUsername(membership.org_id, cliente.id)
+    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
 
     // Get profile from Upload-Post
     const profileResult = await getProfile(username)

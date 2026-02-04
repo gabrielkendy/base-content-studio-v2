@@ -29,7 +29,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
     // Get client info
     const { data: cliente } = await admin
       .from('clientes')
-      .select('id, org_id')
+      .select('id, slug, org_id')
       .eq('id', post.cliente_id)
       .single()
 
@@ -37,7 +37,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
       return { success: false, error: 'Cliente não encontrado' }
     }
 
-    const username = buildUsername(cliente.org_id, cliente.id)
+    const username = buildUsername(cliente.org_id, cliente.id, cliente.slug)
 
     // Parse platforms
     let platforms: string[] = []

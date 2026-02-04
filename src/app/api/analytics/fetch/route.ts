@@ -160,7 +160,7 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    const username = buildUsername(membership.org_id, cliente.id)
+    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
 
     // Fetch analytics from Upload-Post
     const analyticsData = await fetchUploadPostAnalytics(username)

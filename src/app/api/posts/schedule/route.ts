@@ -87,7 +87,7 @@ export async function POST(request: NextRequest) {
     // Verify client
     const { data: cliente, error: clienteError } = await admin
       .from('clientes')
-      .select('id, nome, org_id')
+      .select('id, nome, slug, org_id')
       .eq('id', cliente_id)
       .eq('org_id', membership.org_id)
       .single()
@@ -114,7 +114,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Ensure Upload-Post profile exists
-    const username = buildUsername(membership.org_id, cliente_id)
+    const username = buildUsername(membership.org_id, cliente_id, cliente.slug)
     const profileResult = await ensureProfile(username)
     if (!profileResult.success) {
       console.error('Failed to ensure Upload-Post profile:', profileResult.error)

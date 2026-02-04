@@ -48,7 +48,7 @@ export async function POST(request: NextRequest) {
     // Get client
     const { data: cliente, error: clienteError } = await admin
       .from('clientes')
-      .select('id, nome, org_id')
+      .select('id, nome, slug, org_id')
       .eq('slug', clienteSlug)
       .eq('org_id', membership.org_id)
       .single()
@@ -57,7 +57,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    const username = buildUsername(membership.org_id, cliente.id)
+    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
     const result = await createProfile(username)
 
     if (!result.success) {

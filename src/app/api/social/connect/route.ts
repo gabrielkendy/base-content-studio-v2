@@ -64,7 +64,7 @@ export async function POST(request: NextRequest) {
       .eq('id', membership.org_id)
       .single()
 
-    const username = buildUsername(membership.org_id, cliente.id)
+    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
 
     // Lazy creation: ensure profile exists
     const profileResult = await ensureProfile(username)

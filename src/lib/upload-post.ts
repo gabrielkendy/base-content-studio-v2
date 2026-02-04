@@ -207,8 +207,9 @@ export function parseSocialAccounts(
 
 /**
  * Build the Upload-Post username for a client
- * Uses org_id + client_id format for unique identification
+ * Usa o slug do cliente (simples e direto)
  */
 export function buildUsername(orgId: string, clienteId: string, clienteSlug?: string): string {
-  return `org_${orgId}_client_${clienteId}`
+  // Usa slug se disponível, senão usa clienteId curto
+  return clienteSlug || clienteId.substring(0, 20)
 }

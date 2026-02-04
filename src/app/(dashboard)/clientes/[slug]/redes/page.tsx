@@ -165,17 +165,61 @@ export default function RedesSociaisPage() {
         `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
       )
 
-      // Polling pra detectar quando popup fecha
+      // Polling pra detectar quando popup fecha E verificar novas conexões
+      let previousCount = socialAccounts.length
+      let retryCount = 0
+      const maxRetries = 10
+      
       const pollTimer = setInterval(async () => {
         try {
+          // Verificar se popup fechou
           if (popup?.closed) {
             clearInterval(pollTimer)
-            setConnecting(false)
             toast('Sincronizando contas...', 'success')
-            await fetchStatus(true)
+            
+            // Fazer múltiplas tentativas de sincronização (Upload-Post pode demorar)
+            const syncWithRetry = async () => {
+              for (let i = 0; i < maxRetries; i++) {
+                await fetchStatus(true)
+                // Dar tempo pro Upload-Post processar
+                await new Promise(resolve => setTimeout(resolve, 2000))
+                
+                // Verificar se novas contas apareceram
+                const res = await fetch(`/api/social/status?clienteSlug=${slug}`)
+                const data = await res.json()
+                if (data.accounts && data.accounts.length > previousCount) {
+                  toast('Conta conectada com sucesso! 🎉', 'success')
+                  setSocialAccounts(data.accounts)
+                  break
+                }
+                
+                if (i === maxRetries - 1) {
+                  toast('Clique em "Atualizar" se a conta não aparecer', 'info')
+                }
+              }
+              setConnecting(false)
+            }
+            
+            syncWithRetry()
+            return
+          }
+          
+          // Também verificar periodicamente ENQUANTO popup está aberto
+          // (pra detectar conexão mesmo sem redirect)
+          retryCount++
+          if (retryCount % 6 === 0) { // A cada 3 segundos
+            const res = await fetch(`/api/social/status?clienteSlug=${slug}`)
+            const data = await res.json()
+            if (data.accounts && data.accounts.length > previousCount) {
+              clearInterval(pollTimer)
+              popup?.close()
+              toast('Conta conectada com sucesso! 🎉', 'success')
+              setSocialAccounts(data.accounts)
+              setConnecting(false)
+            }
           }
         } catch (e) {
-          // Cross-origin error - popup ainda aberto
+          // Cross-origin error ou erro de fetch - ignorar
         }
       }, 500)
 

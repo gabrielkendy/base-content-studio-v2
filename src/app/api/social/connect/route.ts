@@ -76,15 +76,26 @@ export async function POST(request: NextRequest) {
     const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
     const redirectUrl = `${appUrl}/auth/social-callback?connected=true&cliente=${cliente.slug}`
 
-    // Plano Basic não suporta Whitelabel/JWT - usa painel direto do Upload-Post
-    // O usuário conecta no painel e depois volta pra sincronizar
-    const connectUrl = `https://app.upload-post.com/dashboard/managed-users`
-    
+    // Gerar JWT URL (Whitelabel - requer plano Pro+)
+    const jwtResult = await generateJwtUrl({
+      username,
+      redirect_url: redirectUrl,
+      logo_image: org?.logo_url || undefined,
+      connect_title: 'Conectar Redes Sociais',
+      connect_description: `Conecte as redes sociais de ${cliente.nome} para publicar conteúdo.`,
+      platforms: platforms || undefined,
+      show_calendar: false,
+    })
+
+    if (!jwtResult.success) {
+      return NextResponse.json({ 
+        error: jwtResult.error || 'Erro ao gerar link de conexão. Verifique se seu plano suporta Whitelabel.',
+      }, { status: 500 })
+    }
+
     return NextResponse.json({
       success: true,
-      access_url: connectUrl,
-      username: username,
-      message: `Conecte as redes sociais no painel do Upload-Post. Procure pelo perfil e conecte as redes desejadas.`
+      access_url: jwtResult.access_url,
     })
   } catch (error: any) {
     console.error('Connect error:', error)

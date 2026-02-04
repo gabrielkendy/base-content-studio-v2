@@ -207,13 +207,8 @@ export function parseSocialAccounts(
 
 /**
  * Build the Upload-Post username for a client
- * Uses simple slug-based names for cleaner profiles
+ * Uses org_id + client_id format for unique identification
  */
 export function buildUsername(orgId: string, clienteId: string, clienteSlug?: string): string {
-  // Use slug if provided for cleaner profile names
-  if (clienteSlug) {
-    return clienteSlug.replace(/[^a-z0-9]/gi, '').toLowerCase()
-  }
-  // Fallback to shorter ID-based name
-  return `c${clienteId.split('-')[0]}`
+  return `org_${orgId}_client_${clienteId}`
 }

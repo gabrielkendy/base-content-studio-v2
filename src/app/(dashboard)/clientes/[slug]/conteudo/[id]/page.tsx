@@ -34,6 +34,7 @@ import type { Conteudo, Cliente, Member } from '@/types/database'
 import Link from 'next/link'
 import { ApprovalTimeline } from '@/components/ApprovalTimeline'
 import { InternalApprovalActions } from '@/components/InternalApprovalActions'
+import { ScheduleModal } from '@/components/ScheduleModal'
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return bytes + ' B'
@@ -54,6 +55,7 @@ export default function ConteudoDetailPage() {
   const [loading, setLoading] = useState(true)
   const [linkCopied, setLinkCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
+  const [showScheduleModal, setShowScheduleModal] = useState(false)
 
   // Upload state
   const [uploading, setUploading] = useState(false)
@@ -300,6 +302,13 @@ export default function ConteudoDetailPage() {
           <Button variant="outline" onClick={generateApprovalLink}>
             {linkCopied ? <CheckCircle className="w-4 h-4 mr-2 text-green-600" /> : <Copy className="w-4 h-4 mr-2" />}
             {linkCopied ? 'Link Copiado!' : 'Gerar Link de Aprovação'}
+          </Button>
+          <Button 
+            variant="outline" 
+            onClick={() => setShowScheduleModal(true)}
+            className="border-purple-300 text-purple-700 hover:bg-purple-50"
+          >
+            <Calendar className="w-4 h-4 mr-2" /> Agendar
           </Button>
           <Link href={`/clientes/${slug}/mes/${conteudo.mes}`}>
             <Button className="bg-blue-600 hover:bg-blue-700">
@@ -628,6 +637,19 @@ export default function ConteudoDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* Schedule Modal */}
+      {cliente && conteudo && (
+        <ScheduleModal
+          open={showScheduleModal}
+          onClose={() => setShowScheduleModal(false)}
+          conteudoId={conteudo.id}
+          conteudoTitulo={conteudo.titulo || undefined}
+          conteudoLegenda={conteudo.legenda || undefined}
+          clienteSlug={cliente.slug}
+          onScheduled={loadData}
+        />
+      )}
     </div>
   )
 }

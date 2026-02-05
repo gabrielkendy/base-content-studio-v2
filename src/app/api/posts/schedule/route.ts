@@ -2,18 +2,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-import { buildUsername, ensureProfile } from '@/lib/upload-post'
+import { buildUsername } from '@/lib/upload-post'
 
-interface SchedulePostRequest {
-  cliente_id: string
-  conteudo_id?: string
-  platforms: Array<{ platform: string; format: string }> | string[]
-  caption: string
-  media_urls?: string[]
-  hashtags?: string[]
-  scheduled_at: string
-  timezone?: string // e.g., 'America/Sao_Paulo'
-}
+const UPLOAD_POST_API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
+const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY!
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -46,125 +38,188 @@ async function getUserMembership(userId: string) {
 export async function POST(request: NextRequest) {
   try {
     const user = await getAuthUser()
-    if (!user) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-    }
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
 
     const membership = await getUserMembership(user.id)
-    if (!membership) {
-      return NextResponse.json({ error: 'No active membership found' }, { status: 403 })
-    }
+    if (!membership) return NextResponse.json({ error: 'No active membership' }, { status: 403 })
 
-    const body: SchedulePostRequest = await request.json()
+    const body = await request.json()
     const { 
-      cliente_id, 
-      conteudo_id, 
+      conteudoId, 
       platforms, 
-      caption, 
-      media_urls = [], 
-      hashtags = [], 
-      scheduled_at 
+      scheduledDate, 
+      scheduledTime,
+      timezone = 'America/Sao_Paulo',
+      title,
+      description,
+      firstComment,
     } = body
 
-    // Support both old format (string[]) and new format (object[])
-    const platformStrings = platforms.map(p => typeof p === 'string' ? p : p.platform)
-
-    if (!cliente_id || !platforms || platforms.length === 0 || !scheduled_at || !caption) {
-      return NextResponse.json({ 
-        error: 'Missing required fields: cliente_id, platforms, caption, scheduled_at' 
-      }, { status: 400 })
-    }
-
-    const scheduledDate = new Date(scheduled_at)
-    if (scheduledDate <= new Date()) {
-      return NextResponse.json({ 
-        error: 'Agendamento deve ser no futuro' 
-      }, { status: 400 })
-    }
+    if (!conteudoId) return NextResponse.json({ error: 'conteudoId is required' }, { status: 400 })
+    if (!platforms || platforms.length === 0) return NextResponse.json({ error: 'platforms is required' }, { status: 400 })
+    if (!scheduledDate || !scheduledTime) return NextResponse.json({ error: 'scheduledDate and scheduledTime are required' }, { status: 400 })
 
     const admin = createServiceClient()
 
-    // Verify client
-    const { data: cliente, error: clienteError } = await admin
-      .from('clientes')
-      .select('id, nome, slug, org_id')
-      .eq('id', cliente_id)
+    // Get conteúdo with cliente
+    const { data: conteudo, error: contErr } = await admin
+      .from('conteudos')
+      .select('*, empresa:clientes(id, nome, slug, org_id)')
+      .eq('id', conteudoId)
       .eq('org_id', membership.org_id)
       .single()
 
-    if (clienteError || !cliente) {
+    if (contErr || !conteudo) {
+      return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
+    }
+
+    const cliente = conteudo.empresa as any
+    if (!cliente) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Verify platforms connected (case-insensitive)
-    const platformStringsLower = platformStrings.map(p => p.toLowerCase())
-    const { data: connectedAccounts } = await admin
-      .from('social_accounts')
-      .select('platform, upload_post_user_id')
-      .eq('cliente_id', cliente_id)
-      .eq('status', 'active')
+    // Build Upload-Post username
+    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
 
-    const connectedPlatformsLower = (connectedAccounts || []).map(acc => acc.platform.toLowerCase())
-    const missingPlatforms = platformStringsLower.filter(p => !connectedPlatformsLower.includes(p))
+    // Get media URLs
+    const mediaUrls: string[] = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
+    if (!mediaUrls.length) {
+      return NextResponse.json({ error: 'Nenhuma mídia para publicar' }, { status: 400 })
+    }
+
+    // Build ISO date
+    const scheduledDateTime = `${scheduledDate}T${scheduledTime}:00`
+
+    // Prepare Upload-Post request
+    const uploadPostBody: Record<string, any> = {
+      user: username,
+      title: title || conteudo.legenda || conteudo.titulo || '',
+      scheduled_date: scheduledDateTime,
+      timezone,
+      async_upload: true,
+    }
+
+    // Add platforms
+    platforms.forEach((p: string) => {
+      uploadPostBody[`platform[]`] = uploadPostBody[`platform[]`] || []
+      if (!Array.isArray(uploadPostBody[`platform[]`])) {
+        uploadPostBody[`platform[]`] = [uploadPostBody[`platform[]`]]
+      }
+      uploadPostBody[`platform[]`].push(p)
+    })
+
+    // Platform-specific fields
+    if (platforms.includes('instagram')) {
+      uploadPostBody.instagram_title = title || conteudo.legenda
+    }
+    if (platforms.includes('tiktok')) {
+      uploadPostBody.tiktok_title = title || conteudo.legenda
+    }
+    if (platforms.includes('youtube')) {
+      uploadPostBody.youtube_title = conteudo.titulo
+      uploadPostBody.youtube_description = description || conteudo.descricao || conteudo.legenda
+    }
+    if (platforms.includes('facebook')) {
+      uploadPostBody.facebook_title = title || conteudo.legenda
+    }
+    if (platforms.includes('linkedin')) {
+      uploadPostBody.linkedin_title = title || conteudo.legenda
+      uploadPostBody.linkedin_description = description || conteudo.descricao
+    }
+
+    // First comment
+    if (firstComment) {
+      uploadPostBody.first_comment = firstComment
+    }
+
+    // Determine if video or image(s)
+    const firstMedia = mediaUrls[0]
+    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(firstMedia)
+
+    // Build form data
+    const formData = new FormData()
     
-    if (missingPlatforms.length > 0) {
+    // Add all simple fields
+    formData.append('user', username)
+    formData.append('title', uploadPostBody.title)
+    formData.append('scheduled_date', scheduledDateTime)
+    formData.append('timezone', timezone)
+    formData.append('async_upload', 'true')
+
+    // Add platforms
+    platforms.forEach((p: string) => {
+      formData.append('platform[]', p)
+    })
+
+    // Add platform-specific
+    if (uploadPostBody.instagram_title) formData.append('instagram_title', uploadPostBody.instagram_title)
+    if (uploadPostBody.tiktok_title) formData.append('tiktok_title', uploadPostBody.tiktok_title)
+    if (uploadPostBody.youtube_title) formData.append('youtube_title', uploadPostBody.youtube_title)
+    if (uploadPostBody.youtube_description) formData.append('youtube_description', uploadPostBody.youtube_description)
+    if (uploadPostBody.facebook_title) formData.append('facebook_title', uploadPostBody.facebook_title)
+    if (uploadPostBody.linkedin_title) formData.append('linkedin_title', uploadPostBody.linkedin_title)
+    if (uploadPostBody.linkedin_description) formData.append('linkedin_description', uploadPostBody.linkedin_description)
+    if (firstComment) formData.append('first_comment', firstComment)
+
+    // Add media
+    if (isVideo) {
+      // Video upload via URL
+      formData.append('video', firstMedia)
+    } else {
+      // Image(s) - for carousels, add multiple
+      for (const url of mediaUrls) {
+        formData.append('photos[]', url)
+      }
+    }
+
+    console.log('=== SCHEDULE POST DEBUG ===')
+    console.log('Username:', username)
+    console.log('Platforms:', platforms)
+    console.log('Scheduled:', scheduledDateTime)
+    console.log('Media count:', mediaUrls.length)
+    console.log('Is video:', isVideo)
+
+    // Call Upload-Post API
+    const response = await fetch(`${UPLOAD_POST_API_URL}/api/upload${isVideo ? '' : '_photos'}`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Apikey ${UPLOAD_POST_API_KEY}`,
+      },
+      body: formData,
+    })
+
+    const result = await response.json()
+    console.log('Upload-Post response:', response.status, result)
+
+    if (!response.ok) {
       return NextResponse.json({ 
-        error: `Plataformas não conectadas: ${missingPlatforms.join(', ')}. Conecte em Redes Sociais primeiro.` 
-      }, { status: 400 })
+        error: result.message || result.error || 'Erro ao agendar',
+        details: result
+      }, { status: response.status })
     }
 
-    // Ensure Upload-Post profile exists
-    const username = buildUsername(membership.org_id, cliente_id, cliente.slug)
-    const profileResult = await ensureProfile(username)
-    if (!profileResult.success) {
-      console.error('Failed to ensure Upload-Post profile:', profileResult.error)
-      // Continue anyway, profile might exist
-    }
-
-    // Parse and validate scheduled datetime
-    // The frontend sends ISO string which is already in UTC
-    const scheduledDateUTC = new Date(scheduled_at)
-    
-    // Create scheduled post with full platform+format info
-    const { data: scheduledPost, error: insertError } = await admin
-      .from('scheduled_posts')
-      .insert({
-        org_id: membership.org_id,
-        cliente_id,
-        conteudo_id,
-        platforms: JSON.stringify(platforms),
-        caption,
-        media_urls,
-        hashtags,
-        scheduled_at: scheduledDateUTC.toISOString(), // Store in UTC
-        status: 'scheduled',
-        created_by: user.id,
+    // Update conteúdo status
+    await admin
+      .from('conteudos')
+      .update({
+        status: 'agendado',
+        data_publicacao: scheduledDate,
+        hora_publicacao: scheduledTime,
+        canais: platforms,
+        scheduled_job_id: result.job_id || result.request_id || null,
+        updated_at: new Date().toISOString(),
       })
-      .select('*')
-      .single()
+      .eq('id', conteudoId)
 
-    if (insertError) {
-      console.error('Error creating scheduled post:', insertError)
-      return NextResponse.json({ error: 'Erro ao agendar post' }, { status: 500 })
-    }
-
-    // Format for Brazilian display
-    const brFormatter = new Intl.DateTimeFormat('pt-BR', {
-      timeZone: 'America/Sao_Paulo',
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
+    return NextResponse.json({
+      success: true,
+      job_id: result.job_id || result.request_id,
+      scheduled_date: scheduledDateTime,
+      platforms,
     })
 
-    return NextResponse.json({ 
-      data: scheduledPost,
-      scheduled_at_br: brFormatter.format(scheduledDateUTC),
-      message: `Post agendado para ${brFormatter.format(scheduledDateUTC)} (horário de Brasília)!`
-    })
-  } catch (error: any) {
-    console.error('Schedule post error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (err: any) {
+    console.error('Schedule error:', err)
+    return NextResponse.json({ error: err.message }, { status: 500 })
   }
 }

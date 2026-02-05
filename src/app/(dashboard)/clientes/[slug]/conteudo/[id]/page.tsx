@@ -27,10 +27,13 @@ import {
   Download,
   Film,
   Trash2,
+  History,
 } from 'lucide-react'
 import { STATUS_CONFIG, TIPO_EMOJI, CANAIS, formatDateFull } from '@/lib/utils'
-import type { Conteudo, Cliente } from '@/types/database'
+import type { Conteudo, Cliente, Member } from '@/types/database'
 import Link from 'next/link'
+import { ApprovalTimeline } from '@/components/ApprovalTimeline'
+import { InternalApprovalActions } from '@/components/InternalApprovalActions'
 
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return bytes + ' B'
@@ -44,17 +47,25 @@ export default function ConteudoDetailPage() {
   const router = useRouter()
   const slug = params.slug as string
   const conteudoId = params.id as string
-  const { org } = useAuth()
+  const { org, member } = useAuth()
 
   const [conteudo, setConteudo] = useState<Conteudo | null>(null)
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [showHistory, setShowHistory] = useState(false)
 
   // Upload state
   const [uploading, setUploading] = useState(false)
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useState<HTMLInputElement | null>(null)
+
+  // Current user info for approvals
+  const currentUser = member ? {
+    id: member.user_id,
+    display_name: member.display_name,
+    role: member.role,
+  } : null
 
   useEffect(() => {
     if (org?.id) loadData()
@@ -102,7 +113,7 @@ export default function ConteudoDetailPage() {
   }
 
   const generateApprovalLink = async () => {
-    if (!conteudo || !cliente) return
+    if (!conteudo || !cliente || !org) return
     try {
       const token = Array.from({ length: 32 }, () =>
         'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
@@ -117,6 +128,21 @@ export default function ConteudoDetailPage() {
       })
 
       if (error) throw new Error(error)
+
+      // Registrar no histórico de aprovações
+      await fetch('/api/approvals', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          org_id: org.id,
+          conteudo_id: conteudo.id,
+          type: 'external',
+          status: 'pending',
+          reviewer_name: cliente.nome,
+          previous_status: conteudo.status,
+          link_token: token,
+        }),
+      })
 
       const link = `${window.location.origin}/aprovacao?token=${token}`
       await navigator.clipboard.writeText(link)
@@ -542,6 +568,63 @@ export default function ConteudoDetailPage() {
                 <span className="text-xs text-gray-400">Adicionar mais</span>
               </div>
             </label>
+          </div>
+        )}
+      </Card>
+
+      {/* Seção de Aprovações */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            ✅ Aprovações
+          </h3>
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-700 transition-colors"
+          >
+            <History className="w-4 h-4" />
+            {showHistory ? 'Ocultar' : 'Ver'} Histórico
+          </button>
+        </div>
+
+        {/* Ações de Aprovação Interna */}
+        {currentUser && org && conteudo && (
+          <div className="mb-6">
+            <InternalApprovalActions
+              conteudo={conteudo}
+              currentUser={currentUser}
+              orgId={org.id}
+              onSuccess={loadData}
+            />
+          </div>
+        )}
+
+        {/* Botão de Enviar para Cliente (só aparece após aprovação interna) */}
+        {conteudo?.internal_approved && conteudo.status === 'aprovacao' && (
+          <div className="mb-6 p-4 bg-purple-50 rounded-lg border border-purple-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <p className="text-sm font-medium text-purple-800">Pronto para enviar ao cliente</p>
+                <p className="text-xs text-purple-600">Aprovado internamente, gere o link de aprovação</p>
+              </div>
+              <Button
+                onClick={generateApprovalLink}
+                className="bg-purple-600 hover:bg-purple-700 text-white"
+              >
+                {linkCopied ? <CheckCircle className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                {linkCopied ? 'Link Copiado!' : 'Gerar Link'}
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* Timeline de Histórico */}
+        {showHistory && (
+          <div className="border-t border-gray-100 pt-4">
+            <ApprovalTimeline
+              conteudoId={conteudoId}
+              conteudo={conteudo || undefined}
+            />
           </div>
         )}
       </Card>

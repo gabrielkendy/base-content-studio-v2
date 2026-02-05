@@ -73,8 +73,17 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate JWT URL - redireciona pra callback que fecha o popup
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'
-    const redirectUrl = `${appUrl}/auth/social-callback?connected=true&cliente=${cliente.slug}`
+    // Detecta URL automaticamente: Vercel env > variável > fallback produção
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL 
+      || process.env.VERCEL_URL && `https://${process.env.VERCEL_URL}`
+      || 'https://base-content-studio-v2.vercel.app'
+    const redirectUrl = `${appUrl}/auth/social-callback?connected=true&cliente=${encodeURIComponent(cliente.slug)}`
+    
+    console.log('=== SOCIAL CONNECT DEBUG ===')
+    console.log('Username Upload-Post:', username)
+    console.log('App URL:', appUrl)
+    console.log('Redirect URL:', redirectUrl)
+    console.log('Cliente:', cliente.nome, '/', cliente.slug)
 
     // Gerar JWT URL (Whitelabel - requer plano Pro+)
     const jwtResult = await generateJwtUrl({

@@ -106,6 +106,9 @@ export async function generateJwtUrl(params: {
   show_calendar?: boolean
 }): Promise<{ success: boolean; access_url?: string; error?: string }> {
   try {
+    console.log('=== GENERATE JWT DEBUG ===')
+    console.log('Params:', JSON.stringify(params, null, 2))
+    
     const res = await fetch(`${API_URL}/api/uploadposts/users/generate-jwt`, {
       method: 'POST',
       headers: headers(),
@@ -113,6 +116,9 @@ export async function generateJwtUrl(params: {
     })
 
     const data = await res.json()
+    
+    console.log('Response status:', res.status)
+    console.log('Response data:', JSON.stringify(data, null, 2))
 
     if (!res.ok) {
       return { success: false, error: data.message || `HTTP ${res.status}` }
@@ -207,9 +213,19 @@ export function parseSocialAccounts(
 
 /**
  * Build the Upload-Post username for a client
- * Usa o slug do cliente (simples e direto)
+ * Garante que o username seja válido (lowercase, sem espaços, sem caracteres especiais)
  */
 export function buildUsername(orgId: string, clienteId: string, clienteSlug?: string): string {
   // Usa slug se disponível, senão usa clienteId curto
-  return clienteSlug || clienteId.substring(0, 20)
+  const base = clienteSlug || clienteId.substring(0, 20)
+  
+  // Normaliza: lowercase, remove acentos, substitui espaços por hífen, remove caracteres inválidos
+  return base
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '') // Remove acentos
+    .replace(/\s+/g, '-')            // Espaços -> hífen
+    .replace(/[^a-z0-9-]/g, '')      // Remove caracteres inválidos
+    .replace(/-+/g, '-')             // Múltiplos hífens -> um hífen
+    .replace(/^-|-$/g, '')           // Remove hífen no início/fim
 }

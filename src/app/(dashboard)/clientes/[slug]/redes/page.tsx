@@ -69,10 +69,10 @@ export default function RedesSociaisPage() {
     loadData()
   }, [org, slug])
 
-  // Handle redirect back from Upload-Post
+  // Handle redirect back from Upload-Post (detecta tanto 'connected' quanto 'success')
   useEffect(() => {
-    if (searchParams.get('connected') === 'true') {
-      toast('Redes sociais atualizadas! Sincronizando...', 'success')
+    if (searchParams.get('connected') === 'true' || searchParams.get('success') === 'true') {
+      toast('Redes sociais conectadas! Sincronizando...', 'success')
       fetchStatus(true)
       // Clean URL
       window.history.replaceState({}, '', window.location.pathname)
@@ -153,81 +153,14 @@ export default function RedesSociaisPage() {
         return
       }
 
-      // Abrir popup Whitelabel centralizado (igual mLabs)
-      const width = 600
-      const height = 700
-      const left = window.screenX + (window.outerWidth - width) / 2
-      const top = window.screenY + (window.outerHeight - height) / 2
+      // Abrir em NOVA ABA (igual mLabs) - não popup!
+      // O callback vai redirecionar de volta pra cá
+      window.open(data.access_url, '_blank')
       
-      const popup = window.open(
-        data.access_url,
-        'conectar-redes',
-        `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,scrollbars=yes,resizable=yes`
-      )
-
-      // Polling pra detectar quando popup fecha E verificar novas conexões
-      let previousCount = socialAccounts.length
-      let retryCount = 0
-      const maxRetries = 10
-      
-      const pollTimer = setInterval(async () => {
-        try {
-          // Verificar se popup fechou
-          if (popup?.closed) {
-            clearInterval(pollTimer)
-            toast('Sincronizando contas...', 'success')
-            
-            // Fazer múltiplas tentativas de sincronização (Upload-Post pode demorar)
-            const syncWithRetry = async () => {
-              for (let i = 0; i < maxRetries; i++) {
-                await fetchStatus(true)
-                // Dar tempo pro Upload-Post processar
-                await new Promise(resolve => setTimeout(resolve, 2000))
-                
-                // Verificar se novas contas apareceram
-                const res = await fetch(`/api/social/status?clienteSlug=${slug}`)
-                const data = await res.json()
-                if (data.accounts && data.accounts.length > previousCount) {
-                  toast('Conta conectada com sucesso! 🎉', 'success')
-                  setSocialAccounts(data.accounts)
-                  break
-                }
-                
-                if (i === maxRetries - 1) {
-                  toast('Clique em "Atualizar" se a conta não aparecer', 'info')
-                }
-              }
-              setConnecting(false)
-            }
-            
-            syncWithRetry()
-            return
-          }
-          
-          // Também verificar periodicamente ENQUANTO popup está aberto
-          // (pra detectar conexão mesmo sem redirect)
-          retryCount++
-          if (retryCount % 6 === 0) { // A cada 3 segundos
-            const res = await fetch(`/api/social/status?clienteSlug=${slug}`)
-            const data = await res.json()
-            if (data.accounts && data.accounts.length > previousCount) {
-              clearInterval(pollTimer)
-              popup?.close()
-              toast('Conta conectada com sucesso! 🎉', 'success')
-              setSocialAccounts(data.accounts)
-              setConnecting(false)
-            }
-          }
-        } catch (e) {
-          // Cross-origin error ou erro de fetch - ignorar
-        }
-      }, 500)
-
-      // Timeout de segurança (5 min)
+      // Reset connecting após 2s (usuário foi pra outra aba)
       setTimeout(() => {
-        clearInterval(pollTimer)
         setConnecting(false)
-      }, 300000)
+      }, 2000)
 
     } catch (error) {
       toast('Erro ao conectar. Tente novamente.', 'error')

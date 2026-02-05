@@ -7,17 +7,18 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import { Save, Upload, Building2, Palette, User, Bell, Camera } from 'lucide-react'
+import { Save, Upload, Building2, Palette, User, Bell, Camera, Share2 } from 'lucide-react'
 import { useRoleGuard } from '@/hooks/use-role-guard'
 import type { NotificationPreferences } from '@/types/database'
 
-type TabId = 'org' | 'appearance' | 'profile' | 'notifications'
+type TabId = 'org' | 'appearance' | 'profile' | 'notifications' | 'social'
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'org', label: 'Organização', icon: Building2 },
   { id: 'appearance', label: 'Aparência', icon: Palette },
   { id: 'profile', label: 'Perfil', icon: User },
   { id: 'notifications', label: 'Notificações', icon: Bell },
+  { id: 'social', label: 'Redes Sociais', icon: Share2 },
 ]
 
 const DEFAULT_NOTIF: NotificationPreferences = {
@@ -54,6 +55,10 @@ export default function ConfiguracoesPage() {
 
   // Notification state
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIF)
+
+  // Social accounts state
+  const [connectUrl, setConnectUrl] = useState<string | null>(null)
+  const [loadingSocial, setLoadingSocial] = useState(false)
 
   useEffect(() => {
     if (org) {
@@ -186,6 +191,24 @@ export default function ConfiguracoesPage() {
   function toggleNotif(key: keyof NotificationPreferences) {
     setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }))
   }
+
+  // Load Upload-Post connect URL when social tab is active
+  useEffect(() => {
+    if (activeTab === 'social' && !connectUrl && org) {
+      setLoadingSocial(true)
+      fetch('/api/social/connect-url', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ orgSlug: org.slug })
+      })
+        .then(res => res.json())
+        .then(data => {
+          if (data.url) setConnectUrl(data.url)
+        })
+        .catch(() => toast('Erro ao carregar conexão', 'error'))
+        .finally(() => setLoadingSocial(false))
+    }
+  }, [activeTab, connectUrl, org, toast])
 
   if (roleLoading || !allowed) {
     return (
@@ -498,6 +521,43 @@ export default function ConfiguracoesPage() {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tab: Redes Sociais */}
+      {activeTab === 'social' && (
+        <Card>
+          <div className="px-6 py-4 border-b border-zinc-100">
+            <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+              <Share2 className="w-5 h-5" /> Redes Sociais
+            </h3>
+            <p className="text-sm text-zinc-500 mt-1">Conecte suas contas para agendar publicações</p>
+          </div>
+          <CardContent className="p-0">
+            {loadingSocial ? (
+              <div className="flex items-center justify-center h-[500px]">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+              </div>
+            ) : connectUrl ? (
+              <iframe
+                src={connectUrl}
+                className="w-full h-[600px] border-0"
+                allow="clipboard-write"
+              />
+            ) : (
+              <div className="flex flex-col items-center justify-center h-[400px] text-center p-6">
+                <Share2 className="w-12 h-12 text-zinc-300 mb-4" />
+                <p className="text-zinc-500">Não foi possível carregar a conexão de redes sociais.</p>
+                <Button 
+                  variant="outline" 
+                  className="mt-4"
+                  onClick={() => { setConnectUrl(null); setLoadingSocial(false) }}
+                >
+                  Tentar novamente
+                </Button>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

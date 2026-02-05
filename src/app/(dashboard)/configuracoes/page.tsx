@@ -59,6 +59,9 @@ export default function ConfiguracoesPage() {
   // Social accounts state
   const [connectUrl, setConnectUrl] = useState<string | null>(null)
   const [loadingSocial, setLoadingSocial] = useState(false)
+  const [clientes, setClientes] = useState<Array<{ id: string; nome: string; slug: string }>>([])
+  const [selectedCliente, setSelectedCliente] = useState<string | null>(null)
+  const [loadingClientes, setLoadingClientes] = useState(false)
 
   useEffect(() => {
     if (org) {
@@ -192,14 +195,33 @@ export default function ConfiguracoesPage() {
     setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }))
   }
 
-  // Load Upload-Post connect URL when social tab is active
+  // Load clientes when social tab is active
   useEffect(() => {
-    if (activeTab === 'social' && !connectUrl && org) {
+    if (activeTab === 'social' && clientes.length === 0 && org) {
+      setLoadingClientes(true)
+      db.select('clientes', { select: 'id,nome,slug', order: { col: 'nome', asc: true } })
+        .then(result => {
+          const data = result.data || []
+          setClientes(data)
+          // Auto-select first if only one
+          if (data.length === 1) {
+            setSelectedCliente(data[0].slug)
+          }
+        })
+        .catch(() => toast('Erro ao carregar clientes', 'error'))
+        .finally(() => setLoadingClientes(false))
+    }
+  }, [activeTab, clientes.length, org, toast])
+
+  // Load Upload-Post connect URL when cliente is selected
+  useEffect(() => {
+    if (activeTab === 'social' && selectedCliente) {
+      setConnectUrl(null)
       setLoadingSocial(true)
       fetch('/api/social/connect-url', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ orgSlug: org.slug })
+        body: JSON.stringify({ clienteSlug: selectedCliente })
       })
         .then(res => res.json())
         .then(data => {
@@ -208,7 +230,7 @@ export default function ConfiguracoesPage() {
         .catch(() => toast('Erro ao carregar conexão', 'error'))
         .finally(() => setLoadingSocial(false))
     }
-  }, [activeTab, connectUrl, org, toast])
+  }, [activeTab, selectedCliente, toast])
 
   if (roleLoading || !allowed) {
     return (
@@ -532,41 +554,71 @@ export default function ConfiguracoesPage() {
             <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
               <Share2 className="w-5 h-5" /> Redes Sociais
             </h3>
-            <p className="text-sm text-zinc-500 mt-1">Conecte suas contas para agendar publicações</p>
+            <p className="text-sm text-zinc-500 mt-1">Conecte as redes de cada cliente para agendar publicações</p>
           </div>
           <CardContent>
-            <div className="flex flex-col items-center justify-center py-12 text-center">
-              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6">
-                <Share2 className="w-8 h-8 text-white" />
-              </div>
-              <h4 className="text-lg font-semibold text-zinc-900 mb-2">Conectar Redes Sociais</h4>
-              <p className="text-sm text-zinc-500 mb-6 max-w-md">
-                Clique no botão abaixo para conectar Instagram, Facebook, TikTok e outras redes.
-                Uma nova janela será aberta para autenticação segura.
-              </p>
-              {loadingSocial ? (
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
-              ) : connectUrl ? (
-                <Button 
-                  variant="primary"
-                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
-                  onClick={() => window.open(connectUrl, '_blank', 'width=600,height=700')}
-                >
-                  <Share2 className="w-4 h-4 mr-2" />
-                  Abrir Painel de Conexão
-                </Button>
+            {/* Seletor de Cliente */}
+            <div className="mb-6">
+              <Label>Selecione o Cliente</Label>
+              {loadingClientes ? (
+                <div className="animate-pulse h-10 bg-zinc-100 rounded-lg mt-1" />
+              ) : clientes.length === 0 ? (
+                <p className="text-sm text-zinc-500 mt-2">Nenhum cliente cadastrado</p>
               ) : (
-                <Button 
-                  variant="outline" 
-                  onClick={() => { setConnectUrl(null); setLoadingSocial(false) }}
+                <select
+                  value={selectedCliente || ''}
+                  onChange={(e) => setSelectedCliente(e.target.value || null)}
+                  className="w-full mt-1 px-3 py-2 border border-zinc-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
                 >
-                  Tentar novamente
-                </Button>
+                  <option value="">Selecione um cliente...</option>
+                  {clientes.map(c => (
+                    <option key={c.id} value={c.slug}>{c.nome}</option>
+                  ))}
+                </select>
               )}
-              <p className="text-xs text-zinc-400 mt-4">
-                Após conectar, volte aqui e recarregue a página para ver suas contas.
-              </p>
             </div>
+
+            {/* Área de Conexão */}
+            {selectedCliente ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center">
+                <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6">
+                  <Share2 className="w-8 h-8 text-white" />
+                </div>
+                <h4 className="text-lg font-semibold text-zinc-900 mb-2">
+                  Conectar Redes - {clientes.find(c => c.slug === selectedCliente)?.nome}
+                </h4>
+                <p className="text-sm text-zinc-500 mb-6 max-w-md">
+                  Clique no botão abaixo para conectar Instagram, Facebook, TikTok e outras redes deste cliente.
+                </p>
+                {loadingSocial ? (
+                  <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+                ) : connectUrl ? (
+                  <Button 
+                    variant="primary"
+                    className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                    onClick={() => window.open(connectUrl, '_blank', 'width=600,height=700')}
+                  >
+                    <Share2 className="w-4 h-4 mr-2" />
+                    Abrir Painel de Conexão
+                  </Button>
+                ) : (
+                  <Button 
+                    variant="outline" 
+                    onClick={() => setSelectedCliente(selectedCliente)}
+                  >
+                    Tentar novamente
+                  </Button>
+                )}
+                <p className="text-xs text-zinc-400 mt-4">
+                  Cada cliente tem suas próprias redes conectadas para agendamento.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-zinc-400">
+                <Share2 className="w-12 h-12 mb-4 opacity-50" />
+                <p>Selecione um cliente acima para conectar as redes sociais</p>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

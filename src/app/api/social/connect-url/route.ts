@@ -1,51 +1,97 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { createServerClient } from '@supabase/ssr'
+import { createServiceClient } from '@/lib/supabase/server'
+import { cookies } from 'next/headers'
+import { ensureProfile, generateJwtUrl, buildUsername } from '@/lib/upload-post'
 
-const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJlbWFpbCI6ImdhYnJpZWwua2VuZEBnbWFpbC5jb20iLCJleHAiOjQ5MjM4Mzg2NDIsImp0aSI6IjY3NzUzOTRkLTZhMWMtNGRhYi1iNmZiLTI4YTYwMWFjNTRhNyJ9.KP06TC86GndVw9W6SbrSr8djsLsoNOjiQklLqYczK1k'
+async function getAuthUser() {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll() {},
+      },
+    }
+  )
+  const { data: { user } } = await supabase.auth.getUser()
+  return user
+}
+
+async function getUserMembership(userId: string) {
+  const admin = createServiceClient()
+  const { data } = await admin
+    .from('members')
+    .select('id, org_id, role, user_id')
+    .eq('user_id', userId)
+    .eq('status', 'active')
+    .limit(1)
+    .maybeSingle()
+  return data
+}
 
 export async function POST(request: NextRequest) {
   try {
-    const { orgSlug } = await request.json()
+    const user = await getAuthUser()
+    if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+
+    const membership = await getUserMembership(user.id)
+    if (!membership) return NextResponse.json({ error: 'No active membership' }, { status: 403 })
+
+    const { clienteSlug } = await request.json()
     
-    if (!orgSlug) {
-      return NextResponse.json({ error: 'orgSlug is required' }, { status: 400 })
+    if (!clienteSlug) {
+      return NextResponse.json({ error: 'clienteSlug is required' }, { status: 400 })
     }
 
-    const username = `base_${orgSlug}`
+    const admin = createServiceClient()
 
-    // First, ensure user exists
-    await fetch('https://api.upload-post.com/api/uploadposts/users', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Apikey ${UPLOAD_POST_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({ username })
-    })
+    // Get client
+    const { data: cliente, error: clienteError } = await admin
+      .from('clientes')
+      .select('id, nome, slug, org_id')
+      .eq('slug', clienteSlug)
+      .eq('org_id', membership.org_id)
+      .single()
+
+    if (clienteError || !cliente) {
+      return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
+    }
+
+    // Build consistent username (same as schedule uses)
+    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
+
+    console.log('=== CONNECT-URL DEBUG ===')
+    console.log('clienteSlug:', clienteSlug)
+    console.log('Generated username:', username)
+
+    // Ensure profile exists
+    const profileResult = await ensureProfile(username)
+    if (!profileResult.success) {
+      console.error('Failed to ensure profile:', profileResult.error)
+      return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
+    }
 
     // Generate JWT link
-    const jwtResponse = await fetch('https://api.upload-post.com/api/uploadposts/users/generate-jwt', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Apikey ${UPLOAD_POST_API_KEY}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
-        username,
-        connect_title: 'Conectar Redes Sociais',
-        connect_description: 'Conecte suas redes para agendar publicações automaticamente',
-        platforms: ['instagram', 'tiktok', 'facebook', 'youtube'],
-        show_calendar: false
-      })
+    const jwtResult = await generateJwtUrl({
+      username,
+      connect_title: `Conectar Redes - ${cliente.nome}`,
+      connect_description: 'Conecte suas redes para agendar publicações automaticamente',
+      platforms: ['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin'],
+      show_calendar: false,
     })
 
-    const jwtData = await jwtResponse.json()
-
-    if (!jwtResponse.ok || !jwtData.access_url) {
-      console.error('Upload-Post JWT error:', jwtData)
+    if (!jwtResult.success || !jwtResult.access_url) {
+      console.error('Upload-Post JWT error:', jwtResult.error)
       return NextResponse.json({ error: 'Failed to generate connect URL' }, { status: 500 })
     }
 
-    return NextResponse.json({ url: jwtData.access_url })
+    return NextResponse.json({ 
+      url: jwtResult.access_url,
+      username,
+    })
   } catch (error) {
     console.error('Connect URL error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

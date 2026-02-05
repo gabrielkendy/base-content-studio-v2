@@ -42,7 +42,10 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const clienteSlug = searchParams.get('clienteSlug')
-    if (!clienteSlug) return NextResponse.json({ error: 'clienteSlug is required' }, { status: 400 })
+    
+    if (!clienteSlug) {
+      return NextResponse.json({ error: 'clienteSlug is required' }, { status: 400 })
+    }
 
     const admin = createServiceClient()
 
@@ -58,108 +61,32 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
+    // Build username (same as schedule uses)
     const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
 
     // Get profile from Upload-Post
     const profileResult = await getProfile(username)
 
-    console.log('[social/status] Profile result:', JSON.stringify(profileResult, null, 2))
-
     if (!profileResult.success || !profileResult.profile) {
       // Profile doesn't exist yet - return empty accounts
       return NextResponse.json({
-        success: true,
-        profile_exists: false,
-        accounts: [],
         username,
-        debug: { error: profileResult.error, profile: profileResult.profile }
+        exists: false,
+        accounts: [],
       })
     }
 
-    console.log('[social/status] Raw social_accounts:', JSON.stringify(profileResult.profile.social_accounts, null, 2))
-
-    // Parse connected accounts
-    const connectedAccounts = parseSocialAccounts(profileResult.profile.social_accounts)
-    
-    console.log('[social/status] Parsed accounts:', JSON.stringify(connectedAccounts, null, 2))
-
-    // Sync to Supabase: upsert connected accounts, mark missing as disconnected
-    const now = new Date().toISOString()
-
-    // Get existing accounts from Supabase
-    const { data: existingAccounts } = await admin
-      .from('social_accounts')
-      .select('*')
-      .eq('cliente_id', cliente.id)
-
-    const existingMap = new Map((existingAccounts || []).map(a => [a.platform, a]))
-
-    // Upsert connected accounts
-    for (const account of connectedAccounts) {
-      const existing = existingMap.get(account.platform)
-
-      if (existing) {
-        // Update existing
-        await admin
-          .from('social_accounts')
-          .update({
-            profile_name: account.display_name || account.username || account.platform,
-            profile_avatar: account.avatar_url,
-            profile_id: account.username || existing.profile_id,
-            upload_post_user_id: username,
-            status: 'active',
-            connected_at: existing.status !== 'active' ? now : existing.connected_at,
-          })
-          .eq('id', existing.id)
-      } else {
-        // Insert new
-        await admin
-          .from('social_accounts')
-          .insert({
-            org_id: cliente.org_id,
-            cliente_id: cliente.id,
-            platform: account.platform,
-            profile_id: account.username || `${account.platform}_${Date.now()}`,
-            profile_name: account.display_name || account.username || account.platform,
-            profile_avatar: account.avatar_url,
-            upload_post_user_id: username,
-            status: 'active',
-            connected_at: now,
-          })
-      }
-    }
-
-    // Mark accounts that are no longer connected in Upload-Post as disconnected
-    const connectedPlatforms = new Set(connectedAccounts.map(a => a.platform))
-    for (const [platform, existing] of existingMap.entries()) {
-      if (!connectedPlatforms.has(platform) && existing.status === 'active') {
-        await admin
-          .from('social_accounts')
-          .update({ status: 'disconnected' })
-          .eq('id', existing.id)
-      }
-    }
-
-    // Re-fetch synced accounts
-    const { data: syncedAccounts } = await admin
-      .from('social_accounts')
-      .select('*')
-      .eq('cliente_id', cliente.id)
-      .eq('status', 'active')
+    // Parse social accounts
+    const accounts = parseSocialAccounts(profileResult.profile.social_accounts)
 
     return NextResponse.json({
-      success: true,
-      profile_exists: true,
-      accounts: syncedAccounts || [],
-      upload_post_accounts: connectedAccounts,
       username,
-      debug: {
-        raw_social_accounts: profileResult.profile.social_accounts,
-        parsed_count: connectedAccounts.length,
-      }
+      exists: true,
+      accounts,
+      created_at: profileResult.profile.created_at,
     })
-  } catch (error: any) {
-    console.error('Status error:', error)
-    return NextResponse.json({ error: error.message }, { status: 500 })
+  } catch (error) {
+    console.error('Social status error:', error)
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
 }

@@ -10,8 +10,8 @@ import { Select, Input } from '@/components/ui/input'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate, normalizeStatus } from '@/lib/utils'
-import { Search, X, Filter, Inbox } from 'lucide-react'
+import { STATUS_CONFIG, SUB_STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate, normalizeStatus } from '@/lib/utils'
+import { Search, X, Filter, Inbox, ChevronDown, ChevronRight, Image, Play, MoreHorizontal, Eye, Trash2, Calendar } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/types/database'
 
@@ -20,6 +20,7 @@ type KanbanItem = {
   titulo: string
   tipo: string
   status: string
+  sub_status?: string | null
   empresa?: Cliente
   assignee?: Member
   data_publicacao?: string | null
@@ -28,7 +29,13 @@ type KanbanItem = {
   ajusteComentario?: string | null
   prioridade?: string
   fromSolicitacao?: boolean
+  midiaUrl?: string | null
+  midiaType?: string | null
+  canais?: string[]
 }
+
+// Colunas que aparecem no Kanban (exclui cancelado e arquivado por padrão)
+const KANBAN_VISIBLE_STATUSES = ['rascunho', 'conteudo', 'aprovacao_interna', 'aprovacao_cliente', 'ajuste', 'aguardando_agendamento', 'agendado', 'publicado']
 
 function WorkflowContent() {
   const { org } = useAuth()
@@ -43,6 +50,12 @@ function WorkflowContent() {
   const [loading, setLoading] = useState(true)
   const [dragging, setDragging] = useState<string | null>(null)
 
+  // Colunas colapsadas
+  const [collapsedCols, setCollapsedCols] = useState<Record<string, boolean>>({})
+
+  // Painel de solicitações
+  const [showSolicitacoes, setShowSolicitacoes] = useState(true)
+
   // Filtros
   const [filtroCliente, setFiltroCliente] = useState(searchParams.get('cliente') || 'todos')
   const [filtroMes, setFiltroMes] = useState('todos')
@@ -50,8 +63,8 @@ function WorkflowContent() {
   const [filtroTipo, setFiltroTipo] = useState('todos')
   const [busca, setBusca] = useState('')
   const [showFilters, setShowFilters] = useState(false)
+  const [showArchived, setShowArchived] = useState(false)
 
-  // Nome do cliente filtrado
   const clienteFiltrado = filtroCliente !== 'todos'
     ? clientes.find(c => c.id === filtroCliente)
     : null
@@ -94,10 +107,8 @@ function WorkflowContent() {
     const membersData = membersRes.data || []
     setMembers(membersData)
 
-    // Map assignee + normalize legacy statuses
     const rawConteudos = (conteudosRes.data as any) || []
     const conteudosWithAssignee = rawConteudos.map((c: any) => {
-      // Normalize legacy status values
       c.status = normalizeStatus(c.status || 'rascunho')
       if (c.assigned_to) {
         const assignee = membersData.find((m: any) => m.user_id === c.assigned_to)
@@ -111,37 +122,18 @@ function WorkflowContent() {
     setLoading(false)
   }, [org])
 
-  // Build kanban items
+  // Build kanban items (sem solicitações - elas ficam no painel lateral)
   const kanbanItems: KanbanItem[] = []
 
-  // Add solicitações as nova_solicitacao items (only pending ones)
-  const pendingSolStatuses = ['nova', 'em_analise', 'aprovada']
-  solicitacoes.forEach(sol => {
-    if (!pendingSolStatuses.includes(sol.status)) return
-
-    // Apply filters
-    if (filtroCliente !== 'todos' && sol.cliente_id !== filtroCliente) return
-    if (busca && !sol.titulo.toLowerCase().includes(busca.toLowerCase())) return
-
-    kanbanItems.push({
-      id: `sol_${sol.id}`,
-      titulo: sol.titulo,
-      tipo: 'post',
-      status: 'nova_solicitacao',
-      empresa: sol.cliente as Cliente | undefined,
-      isSolicitacao: true,
-      solicitacaoData: sol,
-      prioridade: sol.prioridade,
-    })
-  })
-
-  // Add conteúdos
   conteudos.forEach(c => {
     if (filtroCliente !== 'todos' && c.empresa_id !== filtroCliente) return
     if (filtroMes !== 'todos' && c.mes !== parseInt(filtroMes)) return
     if (filtroResponsavel !== 'todos' && c.assigned_to !== filtroResponsavel) return
     if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) return
     if (busca && !(c.titulo || '').toLowerCase().includes(busca.toLowerCase())) return
+
+    // Esconder cancelados/arquivados se não estiver mostrando
+    if (!showArchived && (c.status === 'cancelado' || c.status === 'arquivado')) return
 
     const ajusteLink = c.status === 'ajuste'
       ? aprovacoes.find(a => a.conteudo_id === c.id && a.status === 'ajuste')
@@ -152,21 +144,38 @@ function WorkflowContent() {
       titulo: c.titulo || 'Sem título',
       tipo: c.tipo,
       status: c.status || 'rascunho',
+      sub_status: (c as any).sub_status,
       empresa: c.empresa,
       assignee: c.assignee,
       data_publicacao: c.data_publicacao,
       ajusteComentario: ajusteLink?.comentario_cliente,
       fromSolicitacao: !!(c as any).solicitacao_id,
+      midiaUrl: (c as any).midia_url,
+      midiaType: (c as any).midia_type,
+      canais: (c as any).canais,
     })
   })
 
   // Group by status
   const porStatus: Record<string, KanbanItem[]> = {}
-  Object.keys(STATUS_CONFIG).forEach(s => { porStatus[s] = [] })
+  KANBAN_VISIBLE_STATUSES.forEach(s => { porStatus[s] = [] })
+  if (showArchived) {
+    porStatus['cancelado'] = []
+    porStatus['arquivado'] = []
+  }
   kanbanItems.forEach(item => {
     const s = item.status
     if (porStatus[s]) porStatus[s].push(item)
     else if (porStatus['rascunho']) porStatus['rascunho'].push(item)
+  })
+
+  // Solicitações pendentes
+  const pendingSolStatuses = ['nova', 'em_analise', 'aprovada']
+  const solicitacoesPendentes = solicitacoes.filter(s => {
+    if (!pendingSolStatuses.includes(s.status)) return false
+    if (filtroCliente !== 'todos' && s.cliente_id !== filtroCliente) return false
+    if (busca && !s.titulo.toLowerCase().includes(busca.toLowerCase())) return false
+    return true
   })
 
   async function handleDrop(e: React.DragEvent, newStatus: string) {
@@ -175,28 +184,22 @@ function WorkflowContent() {
     const rawId = e.dataTransfer.getData('text/plain')
     if (!rawId) { setDragging(null); return }
 
-    // Solicitação being dropped — aceitar e mover pra Produção
+    // Solicitação sendo dropada → aceitar e mover
     if (rawId.startsWith('sol_')) {
-      if (newStatus === 'nova_solicitacao') { setDragging(null); return }
       const solId = rawId.replace('sol_', '')
-
-      // Aceitar solicitação → cria conteúdo em "producao"
       try {
         const res = await fetch(`/api/solicitacoes/${solId}/aceitar`, { method: 'POST' })
         const json = await res.json()
         if (!res.ok) {
           toast(`Erro: ${json.error}`, 'error')
         } else {
-          toast('✅ Solicitação aceita → Conteúdo em Produção!', 'success')
-
-          // Se o drop foi em outra coluna que não producao, mover o conteúdo criado
-          if (newStatus !== 'producao' && newStatus !== 'nova_solicitacao' && json.data?.id) {
+          toast('✅ Solicitação aceita!', 'success')
+          // Mover para o status dropado se diferente de rascunho
+          if (newStatus !== 'rascunho' && json.data?.id) {
             await db.update('conteudos', {
               status: newStatus,
               updated_at: new Date().toISOString()
             }, { id: json.data.id })
-            const cfg = STATUS_CONFIG[newStatus]
-            toast(`Movido para ${cfg?.label || newStatus}`, 'success')
           }
         }
       } catch {
@@ -207,7 +210,6 @@ function WorkflowContent() {
       return
     }
 
-    // Regular conteúdo move
     const currentItem = kanbanItems.find(i => i.id === rawId)
     if (currentItem && currentItem.status === newStatus) { setDragging(null); return }
 
@@ -226,13 +228,16 @@ function WorkflowContent() {
     await loadData()
   }
 
+  function toggleColumn(key: string) {
+    setCollapsedCols(prev => ({ ...prev, [key]: !prev[key] }))
+  }
+
   function clearFilters() {
     setFiltroCliente('todos')
     setFiltroMes('todos')
     setFiltroResponsavel('todos')
     setFiltroTipo('todos')
     setBusca('')
-    // Remove URL params
     router.replace('/workflow')
   }
 
@@ -249,7 +254,9 @@ function WorkflowContent() {
   }
 
   const totalItems = kanbanItems.length
-  const totalSolicitacoes = solicitacoes.filter(s => pendingSolStatuses.includes(s.status)).length
+  const visibleStatuses = showArchived 
+    ? [...KANBAN_VISIBLE_STATUSES, 'cancelado', 'arquivado']
+    : KANBAN_VISIBLE_STATUSES
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -290,18 +297,29 @@ function WorkflowContent() {
             </div>
             <p className="text-sm text-zinc-500 max-sm:text-xs">
               {totalItems} {totalItems === 1 ? 'item' : 'itens'} no board
-              {totalSolicitacoes > 0 && (
+              {solicitacoesPendentes.length > 0 && (
                 <span className="ml-1.5 inline-flex items-center gap-1 text-purple-600 font-medium">
-                  • {totalSolicitacoes} {totalSolicitacoes === 1 ? 'solicitação pendente' : 'solicitações pendentes'}
+                  • {solicitacoesPendentes.length} {solicitacoesPendentes.length === 1 ? 'solicitação' : 'solicitações'}
                 </span>
               )}
             </p>
           </div>
         </div>
-        {/* Limpar filtros moved inline next to filter button */}
+
+        {/* Toggle arquivados */}
+        <button
+          onClick={() => setShowArchived(!showArchived)}
+          className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+            showArchived 
+              ? 'bg-zinc-100 border-zinc-300 text-zinc-700'
+              : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+          }`}
+        >
+          {showArchived ? '📦 Ocultar arquivados' : '📦 Ver arquivados'}
+        </button>
       </div>
 
-      {/* Filtros — compact: search + toggle */}
+      {/* Filtros */}
       <div className="flex items-center gap-2">
         <div className="relative flex-1 max-w-sm">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
@@ -337,7 +355,6 @@ function WorkflowContent() {
         )}
       </div>
 
-      {/* Filtros expandidos */}
       {showFilters && (
         <div className="flex flex-wrap gap-2 items-center bg-zinc-50 rounded-xl p-3 border border-zinc-100 animate-fade-in">
           <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="text-sm h-9">
@@ -359,85 +376,230 @@ function WorkflowContent() {
         </div>
       )}
 
-      {/* Kanban Board */}
-      <div
-        className="flex gap-4 overflow-x-auto pb-6 scroll-smooth"
-        style={{ minHeight: '72vh' }}
-      >
-        {Object.entries(STATUS_CONFIG).map(([key, cfg]) => {
-          const items = porStatus[key] || []
-          const isDragActive = dragging !== null
-          return (
-            <div
-              key={key}
-              className="min-w-[260px] w-[260px] flex-shrink-0 flex flex-col max-sm:min-w-[230px] max-sm:w-[230px]"
-              onDragOver={e => e.preventDefault()}
-              onDrop={e => handleDrop(e, key)}
-            >
-              {/* Column header — colored top bar */}
-              <div className="rounded-t-xl overflow-hidden">
-                <div className="h-1" style={{ backgroundColor: cfg.color }} />
-                <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-x border-zinc-100">
-                  <span className="text-sm">{cfg.emoji}</span>
-                  <span className="text-xs font-bold text-zinc-800 truncate flex-1">{cfg.label}</span>
-                  <span
-                    className="text-[11px] font-bold rounded-md px-2 py-0.5 min-w-[24px] text-center flex-shrink-0"
-                    style={{ backgroundColor: cfg.color + '15', color: cfg.color }}
-                  >
-                    {items.length}
-                  </span>
-                </div>
-              </div>
-
-              {/* Cards container */}
-              <div
-                className={`flex-1 space-y-2.5 p-2.5 rounded-b-xl border-x border-b transition-all min-h-[80px] ${
-                  isDragActive
-                    ? 'bg-zinc-50 border-dashed border-zinc-300'
-                    : 'bg-zinc-50/30 border-zinc-100'
-                }`}
-                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
-                onDragEnter={e => e.preventDefault()}
+      {/* Main content: Solicitações Panel + Kanban */}
+      <div className="flex gap-4">
+        {/* Painel de Solicitações (lateral) */}
+        {solicitacoesPendentes.length > 0 && (
+          <div className={`flex-shrink-0 transition-all duration-300 ${showSolicitacoes ? 'w-[280px]' : 'w-[48px]'}`}>
+            <div className="bg-gradient-to-b from-purple-50 to-white rounded-xl border border-purple-100 h-full">
+              {/* Header do painel */}
+              <button
+                onClick={() => setShowSolicitacoes(!showSolicitacoes)}
+                className="w-full flex items-center gap-2 p-3 hover:bg-purple-50/50 transition-colors rounded-t-xl"
               >
-                {items.map(item => (
-                  <KanbanCard
-                    key={item.id}
-                    item={item}
-                    isDragging={dragging === item.id}
-                    onDragStart={() => setDragging(item.id)}
-                    onDragEnd={() => setDragging(null)}
-                    clienteSlug={(item.empresa as any)?.slug}
-                  />
-                ))}
-                {items.length === 0 && !isDragActive && (
-                  <div className="flex flex-col items-center justify-center py-10 text-zinc-300">
-                    {key === 'nova_solicitacao' ? (
-                      <>
-                        <Inbox className="w-6 h-6 mb-1.5" />
-                        <span className="text-[11px] font-medium">Sem solicitações</span>
-                      </>
-                    ) : (
-                      <span className="text-[11px]">—</span>
-                    )}
-                  </div>
+                <div className="w-8 h-8 rounded-lg bg-purple-500 text-white flex items-center justify-center text-sm font-bold">
+                  {solicitacoesPendentes.length}
+                </div>
+                {showSolicitacoes && (
+                  <>
+                    <div className="flex-1 text-left">
+                      <span className="text-sm font-semibold text-purple-900">Solicitações</span>
+                      <p className="text-[10px] text-purple-500">Arraste para o board</p>
+                    </div>
+                    <ChevronDown className="w-4 h-4 text-purple-400" />
+                  </>
                 )}
-                {items.length === 0 && isDragActive && (
-                  <div className="flex items-center justify-center py-10 border-2 border-dashed rounded-lg transition-colors"
-                    style={{ borderColor: cfg.color + '40' }}>
-                    <span className="text-[11px] font-medium" style={{ color: cfg.color }}>
-                      Soltar aqui
+              </button>
+
+              {/* Lista de solicitações */}
+              {showSolicitacoes && (
+                <div className="p-2 space-y-2 max-h-[calc(100vh-300px)] overflow-y-auto">
+                  {solicitacoesPendentes.map(sol => (
+                    <SolicitacaoCard
+                      key={sol.id}
+                      sol={sol}
+                      isDragging={dragging === `sol_${sol.id}`}
+                      onDragStart={() => setDragging(`sol_${sol.id}`)}
+                      onDragEnd={() => setDragging(null)}
+                    />
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Kanban Board */}
+        <div
+          className="flex-1 flex gap-3 overflow-x-auto pb-6 scroll-smooth"
+          style={{ minHeight: '72vh' }}
+        >
+          {visibleStatuses.map(key => {
+            const cfg = STATUS_CONFIG[key]
+            if (!cfg) return null
+            const items = porStatus[key] || []
+            const isDragActive = dragging !== null
+            const isCollapsed = collapsedCols[key]
+
+            // Coluna colapsada
+            if (isCollapsed) {
+              return (
+                <div
+                  key={key}
+                  className="min-w-[48px] w-[48px] flex-shrink-0 cursor-pointer"
+                  onClick={() => toggleColumn(key)}
+                  onDragOver={e => e.preventDefault()}
+                  onDrop={e => handleDrop(e, key)}
+                >
+                  <div className="h-full rounded-xl border border-zinc-200 bg-zinc-50 flex flex-col items-center py-3 gap-2 hover:bg-zinc-100 transition-colors">
+                    <div className="w-1.5 h-8 rounded-full" style={{ backgroundColor: cfg.color }} />
+                    <span className="text-lg">{cfg.emoji}</span>
+                    <span
+                      className="text-[11px] font-bold rounded-md px-1.5 py-0.5"
+                      style={{ backgroundColor: cfg.color + '20', color: cfg.color }}
+                    >
+                      {items.length}
+                    </span>
+                    <span className="text-[10px] text-zinc-400 font-medium [writing-mode:vertical-rl] rotate-180">
+                      {cfg.label}
                     </span>
                   </div>
-                )}
+                </div>
+              )
+            }
+
+            return (
+              <div
+                key={key}
+                className="min-w-[260px] w-[260px] flex-shrink-0 flex flex-col max-sm:min-w-[220px] max-sm:w-[220px]"
+                onDragOver={e => e.preventDefault()}
+                onDrop={e => handleDrop(e, key)}
+              >
+                {/* Column header */}
+                <div className="rounded-t-xl overflow-hidden">
+                  <div className="h-1.5" style={{ backgroundColor: cfg.color }} />
+                  <div className="flex items-center gap-2 px-3 py-2.5 bg-white border-x border-zinc-100">
+                    <button
+                      onClick={() => toggleColumn(key)}
+                      className="text-zinc-400 hover:text-zinc-600 transition-colors"
+                    >
+                      <ChevronDown className="w-4 h-4" />
+                    </button>
+                    <span className="text-sm">{cfg.emoji}</span>
+                    <span className="text-xs font-bold text-zinc-800 truncate flex-1">{cfg.label}</span>
+                    <span
+                      className="text-[11px] font-bold rounded-md px-2 py-0.5 min-w-[24px] text-center flex-shrink-0"
+                      style={{ backgroundColor: cfg.color + '15', color: cfg.color }}
+                    >
+                      {items.length}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Cards container */}
+                <div
+                  className={`flex-1 space-y-2.5 p-2.5 rounded-b-xl border-x border-b transition-all min-h-[80px] ${
+                    isDragActive
+                      ? 'bg-zinc-50 border-dashed border-zinc-300'
+                      : 'bg-zinc-50/30 border-zinc-100'
+                  }`}
+                >
+                  {items.map(item => (
+                    <KanbanCard
+                      key={item.id}
+                      item={item}
+                      isDragging={dragging === item.id}
+                      onDragStart={() => setDragging(item.id)}
+                      onDragEnd={() => setDragging(null)}
+                      clienteSlug={(item.empresa as any)?.slug}
+                    />
+                  ))}
+                  {items.length === 0 && !isDragActive && (
+                    <div className="flex flex-col items-center justify-center py-10 text-zinc-300">
+                      <span className="text-[11px]">—</span>
+                    </div>
+                  )}
+                  {items.length === 0 && isDragActive && (
+                    <div className="flex items-center justify-center py-10 border-2 border-dashed rounded-lg transition-colors"
+                      style={{ borderColor: cfg.color + '40' }}>
+                      <span className="text-[11px] font-medium" style={{ color: cfg.color }}>
+                        Soltar aqui
+                      </span>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )
-        })}
+            )
+          })}
+        </div>
       </div>
     </div>
   )
 }
 
+// Card de Solicitação (no painel lateral)
+function SolicitacaoCard({
+  sol,
+  isDragging,
+  onDragStart,
+  onDragEnd,
+}: {
+  sol: Solicitacao
+  isDragging: boolean
+  onDragStart: () => void
+  onDragEnd: () => void
+}) {
+  const PRIORIDADE_STYLE: Record<string, string> = {
+    urgente: 'bg-red-100 text-red-600 border-red-200',
+    alta: 'bg-orange-100 text-orange-600 border-orange-200',
+    normal: 'bg-blue-100 text-blue-600 border-blue-200',
+    baixa: 'bg-zinc-100 text-zinc-500 border-zinc-200',
+  }
+
+  return (
+    <div
+      draggable
+      onDragStart={e => {
+        e.dataTransfer.setData('text/plain', `sol_${sol.id}`)
+        onDragStart()
+      }}
+      onDragEnd={onDragEnd}
+      className={`
+        bg-white rounded-xl p-3 cursor-grab active:cursor-grabbing
+        border-2 border-purple-200 hover:border-purple-300
+        hover:shadow-md hover:-translate-y-0.5 transition-all duration-150
+        ${isDragging ? 'opacity-30 scale-95 rotate-1' : 'shadow-sm'}
+      `}
+    >
+      {/* Priority badge */}
+      {sol.prioridade && sol.prioridade !== 'normal' && (
+        <div className="mb-2">
+          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${PRIORIDADE_STYLE[sol.prioridade] || ''}`}>
+            {sol.prioridade === 'urgente' ? '🔴' : '🟠'} {sol.prioridade}
+          </span>
+        </div>
+      )}
+
+      <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2">
+        {sol.titulo}
+      </h4>
+
+      {/* Cliente */}
+      {sol.cliente && (
+        <div className="flex items-center gap-1.5">
+          <Avatar
+            name={(sol.cliente as any).nome}
+            color={(sol.cliente as any).cores?.primaria}
+            size="sm"
+            className="w-4 h-4 text-[6px]"
+          />
+          <span className="text-[10px] text-zinc-400 truncate">
+            {(sol.cliente as any).nome}
+          </span>
+        </div>
+      )}
+
+      {/* Status da solicitação */}
+      <div className="mt-2 pt-2 border-t border-zinc-100">
+        <span className="text-[10px] text-purple-500 font-medium">
+          {sol.status === 'nova' ? '📩 Nova' : sol.status === 'em_analise' ? '🔍 Em análise' : '✅ Aprovada'}
+        </span>
+      </div>
+    </div>
+  )
+}
+
+// Card do Kanban (conteúdo)
 function KanbanCard({
   item,
   isDragging,
@@ -451,17 +613,8 @@ function KanbanCard({
   onDragEnd: () => void
   clienteSlug?: string
 }) {
-  const isSol = item.isSolicitacao
-  const [showTooltip, setShowTooltip] = useState(false)
+  const subStatusCfg = item.sub_status ? SUB_STATUS_CONFIG[item.sub_status] : null
 
-  const PRIORIDADE_STYLE: Record<string, string> = {
-    urgente: 'bg-red-50 text-red-600 border-red-200',
-    alta: 'bg-orange-50 text-orange-600 border-orange-200',
-    normal: 'bg-blue-50 text-blue-600 border-blue-200',
-    baixa: 'bg-zinc-50 text-zinc-500 border-zinc-200',
-  }
-
-  // Link to content detail if it's a regular conteúdo
   const cardContent = (
     <div
       draggable
@@ -471,106 +624,125 @@ function KanbanCard({
       }}
       onDragEnd={onDragEnd}
       className={`
-        bg-white rounded-xl p-3 cursor-grab active:cursor-grabbing
-        hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 touch-manipulation
+        bg-white rounded-xl overflow-hidden cursor-grab active:cursor-grabbing
+        hover:shadow-md hover:-translate-y-0.5 transition-all duration-150
         ${isDragging ? 'opacity-30 scale-95 rotate-1' : 'shadow-sm'}
-        ${isSol
-          ? 'border-l-[3px] border-l-purple-500 border border-purple-100'
-          : 'border border-zinc-150'
-        }
+        border border-zinc-150
       `}
     >
-      {/* Badges row */}
-      <div className="flex items-center gap-1.5 mb-2 flex-wrap">
-        {/* Type badge */}
-        <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
-          {TIPO_EMOJI[item.tipo] || '📄'} {item.tipo}
-        </span>
-
-        {/* Solicitação badge */}
-        {isSol && (
-          <span className="text-[10px] font-semibold text-purple-600 bg-purple-50 px-2 py-0.5 rounded-md">
-            📩 Solicitação
-          </span>
-        )}
-
-        {/* Priority */}
-        {isSol && item.prioridade && item.prioridade !== 'normal' && (
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${PRIORIDADE_STYLE[item.prioridade] || ''}`}>
-            {item.prioridade === 'urgente' ? '🔴' : '🟠'} {item.prioridade}
-          </span>
-        )}
-
-        {/* From solicitação */}
-        {!isSol && item.fromSolicitacao && (
-          <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
-            📋 Demanda
-          </span>
-        )}
-      </div>
-
-      {/* Ajuste tooltip */}
-      {item.ajusteComentario && (
-        <div
-          className="relative mb-2"
-          onMouseEnter={() => setShowTooltip(true)}
-          onMouseLeave={() => setShowTooltip(false)}
-        >
-          <div className="text-[11px] text-orange-600 bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100 cursor-help">
-            🔄 <span className="font-medium">Ajuste:</span> <span className="text-orange-500 line-clamp-2">{item.ajusteComentario}</span>
-          </div>
+      {/* Thumbnail da mídia */}
+      {item.midiaUrl && (
+        <div className="relative h-28 bg-zinc-100 overflow-hidden">
+          {item.midiaType?.startsWith('video') ? (
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/10">
+              <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
+                <Play className="w-5 h-5 text-zinc-700 ml-0.5" />
+              </div>
+            </div>
+          ) : null}
+          <img
+            src={item.midiaUrl}
+            alt=""
+            className="w-full h-full object-cover"
+          />
         </div>
       )}
 
-      {/* Title */}
-      <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2.5 leading-snug">
-        {item.titulo}
-      </h4>
+      <div className="p-3">
+        {/* Badges row */}
+        <div className="flex items-center gap-1.5 mb-2 flex-wrap">
+          <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
+            {TIPO_EMOJI[item.tipo] || '📄'} {item.tipo}
+          </span>
 
-      {/* Footer */}
-      <div className="flex items-center gap-2 pt-2 border-t border-zinc-50">
-        {item.empresa && (
-          <div className="flex items-center gap-1.5 flex-1 min-w-0">
-            <Avatar
-              name={item.empresa.nome}
-              color={item.empresa.cores?.primaria}
-              size="sm"
-              className="w-5 h-5 text-[7px] flex-shrink-0"
-            />
-            <span className="text-[10px] text-zinc-400 truncate">
-              {item.empresa.nome}
+          {/* Sub-status badge */}
+          {subStatusCfg && (
+            <span
+              className="text-[10px] font-semibold px-2 py-0.5 rounded-md"
+              style={{ backgroundColor: subStatusCfg.color + '20', color: subStatusCfg.color }}
+            >
+              {subStatusCfg.emoji} {subStatusCfg.label}
             </span>
+          )}
+
+          {item.fromSolicitacao && (
+            <span className="text-[10px] font-semibold text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md">
+              📋 Demanda
+            </span>
+          )}
+        </div>
+
+        {/* Canais */}
+        {item.canais && item.canais.length > 0 && (
+          <div className="flex items-center gap-1 mb-2">
+            {item.canais.slice(0, 4).map(canal => (
+              <span key={canal} className="text-sm" title={canal}>
+                {canal === 'instagram' ? '📷' : canal === 'tiktok' ? '🎵' : canal === 'facebook' ? '👤' : canal === 'youtube' ? '▶️' : '📱'}
+              </span>
+            ))}
+            {item.canais.length > 4 && (
+              <span className="text-[10px] text-zinc-400">+{item.canais.length - 4}</span>
+            )}
           </div>
         )}
 
-        <div className="flex items-center gap-1.5 flex-shrink-0">
-          {item.assignee && (
-            <div className="relative group/avatar">
+        {/* Ajuste comentário */}
+        {item.ajusteComentario && (
+          <div className="mb-2 text-[11px] text-orange-600 bg-orange-50 rounded-lg px-2.5 py-1.5 border border-orange-100">
+            🔄 <span className="font-medium">Ajuste:</span> <span className="text-orange-500 line-clamp-2">{item.ajusteComentario}</span>
+          </div>
+        )}
+
+        {/* Title */}
+        <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2.5 leading-snug">
+          {item.titulo}
+        </h4>
+
+        {/* Footer */}
+        <div className="flex items-center gap-2 pt-2 border-t border-zinc-50">
+          {item.empresa && (
+            <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <Avatar
-                name={item.assignee.display_name}
+                name={item.empresa.nome}
+                color={item.empresa.cores?.primaria}
                 size="sm"
-                className="w-5 h-5 text-[7px] ring-2 ring-white"
+                className="w-5 h-5 text-[7px] flex-shrink-0"
               />
-              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/avatar:block z-50">
-                <div className="bg-zinc-900 text-white text-[10px] px-2 py-1 rounded-md whitespace-nowrap shadow-lg">
-                  {item.assignee.display_name}
-                </div>
-              </div>
+              <span className="text-[10px] text-zinc-400 truncate">
+                {item.empresa.nome}
+              </span>
             </div>
           )}
 
-          {item.data_publicacao && (
-            <span className="text-[10px] text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded">
-              📅 {formatDate(item.data_publicacao)}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {item.assignee && (
+              <div className="relative group/avatar">
+                <Avatar
+                  name={item.assignee.display_name}
+                  size="sm"
+                  className="w-5 h-5 text-[7px] ring-2 ring-white"
+                />
+                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1 hidden group-hover/avatar:block z-50">
+                  <div className="bg-zinc-900 text-white text-[10px] px-2 py-1 rounded-md whitespace-nowrap shadow-lg">
+                    {item.assignee.display_name}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {item.data_publicacao && (
+              <span className="text-[10px] text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded flex items-center gap-1">
+                <Calendar className="w-3 h-3" />
+                {formatDate(item.data_publicacao)}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>
   )
 
-  // Wrap conteúdos (not solicitações) in Link
-  if (!isSol && clienteSlug) {
+  if (clienteSlug) {
     return (
       <Link href={`/clientes/${clienteSlug}/conteudo/${item.id}`}>
         {cardContent}
@@ -581,7 +753,6 @@ function KanbanCard({
   return cardContent
 }
 
-// Wrap in Suspense for useSearchParams
 export default function WorkflowPage() {
   return (
     <Suspense fallback={

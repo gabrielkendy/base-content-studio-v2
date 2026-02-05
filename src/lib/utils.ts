@@ -22,27 +22,43 @@ export const TIPO_EMOJI: Record<string, string> = {
   'vídeo': '🎥',
 }
 
+// Status principal do workflow (10 status - estilo mLabs)
 export const STATUS_CONFIG: Record<string, { emoji: string; label: string; color: string; description: string }> = {
-  nova_solicitacao: { emoji: '📩', label: 'Solicitação', color: '#8B5CF6', description: 'Demanda recebida do cliente ou equipe' },
-  rascunho:         { emoji: '📝', label: 'Rascunho', color: '#6B7280', description: 'Briefing e ideia registrada' },
-  producao:         { emoji: '⚙️', label: 'Produção', color: '#3B82F6', description: 'Copy + Design em andamento' },
-  aprovacao:        { emoji: '👁️', label: 'Aprovação', color: '#F59E0B', description: 'Aguardando aprovação do cliente' },
-  ajuste:           { emoji: '🔄', label: 'Ajuste', color: '#F97316', description: 'Cliente pediu alterações' },
-  aprovado:         { emoji: '✅', label: 'Aprovado', color: '#22C55E', description: 'Material aprovado pelo cliente' },
-  agendado:         { emoji: '📅', label: 'Agendado', color: '#6366F1', description: 'Data e hora de publicação definidos' },
-  publicado:        { emoji: '🚀', label: 'Publicado', color: '#059669', description: 'Conteúdo publicado nas redes' },
+  rascunho:               { emoji: '📝', label: 'Rascunho', color: '#6B7280', description: 'Briefing e ideia registrada' },
+  conteudo:               { emoji: '⚙️', label: 'Conteúdo', color: '#3B82F6', description: 'Copy + Design em andamento' },
+  aprovacao_interna:      { emoji: '👁️', label: 'Aprov. Interna', color: '#8B5CF6', description: 'Revisão da equipe' },
+  aprovacao_cliente:      { emoji: '📤', label: 'Aprov. Cliente', color: '#F59E0B', description: 'Aguardando aprovação do cliente' },
+  ajuste:                 { emoji: '🔄', label: 'Ajustes', color: '#F97316', description: 'Cliente pediu alterações' },
+  aguardando_agendamento: { emoji: '⏳', label: 'Ag. Agendamento', color: '#06B6D4', description: 'Aprovado, aguardando agendar' },
+  agendado:               { emoji: '📅', label: 'Agendado', color: '#6366F1', description: 'Data e hora definidos' },
+  publicado:              { emoji: '🚀', label: 'Publicado', color: '#059669', description: 'Publicado nas redes' },
+  cancelado:              { emoji: '❌', label: 'Cancelado', color: '#EF4444', description: 'Demanda cancelada' },
+  arquivado:              { emoji: '📦', label: 'Arquivado', color: '#9CA3AF', description: 'Arquivado para referência' },
 }
 
-export type StatusConteudo = 'nova_solicitacao' | 'rascunho' | 'producao' | 'aprovacao' | 'ajuste' | 'aprovado' | 'agendado' | 'publicado'
+export type StatusConteudo = 'rascunho' | 'conteudo' | 'aprovacao_interna' | 'aprovacao_cliente' | 'ajuste' | 'aguardando_agendamento' | 'agendado' | 'publicado' | 'cancelado' | 'arquivado'
+
+// Sub-status para a coluna "Conteúdo" (produção)
+export const SUB_STATUS_CONFIG: Record<string, { emoji: string; label: string; color: string }> = {
+  aguardando_texto:   { emoji: '✏️', label: 'Aguardando Texto', color: '#F59E0B' },
+  texto_concluido:    { emoji: '✅', label: 'Texto OK', color: '#22C55E' },
+  aguardando_design:  { emoji: '🎨', label: 'Aguardando Design', color: '#F59E0B' },
+  design_concluido:   { emoji: '✅', label: 'Design OK', color: '#22C55E' },
+}
+
+export type SubStatusConteudo = 'aguardando_texto' | 'texto_concluido' | 'aguardando_design' | 'design_concluido'
 
 // Map ALL legacy/old status values to the new pipeline
 export const LEGACY_STATUS_MAP: Record<string, string> = {
-  conteudo: 'producao',
-  revisao: 'producao',
-  design: 'producao',
-  aprovacao_cliente: 'aprovacao',
+  // Status antigos → novos
+  nova_solicitacao: 'rascunho',
+  producao: 'conteudo',
+  revisao: 'conteudo',
+  design: 'conteudo',
+  aprovacao: 'aprovacao_cliente',
   ajustes: 'ajuste',
-  aprovado_agendado: 'aprovado',
+  aprovado: 'aguardando_agendamento',
+  aprovado_agendado: 'agendado',
   concluido: 'publicado',
 }
 

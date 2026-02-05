@@ -20,6 +20,8 @@ import {
   LogOut,
   User,
   BarChart3,
+  Rocket,
+  ExternalLink,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -32,6 +34,8 @@ const NAV_ITEMS = [
   { href: '/workflow', label: 'Workflow', icon: Kanban },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/notificacoes', label: 'Notificações', icon: Bell },
+  { divider: true },
+  { href: 'https://max-kanban-seven.vercel.app', label: 'Max Tasks', icon: Rocket, external: true },
   { divider: true },
   { href: '/equipe', label: 'Equipe', icon: Users },
   { href: '/webhooks', label: 'Webhooks', icon: Webhook },
@@ -112,8 +116,33 @@ export function Sidebar() {
             }
 
             const Icon = item.icon
-            const active = pathname === item.href || 
-              (item.href !== '/' && pathname.startsWith(item.href))
+            const isExternal = 'external' in item && item.external
+            const active = !isExternal && (pathname === item.href || 
+              (item.href !== '/' && pathname.startsWith(item.href)))
+
+            if (isExternal) {
+              return (
+                <a
+                  key={item.href}
+                  href={item.href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
+                    'text-purple-600 hover:bg-purple-50 hover:text-purple-700 font-medium'
+                  )}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {!collapsed && (
+                    <span className="flex items-center gap-1.5">
+                      {item.label}
+                      <ExternalLink className="w-3 h-3 opacity-50" />
+                    </span>
+                  )}
+                </a>
+              )
+            }
 
             return (
               <Link

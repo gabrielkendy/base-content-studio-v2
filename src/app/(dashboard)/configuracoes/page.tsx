@@ -534,30 +534,39 @@ export default function ConfiguracoesPage() {
             </h3>
             <p className="text-sm text-zinc-500 mt-1">Conecte suas contas para agendar publicações</p>
           </div>
-          <CardContent className="p-0">
-            {loadingSocial ? (
-              <div className="flex items-center justify-center h-[500px]">
-                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600" />
+          <CardContent>
+            <div className="flex flex-col items-center justify-center py-12 text-center">
+              <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center mb-6">
+                <Share2 className="w-8 h-8 text-white" />
               </div>
-            ) : connectUrl ? (
-              <iframe
-                src={connectUrl}
-                className="w-full h-[600px] border-0"
-                allow="clipboard-write"
-              />
-            ) : (
-              <div className="flex flex-col items-center justify-center h-[400px] text-center p-6">
-                <Share2 className="w-12 h-12 text-zinc-300 mb-4" />
-                <p className="text-zinc-500">Não foi possível carregar a conexão de redes sociais.</p>
+              <h4 className="text-lg font-semibold text-zinc-900 mb-2">Conectar Redes Sociais</h4>
+              <p className="text-sm text-zinc-500 mb-6 max-w-md">
+                Clique no botão abaixo para conectar Instagram, Facebook, TikTok e outras redes.
+                Uma nova janela será aberta para autenticação segura.
+              </p>
+              {loadingSocial ? (
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-purple-600" />
+              ) : connectUrl ? (
+                <Button 
+                  variant="primary"
+                  className="bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700"
+                  onClick={() => window.open(connectUrl, '_blank', 'width=600,height=700')}
+                >
+                  <Share2 className="w-4 h-4 mr-2" />
+                  Abrir Painel de Conexão
+                </Button>
+              ) : (
                 <Button 
                   variant="outline" 
-                  className="mt-4"
                   onClick={() => { setConnectUrl(null); setLoadingSocial(false) }}
                 >
                   Tentar novamente
                 </Button>
-              </div>
-            )}
+              )}
+              <p className="text-xs text-zinc-400 mt-4">
+                Após conectar, volte aqui e recarregue a página para ver suas contas.
+              </p>
+            </div>
           </CardContent>
         </Card>
       )}

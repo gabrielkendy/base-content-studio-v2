@@ -74,11 +74,23 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Failed to create profile' }, { status: 500 })
     }
 
-    // Generate JWT link
+    // Get org info for white-label branding
+    const { data: orgData } = await admin
+      .from('orgs')
+      .select('name, logo_url')
+      .eq('id', membership.org_id)
+      .single()
+
+    const orgName = orgData?.name || 'BASE'
+    const logoUrl = orgData?.logo_url || undefined
+
+    // Generate JWT link with white-label branding
     const jwtResult = await generateJwtUrl({
       username,
-      connect_title: `Conectar Redes - ${cliente.nome}`,
-      connect_description: 'Conecte suas redes para agendar publicações automaticamente',
+      redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://base-content-studio-v2.vercel.app'}/auth/social-callback?connected=true&cliente=${cliente.slug}`,
+      logo_image: logoUrl,
+      connect_title: `Conectar Redes - ${orgName}`,
+      connect_description: `Conecte suas redes sociais para ${cliente.nome} receber suas publicações automaticamente.`,
       platforms: ['instagram', 'tiktok', 'facebook', 'youtube', 'linkedin'],
       show_calendar: false,
     })

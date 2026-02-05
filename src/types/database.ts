@@ -72,16 +72,22 @@ export interface Conteudo {
   prompts_video: string[]
   legenda: string | null
   status: string
+  sub_status: string | null
   ordem: number
   midia_urls: string[]
   canais: string[]
   assigned_to: string | null
   solicitacao_id?: string
+  // Campos de aprovação interna
+  internal_approved: boolean
+  internal_approved_by: string | null
+  internal_approved_at: string | null
   created_at: string
   updated_at: string
   // Joined
   empresa?: Cliente
   assignee?: Member
+  approvals?: Approval[]
 }
 
 export interface AprovacaoLink {
@@ -144,6 +150,29 @@ export interface WebhookEvent {
   response_code: number | null
   sent_at: string | null
   created_at: string
+}
+
+// Sistema de Aprovações (Módulo 2)
+export type ApprovalType = 'internal' | 'external'
+export type ApprovalStatus = 'pending' | 'approved' | 'rejected' | 'adjustment'
+
+export interface Approval {
+  id: string
+  org_id: string
+  conteudo_id: string
+  type: ApprovalType
+  status: ApprovalStatus
+  reviewer_id: string | null
+  reviewer_name: string | null
+  comment: string | null
+  created_at: string
+  reviewed_at: string | null
+  previous_status: string | null
+  new_status: string | null
+  link_token: string | null
+  // Joined
+  reviewer?: Member
+  conteudo?: Conteudo
 }
 
 export interface ActivityLog {

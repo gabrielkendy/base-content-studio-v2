@@ -85,7 +85,9 @@ export async function POST(request: NextRequest) {
     // Update content status
     const conteudo = aprovacao.conteudo as any
     if (conteudo) {
+      const previousStatus = conteudo.status
       const newContentStatus = status === 'aprovado' ? 'aprovado' : 'ajuste'
+      
       await supabase
         .from('conteudos')
         .update({
@@ -93,6 +95,27 @@ export async function POST(request: NextRequest) {
           updated_at: new Date().toISOString(),
         })
         .eq('id', conteudo.id)
+
+      // Registrar na tabela de histórico de aprovações
+      try {
+        await supabase
+          .from('approvals')
+          .insert({
+            org_id: conteudo.org_id,
+            conteudo_id: conteudo.id,
+            type: 'external',
+            status: status === 'aprovado' ? 'approved' : 'adjustment',
+            reviewer_name: cliente_nome || 'Cliente',
+            comment: comentario || null,
+            previous_status: previousStatus,
+            new_status: newContentStatus,
+            link_token: token,
+            reviewed_at: new Date().toISOString(),
+          })
+      } catch (approvalErr) {
+        console.error('Error inserting approval record:', approvalErr)
+        // Continue mesmo se falhar - não é crítico
+      }
 
       // Dispatch webhook (server-side, using internal fetch)
       if (conteudo.org_id) {

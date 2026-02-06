@@ -105,7 +105,7 @@ export default function ClienteDetailPage() {
         <CardContent className="p-6">
           <div className="flex items-center justify-between flex-wrap gap-4">
             <div className="flex items-center gap-4">
-              <Avatar name={cliente.nome} src={cliente.logo_url} color={primaria} size="xl" />
+              <Avatar name={cliente.nome} src={cliente.logo_url} color={primaria} size="lg" />
               <div>
                 <h1 className="text-2xl font-bold text-zinc-900">{cliente.nome}</h1>
                 <p className="text-sm text-zinc-500">{conteudos.length} conteúdos em {ano}</p>
@@ -170,7 +170,7 @@ export default function ClienteDetailPage() {
                       <h3 className={`font-semibold group-hover:text-blue-600 ${isCurrentMonth ? 'text-blue-600' : 'text-zinc-900'}`}>
                         {MESES[m - 1]}
                       </h3>
-                      <Badge variant={total > 0 ? 'default' : 'secondary'} className="text-xs">
+                      <Badge variant={total > 0 ? 'default' : 'info'} className="text-xs">
                         {total} posts
                       </Badge>
                     </div>

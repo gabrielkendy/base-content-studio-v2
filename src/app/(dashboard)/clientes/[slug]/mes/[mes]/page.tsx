@@ -21,6 +21,10 @@ type DataImportante = { id: string; date: string; title: string; description?: s
 
 const CANAL_ICONS: Record<string, any> = { instagram: Instagram, tiktok: Music2, facebook: Facebook, youtube: Youtube }
 
+// Helper para detectar tipo de mídia
+const isVideo = (url: string) => /\.(mp4|webm|mov|avi|mkv|m4v)(\?|$)/i.test(url)
+const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg|bmp)(\?|$)/i.test(url)
+
 export default function ClienteMesPage() {
   const params = useParams()
   const router = useRouter()
@@ -202,7 +206,25 @@ export default function ClienteMesPage() {
                     <div className="relative aspect-[4/3] bg-gradient-to-br from-zinc-100 to-zinc-200 overflow-hidden">
                       <Link href={`/clientes/${slug}/conteudo/${cont.id}`}>
                         {cont.midia_urls?.length > 0 ? (
-                          <img src={cont.midia_urls[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          isVideo(cont.midia_urls[0]) ? (
+                            // Vídeo: mostrar thumbnail do vídeo com ícone de play
+                            <div className="relative w-full h-full">
+                              <video 
+                                src={cont.midia_urls[0]} 
+                                className="w-full h-full object-cover group-hover:scale-105 transition-transform"
+                                muted
+                                preload="metadata"
+                              />
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/20">
+                                <div className="w-10 h-10 rounded-full bg-black/60 flex items-center justify-center">
+                                  <Play className="w-5 h-5 text-white ml-0.5" />
+                                </div>
+                              </div>
+                            </div>
+                          ) : (
+                            // Imagem normal
+                            <img src={cont.midia_urls[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                          )
                         ) : cont.tipo?.toLowerCase().includes('video') || cont.tipo?.toLowerCase().includes('reels') ? (
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">

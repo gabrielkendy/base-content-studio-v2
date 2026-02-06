@@ -11,9 +11,41 @@ import { Input, Label, Textarea, Select } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Avatar } from '@/components/ui/avatar'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Search, Calendar, Clock, CheckCircle, FileText, AlertCircle, ArrowRight, Inbox, Building2 } from 'lucide-react'
+import { Plus, Search, Calendar, Clock, CheckCircle, FileText, AlertCircle, ArrowRight, Inbox, Building2, Link2, AlertTriangle, Timer } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import type { Solicitacao, SolicitacaoStatus, SolicitacaoPrioridade, Cliente } from '@/types/database'
+
+// Helper para tempo relativo
+function tempoRelativo(date: string | Date): string {
+  const now = new Date()
+  const d = new Date(date)
+  const diffMs = now.getTime() - d.getTime()
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24))
+  const diffHours = Math.floor(diffMs / (1000 * 60 * 60))
+  const diffMins = Math.floor(diffMs / (1000 * 60))
+
+  if (diffMins < 1) return 'agora'
+  if (diffMins < 60) return `há ${diffMins}min`
+  if (diffHours < 24) return `há ${diffHours}h`
+  if (diffDays === 1) return 'ontem'
+  if (diffDays < 7) return `há ${diffDays} dias`
+  if (diffDays < 30) return `há ${Math.floor(diffDays / 7)} sem`
+  return d.toLocaleDateString('pt-BR')
+}
+
+// Helper para prazo
+function statusPrazo(prazo: string): { label: string; color: string; isLate: boolean } {
+  const hoje = new Date()
+  hoje.setHours(0, 0, 0, 0)
+  const p = new Date(prazo + 'T00:00:00')
+  const diffDays = Math.floor((p.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24))
+
+  if (diffDays < 0) return { label: `${Math.abs(diffDays)}d atrasado`, color: '#EF4444', isLate: true }
+  if (diffDays === 0) return { label: 'Vence hoje!', color: '#F59E0B', isLate: false }
+  if (diffDays === 1) return { label: 'Vence amanhã', color: '#F59E0B', isLate: false }
+  if (diffDays <= 3) return { label: `Vence em ${diffDays}d`, color: '#F59E0B', isLate: false }
+  return { label: p.toLocaleDateString('pt-BR'), color: '#6B7280', isLate: false }
+}
 
 const PRIORIDADE_CONFIG: Record<SolicitacaoPrioridade, { label: string; color: string; bg: string; emoji: string }> = {
   baixa: { label: 'Baixa', color: '#22C55E', bg: 'bg-green-50 border-green-200', emoji: '🟢' },
@@ -184,16 +216,28 @@ export default function SolicitacoesPage() {
             const pcfg = PRIORIDADE_CONFIG[sol.prioridade]
             const cliente = sol.cliente as Cliente | undefined
             const canAceitar = ['nova', 'em_analise', 'aprovada'].includes(sol.status)
+            const prazoInfo = sol.prazo_desejado ? statusPrazo(sol.prazo_desejado) : null
+            const numRefs = sol.referencias?.length || 0
 
             return (
-              <Card key={sol.id} className={`overflow-hidden hover:shadow-lg transition-all cursor-pointer group border-l-4`} style={{ borderLeftColor: pcfg.color }} onClick={() => { setDetailId(sol.id); setRespostaText(sol.resposta || '') }}>
+              <Card 
+                key={sol.id} 
+                className={`overflow-hidden transition-all duration-200 cursor-pointer group border-l-4 hover:shadow-xl hover:-translate-y-1 ${prazoInfo?.isLate ? 'ring-2 ring-red-200' : ''}`} 
+                style={{ borderLeftColor: pcfg.color }} 
+                onClick={() => { setDetailId(sol.id); setRespostaText(sol.resposta || '') }}
+              >
                 <CardContent className="p-0">
-                  {/* Header com prioridade */}
-                  <div className={`px-4 py-2 ${pcfg.bg} border-b flex items-center justify-between`}>
+                  {/* Header com prioridade + status */}
+                  <div className={`px-4 py-2.5 ${pcfg.bg} border-b flex items-center justify-between`}>
                     <div className="flex items-center gap-2">
-                      <span className="text-xs font-medium" style={{ color: pcfg.color }}>{pcfg.emoji} {pcfg.label}</span>
+                      <span className="text-xs font-semibold" style={{ color: pcfg.color }}>{pcfg.emoji} {pcfg.label}</span>
+                      {prazoInfo?.isLate && (
+                        <span className="flex items-center gap-1 text-[10px] font-medium text-red-600 bg-red-100 px-1.5 py-0.5 rounded-full animate-pulse">
+                          <AlertTriangle className="w-3 h-3" /> ATRASADO
+                        </span>
+                      )}
                     </div>
-                    <Badge className="text-[10px]" style={{ backgroundColor: scfg.color, color: '#fff' }}>
+                    <Badge className="text-[10px] font-medium shadow-sm" style={{ backgroundColor: scfg.color, color: '#fff' }}>
                       {scfg.emoji} {scfg.label}
                     </Badge>
                   </div>
@@ -201,33 +245,46 @@ export default function SolicitacoesPage() {
                   {/* Content */}
                   <div className="p-4 space-y-3">
                     {/* Título */}
-                    <h3 className="font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors line-clamp-2">
+                    <h3 className="font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors line-clamp-2 leading-tight">
                       {sol.titulo}
                     </h3>
 
                     {/* Cliente */}
                     {cliente && (
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 bg-zinc-50 rounded-lg px-2 py-1.5 -mx-1">
                         <Avatar name={cliente.nome} src={cliente.logo_url} color={cliente.cores?.primaria} size="sm" />
-                        <span className="text-sm text-zinc-600 truncate">{cliente.nome}</span>
+                        <span className="text-sm font-medium text-zinc-700 truncate">{cliente.nome}</span>
                       </div>
                     )}
 
                     {/* Descrição truncada */}
                     {sol.descricao && (
-                      <p className="text-xs text-zinc-500 line-clamp-2">{sol.descricao}</p>
+                      <p className="text-xs text-zinc-500 line-clamp-2 leading-relaxed">{sol.descricao}</p>
                     )}
 
-                    {/* Datas */}
-                    <div className="flex items-center gap-4 text-xs text-zinc-400">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" />
-                        <span>{new Date(sol.created_at).toLocaleDateString('pt-BR')}</span>
+                    {/* Footer info: tempo + prazo + refs */}
+                    <div className="flex items-center justify-between gap-2 pt-2 border-t border-zinc-100">
+                      <div className="flex items-center gap-3 text-xs text-zinc-400">
+                        {/* Tempo relativo */}
+                        <div className="flex items-center gap-1" title={new Date(sol.created_at).toLocaleString('pt-BR')}>
+                          <Timer className="w-3 h-3" />
+                          <span>{tempoRelativo(sol.created_at)}</span>
+                        </div>
+                        
+                        {/* Prazo */}
+                        {prazoInfo && (
+                          <div className="flex items-center gap-1 font-medium" style={{ color: prazoInfo.color }}>
+                            <Clock className="w-3 h-3" />
+                            <span>{prazoInfo.label}</span>
+                          </div>
+                        )}
                       </div>
-                      {sol.prazo_desejado && (
-                        <div className="flex items-center gap-1 text-amber-600">
-                          <Clock className="w-3 h-3" />
-                          <span>{new Date(sol.prazo_desejado + 'T00:00:00').toLocaleDateString('pt-BR')}</span>
+                      
+                      {/* Contador de refs */}
+                      {numRefs > 0 && (
+                        <div className="flex items-center gap-1 text-xs text-zinc-400 bg-zinc-100 px-1.5 py-0.5 rounded" title={`${numRefs} referência(s)`}>
+                          <Link2 className="w-3 h-3" />
+                          <span>{numRefs}</span>
                         </div>
                       )}
                     </div>
@@ -235,9 +292,9 @@ export default function SolicitacoesPage() {
 
                   {/* Footer com ação */}
                   {canAceitar && (
-                    <div className="px-4 py-3 border-t border-zinc-100 bg-zinc-50">
-                      <Button size="sm" className="w-full" onClick={(e) => aceitarSolicitacao(sol.id, e)}>
-                        <CheckCircle className="w-4 h-4 mr-1" /> Aceitar e Criar Conteúdo
+                    <div className="px-4 py-3 border-t border-zinc-100 bg-gradient-to-r from-zinc-50 to-white">
+                      <Button size="sm" className="w-full group/btn shadow-sm hover:shadow-md transition-all" onClick={(e) => aceitarSolicitacao(sol.id, e)}>
+                        <CheckCircle className="w-4 h-4 mr-1.5 group-hover/btn:scale-110 transition-transform" /> Aceitar e Criar Conteúdo
                       </Button>
                     </div>
                   )}

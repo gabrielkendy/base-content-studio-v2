@@ -33,34 +33,42 @@ export function Modal({ open, onClose, title, size = 'md', children }: ModalProp
   if (!open) return null
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center">
       <div className="fixed inset-0 bg-black/40 backdrop-blur-sm" onClick={onClose} />
       <div
         className={cn(
-          'relative bg-white rounded-2xl shadow-2xl max-h-[90vh] overflow-y-auto',
-          'animate-in fade-in zoom-in-95 duration-200',
+          'relative bg-white shadow-2xl max-h-[85vh] overflow-y-auto',
+          'animate-in fade-in duration-200',
+          // Mobile: slide up from bottom, rounded top only
+          'rounded-t-3xl sm:rounded-2xl',
+          'slide-in-from-bottom-4 sm:zoom-in-95',
           {
-            'w-full max-w-sm': size === 'sm',
-            'w-full max-w-lg': size === 'md',
-            'w-full max-w-2xl': size === 'lg',
-            'w-full max-w-4xl': size === 'xl',
-            'w-full max-w-[95vw] h-[90vh]': size === 'full',
+            'w-full sm:max-w-sm': size === 'sm',
+            'w-full sm:max-w-lg': size === 'md',
+            'w-full sm:max-w-2xl': size === 'lg',
+            'w-full sm:max-w-4xl': size === 'xl',
+            'w-full sm:max-w-[95vw] sm:h-[90vh]': size === 'full',
           },
-          'mx-4'
+          'sm:mx-4'
         )}
+        style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}
       >
+        {/* Drag handle for mobile */}
+        <div className="sm:hidden flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 bg-zinc-300 rounded-full" />
+        </div>
         {title && (
           <div className="flex items-center justify-between px-6 py-4 border-b border-zinc-100">
             <h2 className="text-lg font-semibold text-zinc-900">{title}</h2>
             <button
               onClick={onClose}
-              className="p-1 rounded-lg hover:bg-zinc-100 transition-colors"
+              className="p-2 -mr-2 rounded-xl hover:bg-zinc-100 transition-colors"
             >
               <X className="w-5 h-5 text-zinc-500" />
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-6 pb-8">{children}</div>
       </div>
     </div>
   )

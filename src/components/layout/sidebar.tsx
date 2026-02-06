@@ -23,6 +23,7 @@ import {
   Rocket,
   ExternalLink,
   Share2,
+  ListTodo,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -37,7 +38,7 @@ const NAV_ITEMS = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/notificacoes', label: 'Notificações', icon: Bell },
   { divider: true },
-  { href: 'https://max-kanban-seven.vercel.app', label: 'Max Tasks', icon: Rocket, external: true },
+  { href: '/tarefas', label: 'Max Tasks', icon: ListTodo, highlight: true },
   { divider: true },
   { href: '/equipe', label: 'Equipe', icon: Users },
   { href: '/webhooks', label: 'Webhooks', icon: Webhook },
@@ -119,6 +120,7 @@ export function Sidebar() {
 
             const Icon = item.icon
             const isExternal = 'external' in item && item.external
+            const isHighlight = 'highlight' in item && item.highlight
             const active = !isExternal && (pathname === item.href || 
               (item.href !== '/' && pathname.startsWith(item.href)))
 
@@ -146,6 +148,24 @@ export function Sidebar() {
               )
             }
 
+            // Highlighted item (Max Tasks)
+            if (isHighlight && !active) {
+              return (
+                <Link
+                  key={item.href}
+                  href={item.href}
+                  onClick={() => setMobileOpen(false)}
+                  className={cn(
+                    'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
+                    'text-orange-600 hover:bg-orange-50 hover:text-orange-700 font-medium'
+                  )}
+                >
+                  <Icon className="w-5 h-5 shrink-0" />
+                  {!collapsed && <span>{item.label} ✨</span>}
+                </Link>
+              )
+            }
+
             return (
               <Link
                 key={item.href}
@@ -160,8 +180,8 @@ export function Sidebar() {
                 style={
                   active
                     ? {
-                        backgroundColor: `${brandColor}15`,
-                        color: brandColor,
+                        backgroundColor: isHighlight ? '#f97316' + '20' : `${brandColor}15`,
+                        color: isHighlight ? '#f97316' : brandColor,
                       }
                     : undefined
                 }

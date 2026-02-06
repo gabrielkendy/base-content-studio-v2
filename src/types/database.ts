@@ -75,6 +75,11 @@ export interface MemberPermissions {
     enabled: boolean
     level: PermissionLevel
   }
+  // Tarefas (Max Tasks)
+  tarefas: {
+    enabled: boolean
+    level: PermissionLevel // full = criar/editar/deletar todas, read = ver apenas as próprias
+  }
 }
 
 // Permissões padrão por role
@@ -93,6 +98,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     ads: { enabled: true, level: 'full' },
     solicitacoes: { enabled: true, level: 'full' },
     webhooks: { enabled: true, level: 'full' },
+    tarefas: { enabled: true, level: 'full' },
   },
   gestor: {
     canais: { enabled: true, level: 'full' },
@@ -108,6 +114,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     ads: { enabled: true, level: 'full' },
     solicitacoes: { enabled: true, level: 'full' },
     webhooks: { enabled: true, level: 'read' },
+    tarefas: { enabled: true, level: 'full' },
   },
   designer: {
     canais: { enabled: false, level: 'none' },
@@ -123,6 +130,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     ads: { enabled: false, level: 'none' },
     solicitacoes: { enabled: true, level: 'read' },
     webhooks: { enabled: false, level: 'none' },
+    tarefas: { enabled: true, level: 'read' }, // vê só as próprias
   },
   cliente: {
     canais: { enabled: false, level: 'none' },
@@ -138,6 +146,7 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     ads: { enabled: false, level: 'none' },
     solicitacoes: { enabled: true, level: 'full' },
     webhooks: { enabled: false, level: 'none' },
+    tarefas: { enabled: false, level: 'none' }, // cliente não vê tarefas internas
   },
 }
 
@@ -377,4 +386,67 @@ export interface Solicitacao {
   updated_at: string
   // Joined
   cliente?: Cliente
+}
+
+// ============== SISTEMA DE TAREFAS (Max Tasks) ==============
+
+export type TaskPriority = 'baixa' | 'normal' | 'alta' | 'urgente'
+export type TaskStatus = 'pendente' | 'em_andamento' | 'concluida' | 'cancelada'
+
+export interface Task {
+  id: string
+  org_id: string
+  titulo: string
+  descricao: string | null
+  prioridade: TaskPriority
+  status: TaskStatus
+  // Atribuição
+  assigned_to: string | null // member user_id
+  created_by: string // member user_id
+  // Prazos
+  due_date: string | null
+  completed_at: string | null
+  // Vínculos opcionais
+  cliente_id: string | null
+  conteudo_id: string | null
+  solicitacao_id: string | null
+  // Metadados
+  tags: string[]
+  checklist: TaskChecklistItem[]
+  // Timestamps
+  created_at: string
+  updated_at: string
+  // Joined
+  assignee?: Member
+  creator?: Member
+  cliente?: Cliente
+  conteudo?: Conteudo
+}
+
+export interface TaskChecklistItem {
+  id: string
+  text: string
+  done: boolean
+}
+
+export interface TaskComment {
+  id: string
+  task_id: string
+  org_id: string
+  user_id: string
+  text: string
+  created_at: string
+  // Joined
+  user?: Member
+}
+
+// Stats de produtividade
+export interface TaskStats {
+  total: number
+  pendentes: number
+  em_andamento: number
+  concluidas: number
+  atrasadas: number
+  concluidas_no_prazo: number
+  tempo_medio_conclusao_horas: number | null
 }

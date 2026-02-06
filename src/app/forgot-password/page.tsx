@@ -2,10 +2,8 @@
 
 import { useState } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Button } from '@/components/ui/button'
-import { Input, Label } from '@/components/ui/input'
 import Link from 'next/link'
-import { Mail, ArrowLeft, Loader2, CheckCircle, KeyRound } from 'lucide-react'
+import { Mail, ArrowLeft, Loader2, CheckCircle, KeyRound, Sparkles } from 'lucide-react'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -33,128 +31,136 @@ export default function ForgotPasswordPage() {
     setLoading(false)
   }
 
-  if (sent) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-50 to-zinc-100 p-4">
-        <div className="w-full max-w-md text-center space-y-6 animate-fade-in">
-          <div className="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto">
-            <CheckCircle className="w-10 h-10 text-green-600" />
+  return (
+    <div className="min-h-screen bg-black flex items-center justify-center p-6">
+      {/* Background Effects */}
+      <div className="fixed inset-0 pointer-events-none">
+        <div className="absolute -top-40 -right-40 w-[600px] h-[600px] bg-purple-500 rounded-full blur-[150px] opacity-20" />
+        <div className="absolute -bottom-40 -left-40 w-[500px] h-[500px] bg-blue-500 rounded-full blur-[150px] opacity-20" />
+      </div>
+
+      <div className="w-full max-w-md relative z-10">
+        {/* Logo */}
+        <Link href="/" className="flex items-center gap-3 mb-12">
+          <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
+            <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <div>
-            <h2 className="text-2xl font-bold text-zinc-900 mb-2">Email enviado!</h2>
-            <p className="text-zinc-500">
+          <span className="text-xl font-bold text-white">ContentStudio</span>
+        </Link>
+
+        {sent ? (
+          <div className="text-center">
+            <div className="w-20 h-20 bg-green-500/20 rounded-full flex items-center justify-center mx-auto mb-6">
+              <CheckCircle className="w-10 h-10 text-green-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3">Email enviado!</h2>
+            <p className="text-zinc-400 mb-6">
               Se existe uma conta com o email<br />
-              <strong className="text-zinc-700">{email}</strong><br />
+              <strong className="text-white">{email}</strong><br />
               você receberá um link para redefinir sua senha.
             </p>
+
+            <div className="bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 text-sm text-blue-400 mb-6">
+              <p className="font-medium mb-2">📧 Próximos passos:</p>
+              <ol className="text-left space-y-1">
+                <li>1. Abra seu email</li>
+                <li>2. Clique no link de redefinição</li>
+                <li>3. Crie uma nova senha</li>
+              </ol>
+            </div>
+
+            <div className="bg-amber-500/10 border border-amber-500/20 rounded-xl p-4 text-sm text-amber-400 mb-8">
+              💡 Não recebeu? Verifique a pasta de spam ou aguarde alguns minutos.
+            </div>
+
+            <div className="space-y-3">
+              <button
+                onClick={() => { setSent(false); setEmail('') }}
+                className="text-zinc-500 hover:text-white transition-colors"
+              >
+                Enviar para outro email
+              </button>
+              <div>
+                <Link href="/login" className="text-purple-400 font-medium hover:underline">
+                  ← Voltar ao login
+                </Link>
+              </div>
+            </div>
           </div>
-          <div className="bg-blue-50 border border-blue-200 rounded-xl p-4 text-sm text-blue-800">
-            <p className="font-medium mb-1">📧 Próximos passos:</p>
-            <ol className="text-left space-y-1 text-blue-700">
-              <li>1. Abra seu email</li>
-              <li>2. Clique no link de redefinição</li>
-              <li>3. Crie uma nova senha</li>
-            </ol>
-          </div>
-          <div className="bg-amber-50 border border-amber-200 rounded-xl p-4 text-sm text-amber-800">
-            <p>💡 Não recebeu? Verifique a pasta de spam ou aguarde alguns minutos.</p>
-          </div>
-          <div className="pt-4 space-y-3">
-            <Button variant="ghost" onClick={() => { setSent(false); setEmail('') }} className="text-zinc-500">
-              Enviar para outro email
-            </Button>
-            <div>
-              <Link href="/login" className="text-blue-600 font-medium hover:underline text-sm">
-                ← Voltar ao login
+        ) : (
+          <>
+            {/* Icon */}
+            <div className="w-16 h-16 bg-gradient-to-br from-amber-500/20 to-orange-500/20 border border-amber-500/30 rounded-2xl flex items-center justify-center mb-6">
+              <KeyRound className="w-8 h-8 text-amber-500" />
+            </div>
+
+            <h1 className="text-3xl font-bold text-white mb-2">Esqueceu sua senha?</h1>
+            <p className="text-zinc-400 mb-8">
+              Sem problema! Digite seu email e enviaremos um link para criar uma nova senha.
+            </p>
+
+            <form onSubmit={handleSubmit} className="space-y-5">
+              {error && (
+                <div className="p-4 bg-red-500/10 border border-red-500/20 rounded-xl text-red-400 text-sm flex items-start gap-3">
+                  <span>⚠️</span>
+                  <span>{error}</span>
+                </div>
+              )}
+
+              <div>
+                <label className="block text-sm font-medium text-zinc-300 mb-2">Seu email</label>
+                <div className="relative">
+                  <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-500" />
+                  <input
+                    type="email"
+                    value={email}
+                    onChange={e => setEmail(e.target.value)}
+                    placeholder="seu@email.com"
+                    className="w-full pl-12 pr-4 py-3 bg-zinc-900 border border-zinc-800 rounded-xl text-white placeholder:text-zinc-600 focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-colors"
+                    required
+                    autoFocus
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                disabled={loading || !email}
+                className="w-full py-3 bg-gradient-to-r from-purple-500 to-blue-500 rounded-xl text-white font-semibold hover:opacity-90 transition-all disabled:opacity-50 flex items-center justify-center gap-2"
+              >
+                {loading ? (
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                ) : (
+                  <>
+                    <Mail className="w-5 h-5" />
+                    Enviar link de recuperação
+                  </>
+                )}
+              </button>
+            </form>
+
+            <div className="mt-8 text-center">
+              <Link 
+                href="/login" 
+                className="inline-flex items-center text-zinc-500 hover:text-white transition-colors"
+              >
+                <ArrowLeft className="w-4 h-4 mr-2" />
+                Voltar ao login
               </Link>
             </div>
-          </div>
-        </div>
-      </div>
-    )
-  }
 
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-zinc-50 to-zinc-100 p-4">
-      <div className="w-full max-w-md animate-fade-in">
-        {/* Header */}
-        <div className="text-center mb-8">
-          <div className="w-16 h-16 bg-gradient-to-br from-amber-500 to-orange-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-amber-200/50">
-            <KeyRound className="w-8 h-8 text-white" />
-          </div>
-          <h1 className="text-2xl font-bold text-zinc-900">Esqueceu sua senha?</h1>
-          <p className="text-zinc-500 mt-2">
-            Sem problema! Digite seu email e enviaremos<br />
-            um link para criar uma nova senha.
-          </p>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-5">
-          {error && (
-            <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl flex items-start gap-3">
-              <span className="text-lg">⚠️</span>
-              <span>{error}</span>
+            {/* Help */}
+            <div className="mt-8 p-4 bg-zinc-900 border border-zinc-800 rounded-xl">
+              <h3 className="font-semibold text-zinc-300 text-sm mb-2">Precisa de ajuda?</h3>
+              <p className="text-xs text-zinc-500">
+                Se você não conseguir acessar sua conta, entre em contato pelo email{' '}
+                <a href="mailto:suporte@contentstudio.com" className="text-purple-400 hover:underline">
+                  suporte@contentstudio.com
+                </a>
+              </p>
             </div>
-          )}
-
-          <div>
-            <Label htmlFor="email" className="text-zinc-700 font-medium">Seu email</Label>
-            <div className="relative mt-1.5">
-              <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-5 h-5 text-zinc-400" />
-              <Input
-                id="email"
-                type="email"
-                value={email}
-                onChange={e => setEmail(e.target.value)}
-                placeholder="seu@email.com"
-                className="pl-11 h-12"
-                required
-                autoFocus
-              />
-            </div>
-          </div>
-
-          <Button 
-            type="submit" 
-            variant="primary" 
-            className="w-full h-12 text-base font-semibold shadow-lg shadow-blue-200/50" 
-            disabled={loading || !email}
-          >
-            {loading ? (
-              <>
-                <Loader2 className="w-5 h-5 mr-2 animate-spin" />
-                Enviando...
-              </>
-            ) : (
-              <>
-                <Mail className="w-5 h-5 mr-2" />
-                Enviar link de recuperação
-              </>
-            )}
-          </Button>
-        </form>
-
-        <div className="mt-8 text-center">
-          <Link 
-            href="/login" 
-            className="inline-flex items-center text-zinc-500 hover:text-zinc-700 font-medium text-sm"
-          >
-            <ArrowLeft className="w-4 h-4 mr-2" />
-            Voltar ao login
-          </Link>
-        </div>
-
-        {/* Help box */}
-        <div className="mt-8 bg-zinc-100 rounded-xl p-4">
-          <h3 className="font-semibold text-zinc-700 text-sm mb-2">Precisa de ajuda?</h3>
-          <p className="text-xs text-zinc-500">
-            Se você não conseguir acessar sua conta, entre em contato com o administrador 
-            da sua organização ou envie um email para{' '}
-            <a href="mailto:suporte@agenciabase.tech" className="text-blue-600 hover:underline">
-              suporte@agenciabase.tech
-            </a>
-          </p>
-        </div>
+          </>
+        )}
       </div>
     </div>
   )

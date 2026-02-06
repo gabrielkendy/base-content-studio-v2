@@ -190,69 +190,77 @@ export default function ClienteMesPage() {
   const PRIORIDADE_STYLE: Record<string, string> = { critical: 'bg-red-100 text-red-700 border-red-200', high: 'bg-orange-100 text-orange-700 border-orange-200', medium: 'bg-blue-100 text-blue-700 border-blue-200', low: 'bg-zinc-100 text-zinc-600 border-zinc-200' }
 
   return (
-    <div className="space-y-6 animate-fade-in">
-      {/* Header - Clean Mobile Design */}
-      <Card className="overflow-hidden border-0 shadow-lg">
-        <div className="h-1.5" style={{ background: `linear-gradient(90deg, ${primaria}, ${primaria}80)` }} />
-        <CardContent className="p-4 sm:p-5">
-          <div className="flex items-center gap-3 sm:gap-4">
+    <div className="space-y-6 sm:space-y-8 animate-fade-in pb-24 sm:pb-6">
+      {/* Header - Beautiful Mobile Design */}
+      <div className="relative overflow-hidden rounded-3xl bg-gradient-to-br from-white to-zinc-50 shadow-lg border border-zinc-100">
+        {/* Color accent */}
+        <div className="absolute top-0 left-0 right-0 h-1" style={{ background: `linear-gradient(90deg, ${primaria}, ${primaria}60)` }} />
+        
+        <div className="p-5 sm:p-6">
+          {/* Top row: Back + Avatar + Info */}
+          <div className="flex items-center gap-4">
             <Link href={`/clientes/${slug}`}>
-              <Button size="sm" variant="ghost" className="h-10 w-10 p-0 rounded-xl hover:bg-zinc-100">
-                <ArrowLeft className="w-5 h-5" />
-              </Button>
+              <button className="h-11 w-11 flex items-center justify-center rounded-2xl bg-zinc-100 hover:bg-zinc-200 transition-colors">
+                <ArrowLeft className="w-5 h-5 text-zinc-600" />
+              </button>
             </Link>
-            <Avatar name={cliente.nome} src={cliente.logo_url} color={primaria} size="lg" className="w-12 h-12 sm:w-14 sm:h-14 rounded-xl shadow-md" />
+            <div className="w-14 h-14 rounded-2xl shadow-lg overflow-hidden ring-2 ring-white" style={{ backgroundColor: primaria }}>
+              {cliente.logo_url ? (
+                <img src={cliente.logo_url} alt={cliente.nome} className="w-full h-full object-cover" />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center text-white text-xl font-bold">
+                  {cliente.nome.charAt(0)}
+                </div>
+              )}
+            </div>
             <div className="flex-1 min-w-0">
-              <h1 className="text-lg sm:text-xl font-bold text-zinc-900 truncate">{cliente.nome}</h1>
-              <p className="text-xs sm:text-sm text-zinc-500">{MESES[mes - 1]} {ano} • {total} conteúdos</p>
+              <h1 className="text-xl sm:text-2xl font-bold text-zinc-900 truncate">{cliente.nome}</h1>
+              <p className="text-sm text-zinc-500 mt-0.5">{total} conteúdos em {MESES[mes - 1]}</p>
             </div>
           </div>
-          {/* Month Navigator - abaixo em mobile */}
-          <div className="flex items-center justify-center gap-2 mt-4 bg-zinc-50 rounded-xl p-1.5">
-            <Button size="sm" variant="ghost" onClick={() => navegarMes(-1)} className="h-9 w-9 p-0 rounded-lg hover:bg-white hover:shadow-sm">
-              <ChevronLeft className="w-5 h-5" />
-            </Button>
-            <span className="font-bold min-w-[110px] text-center text-sm text-zinc-700">{MESES[mes - 1]}</span>
-            <Button size="sm" variant="ghost" onClick={() => navegarMes(1)} className="h-9 w-9 p-0 rounded-lg hover:bg-white hover:shadow-sm">
-              <ChevronRight className="w-5 h-5" />
-            </Button>
+          
+          {/* Month Navigator */}
+          <div className="flex items-center justify-center gap-3 mt-5 py-3 bg-zinc-100/80 rounded-2xl">
+            <button onClick={() => navegarMes(-1)} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-white hover:shadow-sm transition-all">
+              <ChevronLeft className="w-5 h-5 text-zinc-600" />
+            </button>
+            <div className="min-w-[140px] text-center">
+              <span className="text-lg font-bold text-zinc-800">{MESES[mes - 1]}</span>
+              <span className="text-zinc-400 ml-2">{ano}</span>
+            </div>
+            <button onClick={() => navegarMes(1)} className="h-10 w-10 flex items-center justify-center rounded-xl hover:bg-white hover:shadow-sm transition-all">
+              <ChevronRight className="w-5 h-5 text-zinc-600" />
+            </button>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
 
-      {/* Stats mini - scroll horizontal no mobile */}
-      <div className="flex gap-3 overflow-x-auto pb-2 scrollbar-hide sm:grid sm:grid-cols-4 sm:overflow-visible">
+      {/* Stats - clean horizontal on mobile */}
+      <div className="flex items-center justify-between gap-2 p-4 bg-white rounded-2xl shadow-sm border border-zinc-100">
         {[
-          { label: 'Total', value: total, icon: FileText, bg: 'bg-blue-50', iconColor: 'text-blue-500' },
-          { label: 'Publicados', value: publicados, icon: CheckCircle2, bg: 'bg-emerald-50', iconColor: 'text-emerald-500' },
-          { label: 'Aprovação', value: aguardandoAprovacao, icon: Clock, bg: 'bg-amber-50', iconColor: 'text-amber-500' },
-          { label: 'Produção', value: emProducao, icon: AlertCircle, bg: 'bg-violet-50', iconColor: 'text-violet-500' },
-        ].map(stat => (
-          <Card key={stat.label} className="flex-shrink-0 min-w-[120px] sm:min-w-0 border-0 shadow-sm">
-            <CardContent className="p-3 flex items-center gap-3">
-              <div className={`w-10 h-10 rounded-xl ${stat.bg} flex items-center justify-center`}>
-                <stat.icon className={`w-5 h-5 ${stat.iconColor}`} />
-              </div>
-              <div>
-                <div className="text-xl font-bold text-zinc-900">{stat.value}</div>
-                <div className="text-xs text-zinc-500">{stat.label}</div>
-              </div>
-            </CardContent>
-          </Card>
+          { label: 'Total', value: total, color: 'text-blue-600', bg: 'bg-blue-500' },
+          { label: 'Publicados', value: publicados, color: 'text-emerald-600', bg: 'bg-emerald-500' },
+          { label: 'Aprovação', value: aguardandoAprovacao, color: 'text-amber-600', bg: 'bg-amber-500' },
+          { label: 'Produção', value: emProducao, color: 'text-violet-600', bg: 'bg-violet-500' },
+        ].map((stat, i) => (
+          <div key={stat.label} className="flex-1 text-center">
+            <div className={`text-2xl sm:text-3xl font-bold ${stat.color}`}>{stat.value}</div>
+            <div className="text-[10px] sm:text-xs text-zinc-400 font-medium uppercase tracking-wide">{stat.label}</div>
+            <div className={`h-1 ${stat.bg} rounded-full mt-2 opacity-30`} />
+          </div>
         ))}
       </div>
 
       {/* Main grid */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-6 sm:gap-8">
         {/* Cards de conteúdo - 3 colunas */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="lg:col-span-3 space-y-5">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-zinc-900 flex items-center gap-2">
-              <span className="w-8 h-8 bg-blue-50 rounded-lg flex items-center justify-center text-base">📝</span>
+            <h2 className="text-xl font-bold text-zinc-900">
               Conteúdos
             </h2>
             <Link href={`/workflow/nova-demanda?cliente=${cliente.id}`} className="hidden sm:block">
-              <Button size="sm" className="shadow-sm"><Plus className="w-4 h-4 mr-1" /> Nova</Button>
+              <Button size="sm" className="shadow-md rounded-xl"><Plus className="w-4 h-4 mr-1.5" /> Nova</Button>
             </Link>
           </div>
 
@@ -270,15 +278,15 @@ export default function ClienteMesPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-1 xs:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
               {conteudos.map(cont => {
                 const statusCfg = STATUS_CONFIG[cont.status]
                 const canais = (cont as any).canais || []
                 const isMenuOpen = menuOpen === cont.id
                 return (
-                  <Card key={cont.id} className="overflow-hidden hover:shadow-xl transition-all duration-300 group h-full relative border-0 shadow-md">
+                  <div key={cont.id} className="bg-white rounded-2xl overflow-hidden shadow-md hover:shadow-xl transition-all duration-300 group relative border border-zinc-100">
                     {/* Thumbnail */}
-                    <div className="relative aspect-[4/3] bg-gradient-to-br from-zinc-100 to-zinc-50 overflow-hidden">
+                    <div className="relative aspect-square sm:aspect-[4/3] bg-gradient-to-br from-zinc-100 to-zinc-50 overflow-hidden">
                       <Link href={`/clientes/${slug}/conteudo/${cont.id}`}>
                         {cont.midia_urls?.length > 0 ? (
                           isVideo(cont.midia_urls[0]) ? (
@@ -359,22 +367,22 @@ export default function ClienteMesPage() {
                       </div>
                     </div>
                     {/* Info */}
-                    <CardContent className="p-3">
+                    <div className="p-4">
                       <Link href={`/clientes/${slug}/conteudo/${cont.id}`}>
-                        <h3 className="font-semibold text-sm text-zinc-900 truncate group-hover:text-blue-600 transition-colors mb-1.5">
+                        <h3 className="font-semibold text-base text-zinc-900 group-hover:text-blue-600 transition-colors mb-2 line-clamp-2">
                           {cont.titulo || 'Sem título'}
                         </h3>
                       </Link>
                       <div className="flex items-center justify-between">
-                        <span className="text-xs text-zinc-500 flex items-center gap-1">
+                        <span className="text-sm text-zinc-500 flex items-center gap-1.5">
                           <span>{TIPO_EMOJI[cont.tipo] || '📄'}</span>
                           <span>{cont.tipo}</span>
                         </span>
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex items-center gap-2">
                           {(cont.status === 'aprovacao' || cont.status === 'aprovacao_cliente' || cont.status === 'aprovacao_interna') && (
                             <button
                               onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyApprovalLink(cont) }}
-                              className="p-1.5 rounded-lg hover:bg-blue-100 transition-colors"
+                              className="p-2 rounded-xl hover:bg-blue-100 transition-colors"
                               title="Copiar link de aprovação"
                             >
                               {linkCopied === cont.id ? (
@@ -390,8 +398,8 @@ export default function ClienteMesPage() {
                           })}
                         </div>
                       </div>
-                    </CardContent>
-                  </Card>
+                    </div>
+                  </div>
                 )
               })}
             </div>

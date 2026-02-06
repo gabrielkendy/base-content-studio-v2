@@ -30,9 +30,29 @@ const CANAIS = CANAIS_CONFIG.map(c => ({ id: c.id, label: c.label, icon: c.icon 
 function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | null }) {
   const [currentIndex, setCurrentIndex] = useState(0)
   const [touchStart, setTouchStart] = useState<number | null>(null)
+  const [aspectRatios, setAspectRatios] = useState<Record<number, 'landscape' | 'portrait' | 'square'>>({})
   
   const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)
   const isVideo = (url: string) => /\.(mp4|webm|mov)(\?|$)/i.test(url)
+
+  // Detect aspect ratio when media loads
+  const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>, index: number) => {
+    const img = e.currentTarget
+    const ratio = img.naturalWidth / img.naturalHeight
+    let orientation: 'landscape' | 'portrait' | 'square' = 'square'
+    if (ratio > 1.2) orientation = 'landscape'
+    else if (ratio < 0.8) orientation = 'portrait'
+    setAspectRatios(prev => ({ ...prev, [index]: orientation }))
+  }
+
+  const handleVideoLoad = (e: React.SyntheticEvent<HTMLVideoElement>, index: number) => {
+    const video = e.currentTarget
+    const ratio = video.videoWidth / video.videoHeight
+    let orientation: 'landscape' | 'portrait' | 'square' = 'square'
+    if (ratio > 1.2) orientation = 'landscape'
+    else if (ratio < 0.8) orientation = 'portrait'
+    setAspectRatios(prev => ({ ...prev, [index]: orientation }))
+  }
 
   const goTo = (index: number) => {
     if (index < 0) setCurrentIndex(urls.length - 1)
@@ -75,6 +95,14 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
   if (urls.length === 0) return null
 
   const currentUrl = urls[currentIndex]
+  const currentAspect = aspectRatios[currentIndex] || 'square'
+  
+  // Dynamic aspect ratio classes
+  const aspectClass = currentAspect === 'portrait' 
+    ? 'aspect-[9/16] max-w-sm mx-auto' 
+    : currentAspect === 'landscape' 
+      ? 'aspect-video' 
+      : 'aspect-square max-w-md mx-auto'
 
   return (
     <div className="space-y-4">
@@ -84,12 +112,13 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
         onTouchStart={handleTouchStart}
         onTouchEnd={handleTouchEnd}
       >
-        <div className="relative aspect-square md:aspect-video flex items-center justify-center">
+        <div className={`relative flex items-center justify-center transition-all duration-300 ${aspectClass}`}>
           {isImage(currentUrl) ? (
             <img
               src={currentUrl}
               alt={`Mídia ${currentIndex + 1}`}
               className="w-full h-full object-contain"
+              onLoad={(e) => handleImageLoad(e, currentIndex)}
             />
           ) : isVideo(currentUrl) ? (
             <video
@@ -98,6 +127,7 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
               controls
               className="w-full h-full object-contain"
               playsInline
+              onLoadedMetadata={(e) => handleVideoLoad(e, currentIndex)}
             />
           ) : (
             <div className="flex flex-col items-center justify-center text-gray-400">

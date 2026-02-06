@@ -182,37 +182,72 @@ export default function ClientesPage() {
           </CardContent>
         </Card>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {clientes.map(c => (
-            <Link key={c.id} href={`/clientes/${c.slug}`}>
-              <Card className="hover:shadow-md transition-all hover:border-zinc-200 cursor-pointer group h-full">
-                <CardContent className="py-5">
-                  <div className="flex items-start justify-between mb-4">
-                    <Avatar name={c.nome} src={c.logo_url} color={c.cores?.primaria} size="lg" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 max-sm:gap-3">
+          {clientes.map(c => {
+            const primaria = c.cores?.primaria || '#6366F1'
+            const secundaria = c.cores?.secundaria || '#818CF8'
+            return (
+              <Link key={c.id} href={`/clientes/${c.slug}`}>
+                <Card className="overflow-hidden hover:shadow-xl transition-all duration-300 hover:-translate-y-1 cursor-pointer group h-full border-0 shadow-md">
+                  {/* Banner Header com gradiente */}
+                  <div 
+                    className="h-20 max-sm:h-16 relative"
+                    style={{ background: `linear-gradient(135deg, ${primaria} 0%, ${secundaria} 100%)` }}
+                  >
+                    {/* Pattern overlay */}
+                    <div className="absolute inset-0 opacity-10" style={{ backgroundImage: 'url("data:image/svg+xml,%3Csvg width="20" height="20" viewBox="0 0 20 20" xmlns="http://www.w3.org/2000/svg"%3E%3Cg fill="%23fff" fill-opacity="1" fill-rule="evenodd"%3E%3Ccircle cx="3" cy="3" r="3"/%3E%3Ccircle cx="13" cy="13" r="3"/%3E%3C/g%3E%3C/svg%3E")' }} />
+                    
+                    {/* Edit button */}
                     <button
                       onClick={(e) => { e.preventDefault(); openEdit(c) }}
-                      className="text-xs text-zinc-400 hover:text-zinc-600 px-2 py-1 rounded hover:bg-zinc-100"
+                      className="absolute top-2 right-2 w-7 h-7 max-sm:w-6 max-sm:h-6 flex items-center justify-center bg-white/20 hover:bg-white/30 rounded-full text-white/80 hover:text-white transition-all backdrop-blur-sm"
                     >
-                      ✏️
+                      <span className="text-xs">✏️</span>
                     </button>
+                    
+                    {/* Avatar posicionado no banner */}
+                    <div className="absolute -bottom-5 left-4 max-sm:left-3 max-sm:-bottom-4">
+                      <div className="ring-4 ring-white rounded-xl shadow-lg">
+                        <Avatar name={c.nome} src={c.logo_url} color={primaria} size="md" className="w-12 h-12 max-sm:w-10 max-sm:h-10 text-sm" />
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <h3 className="font-semibold text-zinc-900 group-hover:text-blue-600 transition-colors">{c.nome}</h3>
-                    {c._hasAccess ? (
-                      <span className="inline-flex items-center text-[10px] font-medium text-green-700 bg-green-50 px-1.5 py-0.5 rounded-full">Convidado ✓</span>
-                    ) : (
-                      <span className="inline-flex items-center text-[10px] font-medium text-zinc-400 bg-zinc-50 px-1.5 py-0.5 rounded-full">Sem acesso</span>
-                    )}
-                  </div>
-                  <p className="text-xs text-zinc-400 mb-3">@{c.slug}</p>
-                  <div className="flex items-center justify-between">
-                    <span className="text-sm text-zinc-500">{c._count} conteúdos</span>
-                    <ArrowRight className="w-4 h-4 text-zinc-300 group-hover:text-blue-400 transition-colors" />
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
-          ))}
+                  
+                  {/* Content */}
+                  <CardContent className="pt-8 pb-4 px-4 max-sm:pt-7 max-sm:pb-3 max-sm:px-3">
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="min-w-0 flex-1">
+                        <h3 className="font-bold text-zinc-900 group-hover:text-blue-600 transition-colors truncate max-sm:text-sm">
+                          {c.nome}
+                        </h3>
+                        <p className="text-xs text-zinc-400 truncate">@{c.slug}</p>
+                      </div>
+                      {c._hasAccess ? (
+                        <span className="flex-shrink-0 inline-flex items-center text-[9px] font-semibold text-green-700 bg-green-50 px-2 py-1 rounded-full border border-green-100">
+                          ✓ Ativo
+                        </span>
+                      ) : (
+                        <span className="flex-shrink-0 inline-flex items-center text-[9px] font-medium text-zinc-400 bg-zinc-50 px-2 py-1 rounded-full">
+                          Pendente
+                        </span>
+                      )}
+                    </div>
+                    
+                    {/* Stats row */}
+                    <div className="flex items-center justify-between pt-2 border-t border-zinc-100 mt-2">
+                      <div className="flex items-center gap-1.5 text-zinc-500">
+                        <span className="text-sm max-sm:text-xs font-medium">{c._count}</span>
+                        <span className="text-xs text-zinc-400">conteúdos</span>
+                      </div>
+                      <div className="w-8 h-8 max-sm:w-7 max-sm:h-7 rounded-full bg-zinc-50 group-hover:bg-blue-50 flex items-center justify-center transition-colors">
+                        <ArrowRight className="w-4 h-4 max-sm:w-3.5 max-sm:h-3.5 text-zinc-300 group-hover:text-blue-500 transition-colors" />
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              </Link>
+            )
+          })}
         </div>
       )}
 

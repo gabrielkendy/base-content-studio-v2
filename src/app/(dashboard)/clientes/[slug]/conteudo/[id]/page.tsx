@@ -62,9 +62,14 @@ export default function ConteudoDetailPage() {
   const [showHistory, setShowHistory] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
+  // Team members for assignee dropdown
+  const [teamMembers, setTeamMembers] = useState<Member[]>([])
+  const [savingAssignee, setSavingAssignee] = useState(false)
+
   // Inline edit states
   const [editingField, setEditingField] = useState<'titulo' | 'descricao' | 'legenda' | 'data_publicacao' | null>(null)
   const [editValue, setEditValue] = useState('')
+  const [editTimeValue, setEditTimeValue] = useState('') // Para hora
   const [saving, setSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
 
@@ -88,9 +93,9 @@ export default function ConteudoDetailPage() {
     try {
       setLoading(true)
 
-      // Load conteudo
+      // Load conteudo with assignee
       const { data: c, error: cErr } = await db.select('conteudos', {
-        select: '*',
+        select: '*, assignee:members!assigned_to(id, user_id, display_name, avatar_url, role)',
         filters: [{ op: 'eq', col: 'id', val: conteudoId }],
         single: true,
       })
@@ -105,6 +110,20 @@ export default function ConteudoDetailPage() {
         })
         if (clErr) throw new Error(clErr)
         setCliente(cl)
+      }
+
+      // Load team members for assignee dropdown
+      if (org?.id) {
+        const { data: members, error: memErr } = await db.select('members', {
+          filters: [
+            { op: 'eq', col: 'org_id', val: org.id },
+            { op: 'eq', col: 'status', val: 'active' },
+          ],
+          order: { col: 'display_name', asc: true },
+        })
+        if (!memErr && members) {
+          setTeamMembers(members)
+        }
       }
     } catch (err) {
       console.error('Erro ao carregar conteúdo:', err)
@@ -131,11 +150,16 @@ export default function ConteudoDetailPage() {
     setEditingField(field)
     
     if (field === 'data_publicacao') {
-      // Converter data para formato YYYY-MM-DD para o input
+      // Converter data para formato YYYY-MM-DD e HH:mm para os inputs
       const date = conteudo.data_publicacao ? new Date(conteudo.data_publicacao) : new Date()
       setEditValue(date.toISOString().split('T')[0])
+      // Hora no formato HH:mm
+      const hours = date.getHours().toString().padStart(2, '0')
+      const minutes = date.getMinutes().toString().padStart(2, '0')
+      setEditTimeValue(`${hours}:${minutes}`)
     } else {
       setEditValue(conteudo[field] || '')
+      setEditTimeValue('')
     }
     
     // Auto-focus textarea after render
@@ -145,27 +169,62 @@ export default function ConteudoDetailPage() {
   const cancelEditing = () => {
     setEditingField(null)
     setEditValue('')
+    setEditTimeValue('')
   }
 
   const saveField = async () => {
     if (!conteudo || !editingField) return
     setSaving(true)
     try {
+      let valueToSave: string | null = editValue.trim() || null
+
+      // Se for data_publicacao, combinar data + hora
+      if (editingField === 'data_publicacao' && editValue) {
+        const [year, month, day] = editValue.split('-').map(Number)
+        const [hours, minutes] = (editTimeValue || '00:00').split(':').map(Number)
+        const combinedDate = new Date(year, month - 1, day, hours, minutes)
+        valueToSave = combinedDate.toISOString()
+      }
+
       const { error } = await db.update('conteudos', {
-        [editingField]: editValue.trim() || null,
+        [editingField]: valueToSave,
         updated_at: new Date().toISOString(),
       }, { id: conteudo.id })
 
       if (error) throw new Error(error)
 
-      setConteudo(prev => prev ? { ...prev, [editingField]: editValue.trim() || null } : null)
+      setConteudo(prev => prev ? { ...prev, [editingField]: valueToSave } : null)
       setEditingField(null)
       setEditValue('')
+      setEditTimeValue('')
     } catch (err) {
       console.error('Erro ao salvar:', err)
       alert('Erro ao salvar')
     } finally {
       setSaving(false)
+    }
+  }
+
+  // Salvar assignee (membro da equipe)
+  const saveAssignee = async (userId: string | null) => {
+    if (!conteudo) return
+    setSavingAssignee(true)
+    try {
+      const { error } = await db.update('conteudos', {
+        assigned_to: userId,
+        updated_at: new Date().toISOString(),
+      }, { id: conteudo.id })
+
+      if (error) throw new Error(error)
+
+      // Atualizar estado local com o member completo
+      const assignee = userId ? teamMembers.find(m => m.user_id === userId) : undefined
+      setConteudo(prev => prev ? { ...prev, assigned_to: userId, assignee } : null)
+    } catch (err) {
+      console.error('Erro ao atribuir membro:', err)
+      alert('Erro ao atribuir membro')
+    } finally {
+      setSavingAssignee(false)
     }
   }
 
@@ -452,41 +511,86 @@ export default function ConteudoDetailPage() {
         </div>
 
         {/* Meta */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {/* Data de Publicação - Editável */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Data e Hora de Publicação - Editável */}
           {editingField === 'data_publicacao' ? (
-            <div className="flex items-center gap-2">
-              <Calendar className="w-4 h-4 text-blue-500" />
-              <input
-                type="date"
-                value={editValue}
-                onChange={(e) => setEditValue(e.target.value)}
-                className="text-sm border-2 border-blue-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
-                autoFocus
-              />
-              <Button size="sm" onClick={saveField} disabled={saving} className="bg-green-600 hover:bg-green-700 h-8 px-2">
-                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
-              </Button>
-              <Button size="sm" variant="outline" onClick={cancelEditing} disabled={saving} className="h-8 px-2">
-                <X className="w-3 h-3" />
-              </Button>
+            <div className="col-span-1 md:col-span-2 lg:col-span-1 bg-blue-50 rounded-lg p-3 border border-blue-200">
+              <div className="flex items-center gap-2 mb-2">
+                <Calendar className="w-4 h-4 text-blue-600" />
+                <span className="text-xs font-medium text-blue-700">Data e Hora do Post</span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <input
+                  type="date"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  className="text-sm border-2 border-blue-400 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                  autoFocus
+                />
+                <input
+                  type="time"
+                  value={editTimeValue}
+                  onChange={(e) => setEditTimeValue(e.target.value)}
+                  className="text-sm border-2 border-blue-400 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
+                />
+                <div className="flex items-center gap-1">
+                  <Button size="sm" onClick={saveField} disabled={saving} className="bg-green-600 hover:bg-green-700 h-8 px-2">
+                    {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={cancelEditing} disabled={saving} className="h-8 px-2">
+                    <X className="w-3 h-3" />
+                  </Button>
+                </div>
+              </div>
             </div>
           ) : (
             <div 
               className="flex items-center text-sm text-gray-600 cursor-pointer hover:bg-gray-50 rounded px-2 -mx-2 py-1 transition-colors group"
               onClick={() => startEditing('data_publicacao')}
             >
-              <Calendar className="w-4 h-4 mr-2" />
-              {conteudo.data_publicacao ? formatDateFull(conteudo.data_publicacao) : <span className="text-gray-400 italic">Clique para definir data</span>}
+              <Calendar className="w-4 h-4 mr-2 text-blue-500" />
+              <div>
+                {conteudo.data_publicacao ? (
+                  <>
+                    <span>{formatDateFull(conteudo.data_publicacao)}</span>
+                    <span className="ml-2 text-blue-600 font-medium">
+                      <Clock className="w-3 h-3 inline mr-1" />
+                      {new Date(conteudo.data_publicacao).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                    </span>
+                  </>
+                ) : (
+                  <span className="text-gray-400 italic">Clique para definir data e hora</span>
+                )}
+              </div>
               <Pencil className="w-3 h-3 ml-2 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
           )}
-          {(conteudo as any).assignee && (
-            <div className="flex items-center text-sm text-gray-600">
-              <User className="w-4 h-4 mr-2" />
-              {(conteudo as any).assignee.display_name}
-            </div>
-          )}
+
+          {/* Responsável (Assignee) - Editável */}
+          <div className="flex items-center gap-2">
+            <User className="w-4 h-4 text-purple-500" />
+            <select
+              value={conteudo.assigned_to || ''}
+              onChange={(e) => saveAssignee(e.target.value || null)}
+              disabled={savingAssignee}
+              className="text-sm border border-gray-300 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-purple-300 bg-white min-w-[140px] cursor-pointer hover:border-purple-400 transition-colors"
+            >
+              <option value="">Sem responsável</option>
+              {teamMembers.map(m => (
+                <option key={m.user_id} value={m.user_id}>
+                  {m.display_name} ({m.role})
+                </option>
+              ))}
+            </select>
+            {savingAssignee && <Loader2 className="w-4 h-4 animate-spin text-purple-500" />}
+            {conteudo.assignee && !savingAssignee && (
+              <Badge className="bg-purple-100 text-purple-700 text-xs">
+                {conteudo.assignee.role}
+              </Badge>
+            )}
+          </div>
+
+          {/* Canais */}
           {canais.length > 0 && (
             <div className="flex items-center gap-1 text-sm text-gray-600">
               {canais.map((canalId: string) => {

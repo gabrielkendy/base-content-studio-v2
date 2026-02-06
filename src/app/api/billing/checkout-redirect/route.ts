@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import Stripe from 'stripe'
+import { createServiceClient as createClient } from '@/lib/supabase/server'
+import { getStripe } from '@/lib/stripe'
 import { PLANS, PlanId, BillingInterval } from '@/types/billing'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
-})
 
 export async function GET(request: NextRequest) {
   try {
@@ -25,6 +21,8 @@ export async function GET(request: NextRequest) {
     if (!plan) {
       return NextResponse.redirect(`${origin}/pricing`)
     }
+
+    const stripe = getStripe()
 
     // Get or create Stripe customer
     const { data: profile } = await supabase

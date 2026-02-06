@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
+import { notifyTeamInvite } from '@/lib/notifications'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -101,7 +102,35 @@ export async function POST(request: NextRequest) {
     const inviteLink = `${baseUrl}/auth/invite?token=${inviteToken}`
     const displayOrgName = orgName || 'BASE Content Studio'
 
-    // Strategy 1: Send via n8n webhook (Gmail) - most reliable
+    // Strategy 0: Send via Resend (our email system)
+    if (process.env.RESEND_API_KEY) {
+      try {
+        // Get inviter info
+        const { data: inviterProfile } = await admin
+          .from('profiles')
+          .select('name, email')
+          .eq('id', user.id)
+          .single()
+
+        await notifyTeamInvite(
+          email,
+          { id: user.id, email: inviterProfile?.email || '', name: inviterProfile?.name || 'Um colega' },
+          { id: member.org_id, name: displayOrgName },
+          role || 'designer',
+          inviteToken
+        )
+
+        return NextResponse.json({
+          status: 'sent',
+          message: 'Invite email sent successfully via Resend',
+        })
+      } catch (resendErr) {
+        console.warn('Resend email failed:', resendErr)
+        // Continue to other strategies
+      }
+    }
+
+    // Strategy 1: Send via n8n webhook (Gmail) - fallback
     const emailHtml = buildInviteEmailHtml(inviteLink, displayOrgName, role || 'designer')
     const n8nResult = await sendEmailViaN8n(
       email,

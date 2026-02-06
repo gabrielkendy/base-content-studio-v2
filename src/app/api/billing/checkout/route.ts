@@ -1,11 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import Stripe from 'stripe'
+import { createServiceClient as createClient } from '@/lib/supabase/server'
+import { getStripe } from '@/lib/stripe'
 import { PLANS, PlanId, BillingInterval } from '@/types/billing'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
-})
 
 export async function POST(request: NextRequest) {
   try {
@@ -36,6 +32,7 @@ export async function POST(request: NextRequest) {
 
     if (!customerId) {
       // Create Stripe customer
+      const stripe = getStripe()
       const customer = await stripe.customers.create({
         email: user.email,
         metadata: {
@@ -62,6 +59,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Create checkout session
+    const stripe = getStripe()
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',

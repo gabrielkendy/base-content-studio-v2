@@ -1,12 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
+import { getStripe } from '@/lib/stripe'
 import { PlanId } from '@/types/billing'
 import { notifyPaymentFailed, notifySubscriptionCanceled, notifyWelcome } from '@/lib/notifications'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
-})
 
 // Use service role for webhook (no auth context)
 const supabase = createClient(
@@ -23,6 +20,7 @@ export async function POST(request: NextRequest) {
   let event: Stripe.Event
 
   try {
+    const stripe = getStripe()
     event = stripe.webhooks.constructEvent(body, sig, webhookSecret)
   } catch (err: any) {
     console.error('Webhook signature verification failed:', err.message)
@@ -118,7 +116,14 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
 }
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
-  const { customer, metadata, status, current_period_start, current_period_end, cancel_at_period_end, trial_end } = subscription
+  const customer = subscription.customer
+  const metadata = subscription.metadata
+  const status = subscription.status
+  const cancel_at_period_end = subscription.cancel_at_period_end
+  // @ts-ignore - Stripe types may vary
+  const current_period_start = (subscription as any).current_period_start
+  const current_period_end = (subscription as any).current_period_end
+  const trial_end = (subscription as any).trial_end
 
   // Get organization by stripe_customer_id
   const { data: org } = await supabase
@@ -168,7 +173,9 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
 }
 
 async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
-  const { customer, current_period_end } = subscription
+  const customer = subscription.customer
+  // @ts-ignore - Stripe types may vary
+  const current_period_end = (subscription as any).current_period_end
 
   // Get organization by stripe_customer_id
   const { data: org } = await supabase

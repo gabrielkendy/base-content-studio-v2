@@ -112,7 +112,7 @@ export default function ClienteDetailPage() {
           {/* Avatar posicionado */}
           <div className="absolute -bottom-6 left-6 max-sm:left-4 max-sm:-bottom-5">
             <div className="ring-4 ring-white rounded-2xl shadow-xl bg-white">
-              <Avatar name={cliente.nome} src={cliente.logo_url} color={primaria} size="xl" className="w-16 h-16 max-sm:w-14 max-sm:h-14 text-xl rounded-xl" />
+              <Avatar name={cliente.nome} src={cliente.logo_url} color={primaria} size="lg" className="w-16 h-16 max-sm:w-14 max-sm:h-14 text-xl rounded-xl" />
             </div>
           </div>
           

@@ -1,6 +1,7 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { normalizeStatus } from '@/lib/utils'
 import { NextRequest, NextResponse } from 'next/server'
+import { notifyApprovalResponse } from '@/lib/notifications'
 
 export async function GET(request: NextRequest) {
   try {
@@ -159,6 +160,48 @@ export async function POST(request: NextRequest) {
               reference_type: 'conteudo',
             }))
             await supabase.from('notifications').insert(notifications)
+            
+            // Send email notifications
+            try {
+              // Get member emails
+              const memberIds = members.map((m: any) => m.user_id)
+              const { data: profiles } = await supabase
+                .from('profiles')
+                .select('id, email, name')
+                .in('id', memberIds)
+              
+              // Get org name
+              const { data: org } = await supabase
+                .from('organizations')
+                .select('name')
+                .eq('id', conteudo.org_id)
+                .single()
+              
+              // Get client name
+              const { data: client } = await supabase
+                .from('clientes')
+                .select('nome')
+                .eq('id', conteudo.cliente_id)
+                .single()
+
+              if (profiles && profiles.length > 0) {
+                await notifyApprovalResponse(
+                  profiles.map((p: any) => ({ id: p.id, email: p.email, name: p.name })),
+                  { 
+                    id: conteudo.id, 
+                    title: conteudo.titulo,
+                    clientName: client?.nome || 'Cliente',
+                  },
+                  { id: 'client', email: '', name: cliente_nome || 'Cliente' },
+                  status === 'aprovado',
+                  comentario,
+                  org ? { id: conteudo.org_id, name: org.name } : undefined
+                )
+              }
+            } catch (emailErr) {
+              console.error('Email notification error:', emailErr)
+              // Continue - email is not critical
+            }
           }
         }
       } catch (approvalErr) {

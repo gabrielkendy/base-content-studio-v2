@@ -1,10 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
-import Stripe from 'stripe'
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
-  apiVersion: '2024-12-18.acacia',
-})
+import { createServiceClient as createClient } from '@/lib/supabase/server'
+import { getStripe } from '@/lib/stripe'
 
 export async function POST(request: NextRequest) {
   try {
@@ -28,10 +24,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Nenhuma assinatura encontrada' }, { status: 400 })
     }
 
+    const stripe = getStripe()
+
     // Create billing portal session
     const session = await stripe.billingPortal.sessions.create({
       customer: customerId,
-      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/dashboard/configuracoes`,
+      return_url: `${process.env.NEXT_PUBLIC_APP_URL}/configuracoes/assinatura`,
     })
 
     return NextResponse.json({ url: session.url })

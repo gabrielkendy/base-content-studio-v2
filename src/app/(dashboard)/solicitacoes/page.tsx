@@ -188,7 +188,7 @@ export default function SolicitacoesPage() {
           {stats.length > 0 && (
             <div className="flex flex-wrap gap-2 mt-3 pt-3 border-t border-zinc-100">
               {stats.map(s => (
-                <button key={s.key} onClick={() => setFiltroStatus(filtroStatus === s.key ? 'todos' : s.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filtroStatus === s.key ? 'ring-2 ring-offset-1' : ''}`} style={{ backgroundColor: s.color + '15', color: s.color, ringColor: s.color }}>
+                <button key={s.key} onClick={() => setFiltroStatus(filtroStatus === s.key ? 'todos' : s.key)} className={`px-3 py-1.5 rounded-full text-xs font-medium transition-all ${filtroStatus === s.key ? 'ring-2 ring-offset-1' : ''}`} style={{ backgroundColor: s.color + '15', color: s.color, '--tw-ring-color': s.color } as React.CSSProperties}>
                   {s.emoji} {s.count} {s.label}
                 </button>
               ))}

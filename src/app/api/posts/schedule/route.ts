@@ -2,7 +2,6 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-import { buildUsername } from '@/lib/upload-post'
 
 const UPLOAD_POST_API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
 const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY!
@@ -78,8 +77,8 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Build Upload-Post username
-    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
+    // Username = slug do cliente (consistente com v2)
+    const username = cliente.slug
 
     // Get media URLs
     const mediaUrls: string[] = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-import { buildUsername } from '@/lib/upload-post'
+import * as UP from '@/lib/upload-post-v2'
 
 const UPLOAD_POST_API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
 const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY!
@@ -106,25 +106,25 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Verify platforms connected
-    const { data: connectedAccounts } = await admin
-      .from('social_accounts')
-      .select('platform, upload_post_user_id')
-      .eq('cliente_id', cliente_id)
-      .eq('status', 'active')
-      .in('platform', platformStrings)
+    // Username = slug do cliente (consistente com v2)
+    const username = cliente.slug
+    const now = new Date().toISOString()
 
-    const connectedPlatforms = (connectedAccounts || []).map(acc => acc.platform)
+    // Verify platforms connected via Upload-Post API
+    const contas = await UP.verificarConexoes(username)
+    const connectedPlatforms = contas
+      .filter((c: any) => c.conectada)
+      .map((c: any) => c.plataforma)
+
     const missingPlatforms = platformStrings.filter(p => !connectedPlatforms.includes(p))
     
     if (missingPlatforms.length > 0) {
       return NextResponse.json({ 
-        error: `Plataformas não conectadas: ${missingPlatforms.join(', ')}` 
+        error: `Plataformas não conectadas: ${missingPlatforms.join(', ')}`,
+        connected: connectedPlatforms,
+        requested: platformStrings,
       }, { status: 400 })
     }
-
-    const now = new Date().toISOString()
-    const username = buildUsername(membership.org_id, cliente_id, cliente.slug)
 
     // Create the post record
     const { data: scheduledPost, error: insertError } = await admin

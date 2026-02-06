@@ -162,8 +162,21 @@ export default function ConteudoDetailPage() {
     
     if (field === 'data_publicacao') {
       // Converter data para formato YYYY-MM-DD e HH:mm para os inputs
-      const date = conteudo.data_publicacao ? new Date(conteudo.data_publicacao) : new Date()
-      setEditValue(date.toISOString().split('T')[0])
+      let date: Date
+      if (conteudo.data_publicacao) {
+        const parsed = new Date(conteudo.data_publicacao)
+        // Verificar se a data é válida
+        date = isNaN(parsed.getTime()) ? new Date() : parsed
+      } else {
+        date = new Date()
+      }
+      
+      // Formato YYYY-MM-DD para input date
+      const year = date.getFullYear()
+      const month = (date.getMonth() + 1).toString().padStart(2, '0')
+      const day = date.getDate().toString().padStart(2, '0')
+      setEditValue(`${year}-${month}-${day}`)
+      
       // Hora no formato HH:mm
       const hours = date.getHours().toString().padStart(2, '0')
       const minutes = date.getMinutes().toString().padStart(2, '0')
@@ -191,9 +204,30 @@ export default function ConteudoDetailPage() {
 
       // Se for data_publicacao, combinar data + hora
       if (editingField === 'data_publicacao' && editValue) {
-        const [year, month, day] = editValue.split('-').map(Number)
-        const [hours, minutes] = (editTimeValue || '00:00').split(':').map(Number)
+        // Validar formato da data (YYYY-MM-DD)
+        const dateParts = editValue.split('-')
+        if (dateParts.length !== 3) {
+          alert('Formato de data inválido')
+          setSaving(false)
+          return
+        }
+        const [year, month, day] = dateParts.map(Number)
+        
+        // Validar formato da hora (HH:mm) - default 00:00 se vazio
+        const timeParts = (editTimeValue || '00:00').split(':')
+        const hours = parseInt(timeParts[0]) || 0
+        const minutes = parseInt(timeParts[1]) || 0
+        
+        // Criar data combinada
         const combinedDate = new Date(year, month - 1, day, hours, minutes)
+        
+        // Verificar se a data é válida
+        if (isNaN(combinedDate.getTime())) {
+          alert('Data ou hora inválida')
+          setSaving(false)
+          return
+        }
+        
         valueToSave = combinedDate.toISOString()
       }
 

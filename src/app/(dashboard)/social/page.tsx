@@ -1,12 +1,13 @@
 'use client'
 
 import { useEffect, useState } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { useToast } from '@/components/ui/toast'
-import { Share2, Check, X, RefreshCw, ExternalLink } from 'lucide-react'
+import { Share2, Check, X, RefreshCw, Link } from 'lucide-react'
 
 interface Conta {
   plataforma: string
@@ -34,8 +35,19 @@ const ICONES: Record<string, string> = {
 export default function SocialPage() {
   const { org } = useAuth()
   const { toast } = useToast()
+  const searchParams = useSearchParams()
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
+
+  // Detectar retorno do Upload-Post
+  useEffect(() => {
+    const conectado = searchParams.get('conectado')
+    if (conectado) {
+      toast(`✅ Redes conectadas para ${conectado}! Atualizando...`, 'success')
+      // Limpa URL
+      window.history.replaceState({}, '', '/social')
+    }
+  }, [searchParams, toast])
 
   // Carregar clientes
   useEffect(() => {
@@ -104,9 +116,8 @@ export default function SocialPage() {
       const data = await res.json()
       
       if (data.success && data.url) {
-        // Abre nova janela (popup)
-        window.open(data.url, 'conectar-redes', 'width=600,height=700,scrollbars=yes')
-        toast('Janela aberta! Conecte as redes e depois atualize.', 'success')
+        // Redirect direto
+        window.location.href = data.url
       } else {
         toast(data.error || 'Erro ao gerar link', 'error')
       }
@@ -219,7 +230,7 @@ export default function SocialPage() {
                         onClick={() => abrirConexao(cliente)}
                         disabled={cliente.loading}
                       >
-                        <ExternalLink className="w-4 h-4 mr-1" />
+                        <Link className="w-4 h-4 mr-1" />
                         Conectar
                       </Button>
                     </div>

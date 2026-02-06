@@ -83,13 +83,15 @@ export const CANAIS = [
 ] as const
 
 export function formatDate(dateStr: string | null) {
-  if (!dateStr) return '—'
+  if (!dateStr) return '-'
   const d = new Date(dateStr + 'T00:00:00')
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
 }
 
 export function formatDateFull(dateStr: string | null) {
-  if (!dateStr) return '—'
-  const d = new Date(dateStr + 'T00:00:00')
+  if (!dateStr) return '-'
+  // Suporta ISO completo (2026-02-07T21:00:00.000Z) ou só data (2026-02-07)
+  const d = new Date(dateStr.includes('T') ? dateStr : dateStr + 'T00:00:00')
+  if (isNaN(d.getTime())) return 'Invalid Date'
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'long', year: 'numeric' })
 }

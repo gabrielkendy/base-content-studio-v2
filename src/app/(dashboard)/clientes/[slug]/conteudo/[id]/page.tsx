@@ -63,7 +63,7 @@ export default function ConteudoDetailPage() {
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
   // Inline edit states
-  const [editingField, setEditingField] = useState<'titulo' | 'descricao' | 'legenda' | null>(null)
+  const [editingField, setEditingField] = useState<'titulo' | 'descricao' | 'legenda' | 'data_publicacao' | null>(null)
   const [editValue, setEditValue] = useState('')
   const [saving, setSaving] = useState(false)
   const textareaRef = useRef<HTMLTextAreaElement>(null)
@@ -126,10 +126,18 @@ export default function ConteudoDetailPage() {
   }
 
   // Inline edit functions
-  const startEditing = (field: 'titulo' | 'descricao' | 'legenda') => {
+  const startEditing = (field: 'titulo' | 'descricao' | 'legenda' | 'data_publicacao') => {
     if (!conteudo) return
     setEditingField(field)
-    setEditValue(conteudo[field] || '')
+    
+    if (field === 'data_publicacao') {
+      // Converter data para formato YYYY-MM-DD para o input
+      const date = conteudo.data_publicacao ? new Date(conteudo.data_publicacao) : new Date()
+      setEditValue(date.toISOString().split('T')[0])
+    } else {
+      setEditValue(conteudo[field] || '')
+    }
+    
     // Auto-focus textarea after render
     setTimeout(() => textareaRef.current?.focus(), 50)
   }
@@ -445,10 +453,34 @@ export default function ConteudoDetailPage() {
 
         {/* Meta */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          <div className="flex items-center text-sm text-gray-600">
-            <Calendar className="w-4 h-4 mr-2" />
-            {conteudo.data_publicacao ? formatDateFull(conteudo.data_publicacao) : 'Sem data'}
-          </div>
+          {/* Data de Publicação - Editável */}
+          {editingField === 'data_publicacao' ? (
+            <div className="flex items-center gap-2">
+              <Calendar className="w-4 h-4 text-blue-500" />
+              <input
+                type="date"
+                value={editValue}
+                onChange={(e) => setEditValue(e.target.value)}
+                className="text-sm border-2 border-blue-500 rounded px-2 py-1 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                autoFocus
+              />
+              <Button size="sm" onClick={saveField} disabled={saving} className="bg-green-600 hover:bg-green-700 h-8 px-2">
+                {saving ? <Loader2 className="w-3 h-3 animate-spin" /> : <Save className="w-3 h-3" />}
+              </Button>
+              <Button size="sm" variant="outline" onClick={cancelEditing} disabled={saving} className="h-8 px-2">
+                <X className="w-3 h-3" />
+              </Button>
+            </div>
+          ) : (
+            <div 
+              className="flex items-center text-sm text-gray-600 cursor-pointer hover:bg-gray-50 rounded px-2 -mx-2 py-1 transition-colors group"
+              onClick={() => startEditing('data_publicacao')}
+            >
+              <Calendar className="w-4 h-4 mr-2" />
+              {conteudo.data_publicacao ? formatDateFull(conteudo.data_publicacao) : <span className="text-gray-400 italic">Clique para definir data</span>}
+              <Pencil className="w-3 h-3 ml-2 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+            </div>
+          )}
           {(conteudo as any).assignee && (
             <div className="flex items-center text-sm text-gray-600">
               <User className="w-4 h-4 mr-2" />

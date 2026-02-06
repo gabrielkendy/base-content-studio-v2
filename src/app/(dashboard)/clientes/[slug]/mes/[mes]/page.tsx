@@ -59,7 +59,22 @@ export default function ClienteMesPage() {
     const memberMap = new Map((members || []).map((m: Member) => [m.user_id, m]))
 
     const { data: conts } = await db.select('conteudos', { filters: [{ op: 'eq', col: 'empresa_id', val: c.id }, { op: 'eq', col: 'ano', val: ano }, { op: 'eq', col: 'mes', val: mes }], order: [{ col: 'data_publicacao', asc: true }, { col: 'ordem', asc: true }] })
-    setConteudos((conts || []).map((cont: any) => ({ ...cont, status: normalizeStatus(cont.status || 'rascunho'), assignee: cont.assigned_to ? memberMap.get(cont.assigned_to) : undefined })))
+    // Ordenar por data_publicacao (cronograma) - NULLs vão pro final
+    const sortedConts = (conts || [])
+      .map((cont: any) => ({ ...cont, status: normalizeStatus(cont.status || 'rascunho'), assignee: cont.assigned_to ? memberMap.get(cont.assigned_to) : undefined }))
+      .sort((a: any, b: any) => {
+        // Se ambos tem data, ordena por data/hora
+        if (a.data_publicacao && b.data_publicacao) {
+          return new Date(a.data_publicacao).getTime() - new Date(b.data_publicacao).getTime()
+        }
+        // Se só A tem data, A vem primeiro
+        if (a.data_publicacao && !b.data_publicacao) return -1
+        // Se só B tem data, B vem primeiro
+        if (!a.data_publicacao && b.data_publicacao) return 1
+        // Se nenhum tem data, ordena por ordem
+        return (a.ordem || 0) - (b.ordem || 0)
+      })
+    setConteudos(sortedConts)
 
     const { data: sols } = await db.select('solicitacoes', { filters: [{ op: 'eq', col: 'cliente_id', val: c.id }, { op: 'eq', col: 'org_id', val: org!.id }], order: [{ col: 'created_at', asc: false }] })
     setSolicitacoes((sols || []).slice(0, 10))

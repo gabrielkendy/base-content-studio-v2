@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-import { getProfile, parseSocialAccounts, buildUsername } from '@/lib/upload-post'
+import * as UP from '@/lib/upload-post-v2'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -61,29 +61,29 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Build username (same as schedule uses)
-    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
+    // Usar a mesma lógica da v2: username = slug do cliente
+    const username = cliente.slug
 
-    // Get profile from Upload-Post
-    const profileResult = await getProfile(username)
+    // Verificar conexões usando a mesma função da v2
+    const contas = await UP.verificarConexoes(username)
 
-    if (!profileResult.success || !profileResult.profile) {
-      // Profile doesn't exist yet - return empty accounts
-      return NextResponse.json({
-        username,
-        exists: false,
-        accounts: [],
-      })
-    }
-
-    // Parse social accounts
-    const accounts = parseSocialAccounts(profileResult.profile.social_accounts)
+    // Converter formato v2 para formato esperado pelo agendar post
+    const accounts = contas
+      .filter((c: any) => c.conectada)
+      .map((c: any) => ({
+        id: `${c.plataforma}_${username}`,
+        platform: c.plataforma,
+        profile_id: username,
+        profile_name: c.nome || c.plataforma,
+        profile_avatar: c.avatar || null,
+        status: 'connected',
+      }))
 
     return NextResponse.json({
+      success: true,
       username,
       exists: true,
       accounts,
-      created_at: profileResult.profile.created_at,
     })
   } catch (error) {
     console.error('Social status error:', error)

@@ -34,7 +34,6 @@ const NAV_ITEMS = [
   { href: '/agendar', label: 'Agendar Post', icon: CalendarPlus },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/workflow', label: 'Workflow', icon: Kanban },
-  { href: '/social', label: 'Redes Sociais', icon: Share2 },
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/notificacoes', label: 'Notificações', icon: Bell },
   { divider: true },

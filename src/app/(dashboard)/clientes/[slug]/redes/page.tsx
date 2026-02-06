@@ -52,10 +52,22 @@ export default function RedesSociaisPage() {
   const fetchStatus = useCallback(async (showRefresh = false) => {
     if (showRefresh) setRefreshing(true)
     try {
-      const res = await fetch(`/api/social/status?clienteSlug=${slug}`)
+      const res = await fetch(`/api/v2/social?action=conexoes&cliente=${slug}`)
       const data = await res.json()
-      if (data.success) {
-        setSocialAccounts(data.accounts || [])
+      if (data.success && data.contas) {
+        // Converte formato da API v2 para o formato esperado
+        const accounts: SocialAccount[] = data.contas
+          .filter((c: any) => c.conectada)
+          .map((c: any) => ({
+            id: c.plataforma,
+            cliente_id: '',
+            platform: c.plataforma,
+            profile_name: c.nome || c.handle,
+            profile_avatar: c.avatar,
+            status: 'active',
+            connected_at: '',
+          }))
+        setSocialAccounts(accounts)
       }
     } catch (err) {
       console.error('Error fetching status:', err)
@@ -110,23 +122,8 @@ export default function RedesSociaisPage() {
     
     setCliente(c)
     
-    // Fetch real status from Upload-Post
-    try {
-      const res = await fetch(`/api/social/status?clienteSlug=${slug}`)
-      const data = await res.json()
-      if (data.success) {
-        setSocialAccounts(data.accounts || [])
-      }
-    } catch (err) {
-      // Fallback: load from Supabase directly
-      const { data: accounts } = await db.select('social_accounts', {
-        filters: [
-          { op: 'eq', col: 'cliente_id', val: c.id },
-          { op: 'eq', col: 'status', val: 'active' },
-        ],
-      })
-      setSocialAccounts(accounts || [])
-    }
+    // Fetch real status from Upload-Post via API v2
+    await fetchStatus()
     
     setLoading(false)
   }
@@ -136,31 +133,26 @@ export default function RedesSociaisPage() {
     setConnecting(true)
     
     try {
-      const res = await fetch('/api/social/connect', {
+      const res = await fetch('/api/v2/social', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
+          action: 'link',
           clienteSlug: slug,
-          platforms,
+          clienteNome: cliente.nome,
         }),
       })
       
       const data = await res.json()
       
-      if (!res.ok || !data.access_url) {
+      if (!res.ok || !data.url) {
         toast(data.error || 'Erro ao gerar link de conexão', 'error')
         setConnecting(false)
         return
       }
 
-      // Abrir em NOVA ABA (igual mLabs) - não popup!
-      // O callback vai redirecionar de volta pra cá
-      window.open(data.access_url, '_blank')
-      
-      // Reset connecting após 2s (usuário foi pra outra aba)
-      setTimeout(() => {
-        setConnecting(false)
-      }, 2000)
+      // Redirect direto (simples!)
+      window.location.href = data.url
 
     } catch (error) {
       toast('Erro ao conectar. Tente novamente.', 'error')

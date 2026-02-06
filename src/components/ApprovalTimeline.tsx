@@ -12,7 +12,12 @@ import {
   User,
   Building2,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  Eye,
+  Smartphone,
+  Monitor,
+  Tablet,
+  Globe
 } from 'lucide-react'
 import type { Approval, Conteudo } from '@/types/database'
 
@@ -21,6 +26,7 @@ interface ApprovalTimelineProps {
   conteudo?: Conteudo
   className?: string
   compact?: boolean
+  showLinkTracking?: boolean
 }
 
 interface TimelineEvent {
@@ -46,13 +52,29 @@ const EVENT_CONFIG: Record<string, { icon: any; color: string; bgColor: string }
   status_change: { icon: Clock, color: 'text-indigo-600', bgColor: 'bg-indigo-100' },
 }
 
-export function ApprovalTimeline({ conteudoId, conteudo, className = '', compact = false }: ApprovalTimelineProps) {
+interface LinkTracking {
+  token: string
+  status: string
+  view_count: number
+  last_viewed_at: string | null
+  views: Array<{
+    viewed_at: string
+    device: string
+    browser: string
+    ip_address: string
+  }>
+  created_at: string
+}
+
+export function ApprovalTimeline({ conteudoId, conteudo, className = '', compact = false, showLinkTracking = true }: ApprovalTimelineProps) {
   const [approvals, setApprovals] = useState<Approval[]>([])
+  const [linkTracking, setLinkTracking] = useState<LinkTracking[]>([])
   const [loading, setLoading] = useState(true)
   const [expanded, setExpanded] = useState(!compact)
 
   useEffect(() => {
     loadApprovals()
+    if (showLinkTracking) loadLinkTracking()
   }, [conteudoId])
 
   async function loadApprovals() {
@@ -66,6 +88,18 @@ export function ApprovalTimeline({ conteudoId, conteudo, className = '', compact
       console.error('Error loading approvals:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  async function loadLinkTracking() {
+    try {
+      const res = await fetch(`/api/approvals/links?conteudo_id=${conteudoId}`)
+      const json = await res.json()
+      if (json.data) {
+        setLinkTracking(json.data)
+      }
+    } catch (err) {
+      console.error('Error loading link tracking:', err)
     }
   }
 
@@ -221,6 +255,78 @@ export function ApprovalTimeline({ conteudoId, conteudo, className = '', compact
           })}
         </div>
       </div>
+
+      {/* 📊 Link Tracking */}
+      {showLinkTracking && linkTracking.length > 0 && (
+        <div className="mt-6 pt-4 border-t border-gray-100">
+          <h4 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
+            <Eye className="w-4 h-4" /> Tracking dos Links
+          </h4>
+          <div className="space-y-3">
+            {linkTracking.map((link, i) => (
+              <div key={link.token} className="bg-gray-50 rounded-lg p-3 border border-gray-100">
+                <div className="flex items-center justify-between mb-2">
+                  <div className="flex items-center gap-2">
+                    <span className={`w-2 h-2 rounded-full ${
+                      link.status === 'aprovado' ? 'bg-green-500' : 
+                      link.status === 'ajuste' ? 'bg-amber-500' : 'bg-blue-500'
+                    }`} />
+                    <span className="text-xs font-medium text-gray-600">
+                      Link #{linkTracking.length - i}
+                    </span>
+                    <span className={`text-xs px-2 py-0.5 rounded ${
+                      link.status === 'aprovado' ? 'bg-green-100 text-green-700' : 
+                      link.status === 'ajuste' ? 'bg-amber-100 text-amber-700' : 
+                      'bg-blue-100 text-blue-700'
+                    }`}>
+                      {link.status === 'aprovado' ? '✅ Aprovado' : 
+                       link.status === 'ajuste' ? '🔄 Ajuste' : '⏳ Pendente'}
+                    </span>
+                  </div>
+                  <span className="text-xs text-gray-400">
+                    {formatRelativeTime(link.created_at)}
+                  </span>
+                </div>
+                
+                {/* Visualizações */}
+                <div className="flex items-center gap-4 text-xs text-gray-500">
+                  <span className="flex items-center gap-1">
+                    <Eye className="w-3 h-3" />
+                    {link.view_count || 0} visualizações
+                  </span>
+                  {link.last_viewed_at && (
+                    <span>
+                      Último acesso: {formatRelativeTime(link.last_viewed_at)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Detalhes dos acessos */}
+                {link.views && link.views.length > 0 && (
+                  <div className="mt-2 pt-2 border-t border-gray-200">
+                    <p className="text-xs font-medium text-gray-600 mb-1">Acessos recentes:</p>
+                    <div className="space-y-1 max-h-24 overflow-y-auto">
+                      {link.views.slice(-5).reverse().map((view, vi) => (
+                        <div key={vi} className="flex items-center gap-2 text-xs text-gray-500">
+                          {view.device === 'mobile' ? <Smartphone className="w-3 h-3" /> :
+                           view.device === 'tablet' ? <Tablet className="w-3 h-3" /> :
+                           <Monitor className="w-3 h-3" />}
+                          <span>{view.browser}</span>
+                          <span className="text-gray-300">•</span>
+                          <Globe className="w-3 h-3" />
+                          <span className="font-mono">{view.ip_address?.substring(0, 15)}</span>
+                          <span className="text-gray-300">•</span>
+                          <span>{formatRelativeTime(view.viewed_at)}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

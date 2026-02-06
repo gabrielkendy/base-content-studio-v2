@@ -27,6 +27,46 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'expired' }, { status: 410 })
     }
 
+    // 📊 TRACKING: Registrar acesso ao link
+    const userAgent = request.headers.get('user-agent') || ''
+    const ip = request.headers.get('x-forwarded-for')?.split(',')[0] || 
+               request.headers.get('x-real-ip') || 
+               'unknown'
+    
+    // Detectar dispositivo
+    const isMobile = /Mobile|Android|iPhone|iPad/i.test(userAgent)
+    const isTablet = /iPad|Tablet/i.test(userAgent)
+    const device = isTablet ? 'tablet' : (isMobile ? 'mobile' : 'desktop')
+    
+    // Detectar navegador
+    let browser = 'unknown'
+    if (userAgent.includes('Chrome')) browser = 'Chrome'
+    else if (userAgent.includes('Firefox')) browser = 'Firefox'
+    else if (userAgent.includes('Safari')) browser = 'Safari'
+    else if (userAgent.includes('Edge')) browser = 'Edge'
+    
+    // Registrar visualização
+    const viewData = {
+      viewed_at: new Date().toISOString(),
+      ip_address: ip,
+      user_agent: userAgent.substring(0, 500),
+      device,
+      browser,
+    }
+    
+    // Atualizar contagem de visualizações e último acesso
+    const views = (aprovacao as any).views || []
+    views.push(viewData)
+    
+    await supabase
+      .from('aprovacoes_links')
+      .update({
+        last_viewed_at: new Date().toISOString(),
+        view_count: (aprovacao as any).view_count ? (aprovacao as any).view_count + 1 : 1,
+        views: views.slice(-50), // Manter apenas últimas 50 visualizações
+      })
+      .eq('token', token)
+
     return NextResponse.json({ data: aprovacao })
   } catch (err: any) {
     console.error('Public aprovacao GET error:', err)
@@ -91,10 +131,13 @@ export async function POST(request: NextRequest) {
       // 'ajuste' = precisa de ajustes
       const newContentStatus = status === 'aprovado' ? 'aguardando_agendamento' : 'ajuste'
       
+      // Salvar feedback diretamente no conteúdo para ficar visível
       await supabase
         .from('conteudos')
         .update({
           status: newContentStatus,
+          comentario_cliente: status === 'ajuste' ? (comentario || null) : null,
+          cliente_nome_feedback: cliente_nome || null,
           updated_at: new Date().toISOString(),
         })
         .eq('id', conteudo.id)

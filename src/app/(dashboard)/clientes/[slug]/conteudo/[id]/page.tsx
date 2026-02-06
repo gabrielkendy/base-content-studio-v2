@@ -78,6 +78,14 @@ export default function ConteudoDetailPage() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useState<HTMLInputElement | null>(null)
 
+  // Cover/Thumbnail state para Reels
+  const [showCoverSelector, setShowCoverSelector] = useState(false)
+  const [uploadingCover, setUploadingCover] = useState(false)
+  const videoRef = useRef<HTMLVideoElement>(null)
+  
+  // Preview mode (tamanho real)
+  const [previewMode, setPreviewMode] = useState<'feed' | 'reels' | 'story' | null>(null)
+
   // Current user info for approvals
   const currentUser = member ? {
     id: member.user_id,
@@ -161,26 +169,33 @@ export default function ConteudoDetailPage() {
     setEditingField(field)
     
     if (field === 'data_publicacao') {
-      // Converter data para formato YYYY-MM-DD e HH:mm para os inputs
-      let date: Date
+      console.log('🔵 Abrindo edição de data. Valor atual:', conteudo.data_publicacao)
+      
       if (conteudo.data_publicacao) {
         const parsed = new Date(conteudo.data_publicacao)
-        // Verificar se a data é válida
-        date = isNaN(parsed.getTime()) ? new Date() : parsed
+        if (!isNaN(parsed.getTime())) {
+          // Formato YYYY-MM-DD para input date
+          const year = parsed.getFullYear()
+          const month = (parsed.getMonth() + 1).toString().padStart(2, '0')
+          const day = parsed.getDate().toString().padStart(2, '0')
+          setEditValue(`${year}-${month}-${day}`)
+          
+          // Hora no formato HH:mm
+          const hours = parsed.getHours().toString().padStart(2, '0')
+          const minutes = parsed.getMinutes().toString().padStart(2, '0')
+          setEditTimeValue(`${hours}:${minutes}`)
+          
+          console.log('🔵 Data parseada:', { year, month, day, hours, minutes })
+        } else {
+          // Data inválida - limpar campos
+          setEditValue('')
+          setEditTimeValue('12:00')
+        }
       } else {
-        date = new Date()
+        // Sem data - campos vazios (NÃO usar data atual)
+        setEditValue('')
+        setEditTimeValue('12:00')
       }
-      
-      // Formato YYYY-MM-DD para input date
-      const year = date.getFullYear()
-      const month = (date.getMonth() + 1).toString().padStart(2, '0')
-      const day = date.getDate().toString().padStart(2, '0')
-      setEditValue(`${year}-${month}-${day}`)
-      
-      // Hora no formato HH:mm
-      const hours = date.getHours().toString().padStart(2, '0')
-      const minutes = date.getMinutes().toString().padStart(2, '0')
-      setEditTimeValue(`${hours}:${minutes}`)
     } else {
       setEditValue(conteudo[field] || '')
       setEditTimeValue('')
@@ -203,50 +218,61 @@ export default function ConteudoDetailPage() {
       let valueToSave: string | null = editValue.trim() || null
 
       // Se for data_publicacao, combinar data + hora
-      if (editingField === 'data_publicacao' && editValue) {
-        // Validar formato da data (YYYY-MM-DD)
-        const dateParts = editValue.split('-')
-        if (dateParts.length !== 3) {
-          alert('Formato de data inválido')
-          setSaving(false)
-          return
+      if (editingField === 'data_publicacao') {
+        if (editValue) {
+          // Validar formato da data (YYYY-MM-DD)
+          const dateParts = editValue.split('-')
+          if (dateParts.length !== 3) {
+            alert('Formato de data inválido')
+            setSaving(false)
+            return
+          }
+          const [year, month, day] = dateParts.map(Number)
+          
+          // Validar formato da hora (HH:mm) - default 12:00 se vazio
+          const timeParts = (editTimeValue || '12:00').split(':')
+          const hours = parseInt(timeParts[0]) || 12
+          const minutes = parseInt(timeParts[1]) || 0
+          
+          // Criar data combinada (usando UTC para evitar problemas de timezone)
+          const combinedDate = new Date(Date.UTC(year, month - 1, day, hours, minutes))
+          
+          // Verificar se a data é válida
+          if (isNaN(combinedDate.getTime())) {
+            alert('Data ou hora inválida')
+            setSaving(false)
+            return
+          }
+          
+          valueToSave = combinedDate.toISOString()
+        } else {
+          valueToSave = null
         }
-        const [year, month, day] = dateParts.map(Number)
-        
-        // Validar formato da hora (HH:mm) - default 00:00 se vazio
-        const timeParts = (editTimeValue || '00:00').split(':')
-        const hours = parseInt(timeParts[0]) || 0
-        const minutes = parseInt(timeParts[1]) || 0
-        
-        // Criar data combinada
-        const combinedDate = new Date(year, month - 1, day, hours, minutes)
-        
-        // Verificar se a data é válida
-        if (isNaN(combinedDate.getTime())) {
-          alert('Data ou hora inválida')
-          setSaving(false)
-          return
-        }
-        
-        valueToSave = combinedDate.toISOString()
       }
 
-      console.log('Salvando campo:', editingField, 'valor:', valueToSave)
+      console.log('🔵 Salvando campo:', editingField, 'valor:', valueToSave)
       
-      const { data: updated, error } = await db.update('conteudos', {
+      const { error } = await db.update('conteudos', {
         [editingField]: valueToSave,
         updated_at: new Date().toISOString(),
       }, { id: conteudo.id })
 
-      console.log('Resultado update:', { updated, error })
-
       if (error) {
-        console.error('Erro no update:', error)
+        console.error('❌ Erro no update:', error)
         throw new Error(error)
       }
 
-      // Recarregar dados do banco para garantir sincronização
-      await loadData()
+      console.log('✅ Salvo com sucesso!')
+
+      // IMPORTANTE: Atualizar estado local DIRETAMENTE (evita problema de cache)
+      setConteudo(prev => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          [editingField]: valueToSave,
+          updated_at: new Date().toISOString(),
+        }
+      })
       
       setEditingField(null)
       setEditValue('')
@@ -563,6 +589,30 @@ export default function ConteudoDetailPage() {
             ))}
           </select>
         </div>
+
+        {/* 🔴 FEEDBACK DO CLIENTE - Aparece quando tem ajuste pendente */}
+        {(conteudo.status === 'ajuste' || (conteudo as any).comentario_cliente) && (
+          <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-xl">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
+                <MessageSquare className="w-5 h-5 text-amber-700" />
+              </div>
+              <div className="flex-1">
+                <h4 className="font-bold text-amber-800 mb-1">⚠️ Cliente pediu ajuste!</h4>
+                {(conteudo as any).comentario_cliente ? (
+                  <div className="bg-white rounded-lg p-3 border border-amber-200">
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{(conteudo as any).comentario_cliente}</p>
+                  </div>
+                ) : (
+                  <p className="text-sm text-amber-700">Verifique o histórico de aprovações para mais detalhes.</p>
+                )}
+                {(conteudo as any).cliente_nome && (
+                  <p className="text-xs text-amber-600 mt-2">— {(conteudo as any).cliente_nome}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
 
         {/* Meta */}
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -949,6 +999,213 @@ export default function ConteudoDetailPage() {
                 <span className="text-xs text-gray-400">Adicionar mais</span>
               </div>
             </label>
+          </div>
+        )}
+      </Card>
+
+      {/* Capa do Vídeo (Reels/Stories) - Só aparece se tem vídeo */}
+      {mediaUrls.some((url: string) => isVideo(url)) && (
+        <Card className="p-6 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+              🎬 Capa do Vídeo
+              <Badge className="bg-purple-100 text-purple-700 text-xs">Reels/Stories</Badge>
+            </h3>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowCoverSelector(!showCoverSelector)}
+              className="border-purple-300 text-purple-700 hover:bg-purple-50"
+            >
+              {showCoverSelector ? 'Fechar' : 'Definir Capa'}
+            </Button>
+          </div>
+          
+          {/* Capa atual */}
+          {(conteudo as any).cover_url ? (
+            <div className="mb-4">
+              <p className="text-xs text-gray-500 mb-2">Capa selecionada:</p>
+              <div className="relative w-32 h-40 rounded-lg overflow-hidden border-2 border-purple-400 shadow-lg">
+                <img src={(conteudo as any).cover_url} alt="Capa" className="w-full h-full object-cover" />
+              </div>
+            </div>
+          ) : (
+            <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center">
+              <Film className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+              <p className="text-sm text-gray-500">Nenhuma capa definida</p>
+              <p className="text-xs text-gray-400">O primeiro frame será usado automaticamente</p>
+            </div>
+          )}
+
+          {showCoverSelector && (
+            <div className="space-y-4 pt-4 border-t border-gray-100">
+              {/* Opções de capa */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                {/* Upload customizado */}
+                <label className="cursor-pointer">
+                  <input
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={async (e) => {
+                      const file = e.target.files?.[0]
+                      if (!file || !conteudo || !cliente) return
+                      setUploadingCover(true)
+                      try {
+                        // Get presigned URL
+                        const res = await fetch('/api/posts/media-presign', {
+                          method: 'POST',
+                          headers: { 'Content-Type': 'application/json' },
+                          body: JSON.stringify({
+                            conteudoId: conteudo.id,
+                            clienteId: cliente.id,
+                            files: [{ name: `cover-${file.name}`, type: file.type, size: file.size }],
+                          }),
+                        })
+                        if (!res.ok) throw new Error('Erro ao fazer upload')
+                        const { urls } = await res.json()
+                        const { uploadUrl, publicUrl } = urls[0]
+                        
+                        // Upload
+                        const uploadRes = await fetch(uploadUrl, {
+                          method: 'PUT',
+                          headers: { 'Content-Type': file.type },
+                          body: file,
+                        })
+                        if (!uploadRes.ok) throw new Error('Erro no upload')
+                        
+                        // Salvar URL da capa
+                        await db.update('conteudos', { cover_url: publicUrl, updated_at: new Date().toISOString() }, { id: conteudo.id })
+                        setConteudo(prev => prev ? { ...prev, cover_url: publicUrl } as any : null)
+                        setShowCoverSelector(false)
+                      } catch (err) {
+                        console.error('Erro:', err)
+                        alert('Erro ao fazer upload da capa')
+                      }
+                      setUploadingCover(false)
+                      e.target.value = ''
+                    }}
+                    disabled={uploadingCover}
+                  />
+                  <div className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-all ${uploadingCover ? 'border-gray-200 bg-gray-50' : 'border-purple-300 hover:border-purple-500 hover:bg-purple-50 cursor-pointer'}`}>
+                    {uploadingCover ? (
+                      <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
+                    ) : (
+                      <>
+                        <Upload className="w-6 h-6 text-purple-400 mb-1" />
+                        <span className="text-xs text-purple-600 font-medium">Enviar Imagem</span>
+                      </>
+                    )}
+                  </div>
+                </label>
+
+                {/* Frames do vídeo como opções */}
+                {mediaUrls.filter((url: string) => isVideo(url)).slice(0, 1).map((videoUrl: string, i: number) => (
+                  <div key={i} className="col-span-3 grid grid-cols-3 gap-2">
+                    {[0, 25, 50, 75].map((pct) => (
+                      <button
+                        key={pct}
+                        onClick={async () => {
+                          // Usar thumbnail do vídeo (precisa de um serviço de processamento)
+                          // Por agora, vamos só mostrar que pode selecionar
+                          alert(`Seleção de frame ${pct}% - Em breve!`)
+                        }}
+                        className="h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex flex-col items-center justify-center border-2 border-gray-200 hover:border-purple-400 transition-all"
+                      >
+                        <Film className="w-5 h-5 text-gray-400 mb-1" />
+                        <span className="text-[10px] text-gray-500">Frame {pct}%</span>
+                      </button>
+                    ))}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Preview no Tamanho Real */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
+            📱 Preview da Publicação
+          </h3>
+          <div className="flex items-center gap-2">
+            {[
+              { id: 'feed', label: 'Feed', ratio: '4:5', icon: '⬜' },
+              { id: 'reels', label: 'Reels', ratio: '9:16', icon: '📱' },
+              { id: 'story', label: 'Story', ratio: '9:16', icon: '⭕' },
+            ].map((mode) => (
+              <button
+                key={mode.id}
+                onClick={() => setPreviewMode(previewMode === mode.id ? null : mode.id as any)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                  previewMode === mode.id
+                    ? 'bg-blue-600 text-white shadow-sm'
+                    : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                }`}
+              >
+                {mode.icon} {mode.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {previewMode && mediaUrls.length > 0 && (
+          <div className="flex justify-center py-6 bg-gray-900 rounded-xl">
+            <div 
+              className={`bg-black rounded-2xl overflow-hidden shadow-2xl border-4 border-gray-700 relative ${
+                previewMode === 'feed' ? 'w-[320px] aspect-[4/5]' : 'w-[280px] aspect-[9/16]'
+              }`}
+            >
+              {/* Mockup header */}
+              <div className="absolute top-0 left-0 right-0 z-10 p-3 bg-gradient-to-b from-black/60 to-transparent">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500" />
+                  <div>
+                    <p className="text-white text-xs font-semibold">{cliente?.nome || 'Perfil'}</p>
+                    <p className="text-white/60 text-[10px]">Publicação</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Conteúdo */}
+              {isVideo(mediaUrls[0]) ? (
+                <video 
+                  ref={videoRef}
+                  src={mediaUrls[0]} 
+                  className="w-full h-full object-cover"
+                  loop
+                  muted
+                  playsInline
+                  autoPlay
+                />
+              ) : (
+                <img src={mediaUrls[0]} alt="Preview" className="w-full h-full object-cover" />
+              )}
+
+              {/* Mockup footer */}
+              <div className="absolute bottom-0 left-0 right-0 z-10 p-3 bg-gradient-to-t from-black/80 to-transparent">
+                {conteudo?.legenda && (
+                  <p className="text-white text-xs line-clamp-2 mb-2">{conteudo.legenda.substring(0, 100)}...</p>
+                )}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3 text-white/80">
+                    <span className="text-lg">♡</span>
+                    <span className="text-lg">💬</span>
+                    <span className="text-lg">➤</span>
+                  </div>
+                  <span className="text-lg text-white/80">⊞</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {!previewMode && (
+          <div className="text-center py-8 text-gray-400">
+            <ImageIcon className="w-10 h-10 mx-auto mb-2 opacity-50" />
+            <p className="text-sm">Selecione um formato acima para visualizar</p>
           </div>
         )}
       </Card>

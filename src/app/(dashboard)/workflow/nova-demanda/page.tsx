@@ -145,6 +145,16 @@ export default function NovaDemandaPage() {
       })
       const novaOrdem = (existentes?.[0]?.ordem || 0) + 1
 
+      // Combinar data + hora para ISO completo
+      let dataPublicacaoFinal: string | null = null
+      if (dataPublicacao) {
+        // Criar data completa combinando data + hora
+        const [year, month, day] = dataPublicacao.split('-').map(Number)
+        const [hour, minute] = (horaPublicacao || '12:00').split(':').map(Number)
+        const dataCompleta = new Date(year, month - 1, day, hour, minute)
+        dataPublicacaoFinal = dataCompleta.toISOString()
+      }
+
       // Criar conteúdo
       const { data: novoConteudo, error } = await db.insert('conteudos', {
         org_id: org!.id,
@@ -152,7 +162,7 @@ export default function NovaDemandaPage() {
         titulo: titulo.trim(),
         tipo,
         canais: canaisSelecionados,
-        data_publicacao: dataPublicacao || null,
+        data_publicacao: dataPublicacaoFinal,
         descricao: briefing || null,
         badge: tags.length > 0 ? tags[0] : null,
         status: saveAsDraft ? 'rascunho' : 'producao',
@@ -175,7 +185,8 @@ export default function NovaDemandaPage() {
       }
 
       toast(saveAsDraft ? '📝 Rascunho salvo!' : '🚀 Demanda criada com sucesso!', 'success')
-      router.push(`/clientes/${cliente.slug}/conteudo/${novoConteudo.id}`)
+      // Voltar para a pasta do mês do cliente (não para o conteúdo)
+      router.push(`/clientes/${cliente.slug}/mes/${mes}`)
     } catch (err: any) {
       console.error('Erro ao criar demanda:', err)
       toast(err.message || 'Erro ao criar demanda', 'error')
@@ -300,11 +311,18 @@ export default function NovaDemandaPage() {
                 <Calendar className="w-4 h-4 inline mr-2" />
                 Data Prevista
               </label>
-              <Input
+              <input
                 type="date"
+                id="nova-demanda-data"
+                name="nova-demanda-data-field"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 value={dataPublicacao}
-                onChange={(e) => setDataPublicacao(e.target.value)}
-                className="w-full"
+                onChange={(e) => {
+                  setDataPublicacao(e.target.value)
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
             <div>
@@ -312,13 +330,36 @@ export default function NovaDemandaPage() {
                 <Clock className="w-4 h-4 inline mr-2" />
                 Horário
               </label>
-              <Input
+              <input
                 type="time"
+                id="nova-demanda-hora"
+                name="nova-demanda-hora-field"
+                autoComplete="off"
+                data-lpignore="true"
+                data-form-type="other"
                 value={horaPublicacao}
-                onChange={(e) => setHoraPublicacao(e.target.value)}
-                className="w-full"
+                onChange={(e) => {
+                  setHoraPublicacao(e.target.value)
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500"
               />
             </div>
+          </div>
+
+          {/* Debug info + Limpar */}
+          <div className="mt-3 flex items-center justify-between text-xs">
+            <span className="text-gray-500">
+              📅 {dataPublicacao || '(vazio)'} às {horaPublicacao}
+            </span>
+            {dataPublicacao && (
+              <button
+                type="button"
+                onClick={() => { setDataPublicacao(''); setHoraPublicacao('12:00') }}
+                className="text-red-500 hover:text-red-700 underline"
+              >
+                Limpar data
+              </button>
+            )}
           </div>
 
           {/* Auto-agendar toggle */}

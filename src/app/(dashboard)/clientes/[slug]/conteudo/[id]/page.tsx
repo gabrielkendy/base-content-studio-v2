@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
@@ -28,6 +28,11 @@ import {
   Film,
   Trash2,
   History,
+  Pencil,
+  Save,
+  Type,
+  FileText,
+  MessageSquare,
 } from 'lucide-react'
 import { STATUS_CONFIG, TIPO_EMOJI, CANAIS, formatDateFull } from '@/lib/utils'
 import type { Conteudo, Cliente, Member } from '@/types/database'
@@ -56,6 +61,12 @@ export default function ConteudoDetailPage() {
   const [linkCopied, setLinkCopied] = useState(false)
   const [showHistory, setShowHistory] = useState(false)
   const [showScheduleModal, setShowScheduleModal] = useState(false)
+
+  // Inline edit states
+  const [editingField, setEditingField] = useState<'titulo' | 'descricao' | 'legenda' | null>(null)
+  const [editValue, setEditValue] = useState('')
+  const [saving, setSaving] = useState(false)
+  const textareaRef = useRef<HTMLTextAreaElement>(null)
 
   // Upload state
   const [uploading, setUploading] = useState(false)
@@ -111,6 +122,51 @@ export default function ConteudoDetailPage() {
     } catch (err) {
       console.error('Erro ao atualizar status:', err)
       alert('Erro ao atualizar status')
+    }
+  }
+
+  // Inline edit functions
+  const startEditing = (field: 'titulo' | 'descricao' | 'legenda') => {
+    if (!conteudo) return
+    setEditingField(field)
+    setEditValue(conteudo[field] || '')
+    // Auto-focus textarea after render
+    setTimeout(() => textareaRef.current?.focus(), 50)
+  }
+
+  const cancelEditing = () => {
+    setEditingField(null)
+    setEditValue('')
+  }
+
+  const saveField = async () => {
+    if (!conteudo || !editingField) return
+    setSaving(true)
+    try {
+      const { error } = await db.update('conteudos', {
+        [editingField]: editValue.trim() || null,
+        updated_at: new Date().toISOString(),
+      }, { id: conteudo.id })
+
+      if (error) throw new Error(error)
+
+      setConteudo(prev => prev ? { ...prev, [editingField]: editValue.trim() || null } : null)
+      setEditingField(null)
+      setEditValue('')
+    } catch (err) {
+      console.error('Erro ao salvar:', err)
+      alert('Erro ao salvar')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // Handle keyboard shortcuts in edit mode
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      cancelEditing()
+    } else if (e.key === 'Enter' && e.ctrlKey) {
+      saveField()
     }
   }
 
@@ -333,9 +389,37 @@ export default function ConteudoDetailPage() {
                 </Badge>
               )}
             </div>
-            <h1 className="text-2xl font-bold text-gray-900 mb-2">
-              {conteudo.titulo || 'Sem título'}
-            </h1>
+            {editingField === 'titulo' ? (
+              <div className="mb-2">
+                <input
+                  type="text"
+                  value={editValue}
+                  onChange={(e) => setEditValue(e.target.value)}
+                  onKeyDown={handleKeyDown}
+                  placeholder="Título do conteúdo"
+                  className="w-full text-2xl font-bold text-gray-900 border-2 border-blue-500 rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
+                  autoFocus
+                />
+                <div className="flex items-center gap-2 mt-2">
+                  <Button size="sm" onClick={saveField} disabled={saving} className="bg-green-600 hover:bg-green-700">
+                    {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                    Salvar
+                  </Button>
+                  <Button size="sm" variant="outline" onClick={cancelEditing} disabled={saving}>
+                    <X className="w-4 h-4 mr-1" /> Cancelar
+                  </Button>
+                  <span className="text-xs text-gray-400">Ctrl+Enter para salvar, Esc para cancelar</span>
+                </div>
+              </div>
+            ) : (
+              <h1 
+                className="text-2xl font-bold text-gray-900 mb-2 group cursor-pointer hover:bg-gray-50 rounded px-2 -mx-2 py-1 -my-1 transition-colors"
+                onClick={() => startEditing('titulo')}
+              >
+                {conteudo.titulo || <span className="text-gray-400 italic">Clique para adicionar título</span>}
+                <Pencil className="w-4 h-4 inline-block ml-2 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+              </h1>
+            )}
           </div>
         </div>
 
@@ -386,17 +470,61 @@ export default function ConteudoDetailPage() {
         </div>
       </Card>
 
-      {/* Descrição */}
-      {conteudo.descricao && (
-        <Card className="p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">📝 Descrição</h3>
-          <div className="bg-gray-50 rounded-lg p-4">
+      {/* Descrição - sempre visível para poder adicionar */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900">📝 Descrição</h3>
+          {editingField !== 'descricao' && conteudo.descricao && (
+            <button
+              onClick={() => startEditing('descricao')}
+              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
+              <Pencil className="w-3 h-3" /> Editar
+            </button>
+          )}
+        </div>
+        
+        {editingField === 'descricao' ? (
+          <div>
+            <textarea
+              ref={textareaRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Descreva o conteúdo, referências, instruções para a equipe..."
+              className="w-full min-h-[150px] text-sm text-gray-700 border-2 border-blue-500 rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y"
+            />
+            <div className="flex items-center gap-2 mt-3">
+              <Button size="sm" onClick={saveField} disabled={saving} className="bg-green-600 hover:bg-green-700">
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                Salvar
+              </Button>
+              <Button size="sm" variant="outline" onClick={cancelEditing} disabled={saving}>
+                <X className="w-4 h-4 mr-1" /> Cancelar
+              </Button>
+              <span className="text-xs text-gray-400">Ctrl+Enter para salvar, Esc para cancelar</span>
+            </div>
+          </div>
+        ) : conteudo.descricao ? (
+          <div 
+            className="bg-gray-50 rounded-lg p-4 cursor-pointer hover:bg-gray-100 transition-colors group"
+            onClick={() => startEditing('descricao')}
+          >
             <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
               {conteudo.descricao}
             </pre>
+            <Pencil className="w-4 h-4 text-gray-400 opacity-0 group-hover:opacity-100 transition-opacity mt-2" />
           </div>
-        </Card>
-      )}
+        ) : (
+          <div 
+            className="border-2 border-dashed border-gray-200 rounded-lg p-6 text-center cursor-pointer hover:border-blue-400 hover:bg-blue-50/30 transition-all"
+            onClick={() => startEditing('descricao')}
+          >
+            <FileText className="w-8 h-8 text-gray-300 mx-auto mb-2" />
+            <p className="text-sm text-gray-400">Clique para adicionar descrição</p>
+          </div>
+        )}
+      </Card>
 
       {/* Slides */}
       {slides.length > 0 && slides.some((s: string) => s.trim()) && (
@@ -415,17 +543,71 @@ export default function ConteudoDetailPage() {
         </Card>
       )}
 
-      {/* Legenda */}
-      {conteudo.legenda && (
-        <Card className="p-6 mb-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-3">📱 Legenda</h3>
-          <div className="bg-gray-50 rounded-lg p-4">
+      {/* Legenda - sempre visível para poder adicionar */}
+      <Card className="p-6 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-lg font-semibold text-gray-900">📱 Legenda</h3>
+          {editingField !== 'legenda' && conteudo.legenda && (
+            <button
+              onClick={() => startEditing('legenda')}
+              className="text-sm text-blue-600 hover:text-blue-700 flex items-center gap-1"
+            >
+              <Pencil className="w-3 h-3" /> Editar
+            </button>
+          )}
+        </div>
+
+        {editingField === 'legenda' ? (
+          <div>
+            <textarea
+              ref={textareaRef}
+              value={editValue}
+              onChange={(e) => setEditValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder="Digite a legenda para o post...&#10;&#10;Inclua hashtags, menções, CTAs..."
+              className="w-full min-h-[200px] text-sm text-gray-700 border-2 border-blue-500 rounded-lg p-4 focus:outline-none focus:ring-2 focus:ring-blue-300 resize-y font-sans"
+            />
+            <div className="flex items-center justify-between mt-3">
+              <div className="flex items-center gap-2">
+                <Button size="sm" onClick={saveField} disabled={saving} className="bg-green-600 hover:bg-green-700">
+                  {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4 mr-1" />}
+                  Salvar Legenda
+                </Button>
+                <Button size="sm" variant="outline" onClick={cancelEditing} disabled={saving}>
+                  <X className="w-4 h-4 mr-1" /> Cancelar
+                </Button>
+              </div>
+              <span className="text-xs text-gray-400">
+                {editValue.length} caracteres • Ctrl+Enter para salvar
+              </span>
+            </div>
+          </div>
+        ) : conteudo.legenda ? (
+          <div 
+            className="bg-gradient-to-br from-purple-50 to-blue-50 rounded-lg p-4 cursor-pointer hover:from-purple-100 hover:to-blue-100 transition-all group border border-purple-100"
+            onClick={() => startEditing('legenda')}
+          >
             <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">
               {conteudo.legenda}
             </pre>
+            <div className="flex items-center justify-between mt-3 pt-3 border-t border-purple-200/50">
+              <span className="text-xs text-purple-600">{conteudo.legenda.length} caracteres</span>
+              <span className="text-xs text-gray-400 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                <Pencil className="w-3 h-3" /> Clique para editar
+              </span>
+            </div>
           </div>
-        </Card>
-      )}
+        ) : (
+          <div 
+            className="border-2 border-dashed border-purple-200 rounded-lg p-8 text-center cursor-pointer hover:border-purple-400 hover:bg-purple-50/30 transition-all"
+            onClick={() => startEditing('legenda')}
+          >
+            <MessageSquare className="w-10 h-10 text-purple-300 mx-auto mb-3" />
+            <p className="text-sm font-medium text-purple-600">Clique para adicionar legenda</p>
+            <p className="text-xs text-gray-400 mt-1">A legenda que será usada na publicação</p>
+          </div>
+        )}
+      </Card>
 
       {/* Prompts AI */}
       {(promptsImagem.length > 0 || promptsVideo.length > 0) && (

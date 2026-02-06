@@ -15,10 +15,15 @@ export default function NotificacoesPage() {
     'content.created': '📝',
     'content.status_changed': '🔄',
     'content.approved': '✅',
+    'content_approved': '✅',
+    'content.adjustment_requested': '🔄',
+    'content_adjustment': '🔄',
     'content.comment': '💬',
     'member.invited': '👤',
     'deadline.approaching': '⏰',
     'mention': '📢',
+    'solicitacao.nova': '📋',
+    'aprovacao.pendente': '⏳',
   }
 
   return (

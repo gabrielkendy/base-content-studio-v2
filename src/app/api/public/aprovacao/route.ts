@@ -86,7 +86,9 @@ export async function POST(request: NextRequest) {
     const conteudo = aprovacao.conteudo as any
     if (conteudo) {
       const previousStatus = conteudo.status
-      const newContentStatus = status === 'aprovado' ? 'aprovado' : 'ajuste'
+      // 'aprovado' pelo cliente = aguardando_agendamento (pronto para agendar)
+      // 'ajuste' = precisa de ajustes
+      const newContentStatus = status === 'aprovado' ? 'aguardando_agendamento' : 'ajuste'
       
       await supabase
         .from('conteudos')
@@ -112,6 +114,53 @@ export async function POST(request: NextRequest) {
             link_token: token,
             reviewed_at: new Date().toISOString(),
           })
+        
+        // Criar notificação para a equipe
+        // Se tiver assigned_to, notifica ele; senão, notifica todos os admins/gestores
+        if (conteudo.assigned_to) {
+          await supabase
+            .from('notifications')
+            .insert({
+              org_id: conteudo.org_id,
+              user_id: conteudo.assigned_to,
+              type: status === 'aprovado' ? 'content_approved' : 'content_adjustment',
+              title: status === 'aprovado' 
+                ? `✅ "${conteudo.titulo}" aprovado!`
+                : `🔄 "${conteudo.titulo}" precisa de ajustes`,
+              body: status === 'aprovado'
+                ? `O cliente aprovou o conteúdo. Pronto para agendar!`
+                : `Feedback: ${comentario || 'Ver detalhes'}`,
+              read: false,
+              reference_id: conteudo.id,
+              reference_type: 'conteudo',
+            })
+        } else {
+          // Notificar admins e gestores da org
+          const { data: members } = await supabase
+            .from('members')
+            .select('user_id')
+            .eq('org_id', conteudo.org_id)
+            .in('role', ['admin', 'gestor'])
+            .eq('status', 'active')
+          
+          if (members && members.length > 0) {
+            const notifications = members.map((m: any) => ({
+              org_id: conteudo.org_id,
+              user_id: m.user_id,
+              type: status === 'aprovado' ? 'content_approved' : 'content_adjustment',
+              title: status === 'aprovado' 
+                ? `✅ "${conteudo.titulo}" aprovado!`
+                : `🔄 "${conteudo.titulo}" precisa de ajustes`,
+              body: status === 'aprovado'
+                ? `O cliente aprovou o conteúdo. Pronto para agendar!`
+                : `Feedback: ${comentario || 'Ver detalhes'}`,
+              read: false,
+              reference_id: conteudo.id,
+              reference_type: 'conteudo',
+            }))
+            await supabase.from('notifications').insert(notifications)
+          }
+        }
       } catch (approvalErr) {
         console.error('Error inserting approval record:', approvalErr)
         // Continue mesmo se falhar - não é crítico

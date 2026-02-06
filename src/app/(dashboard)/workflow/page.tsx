@@ -100,6 +100,7 @@ function WorkflowContent() {
       }),
       db.select('aprovacoes_links', {
         filters: [{ op: 'eq', col: 'status', val: 'ajuste' }],
+        order: [{ col: 'created_at', asc: false }],
       }),
     ])
 

@@ -11,9 +11,10 @@ import { Avatar } from '@/components/ui/avatar'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Mail, UserX, Trash2, Copy, RefreshCw, MoreVertical, Shield, Users, Clock } from 'lucide-react'
-import type { Member, Invite, Cliente } from '@/types/database'
+import { Plus, Mail, UserX, Trash2, Copy, RefreshCw, MoreVertical, Shield, Users, Clock, Settings2 } from 'lucide-react'
+import type { Member, Invite, Cliente, MemberPermissions } from '@/types/database'
 import { useRoleGuard } from '@/hooks/use-role-guard'
+import { PermissionsModal } from '@/components/permissions-modal'
 
 export default function EquipePage() {
   const { org, member: currentMember } = useAuth()
@@ -30,6 +31,9 @@ export default function EquipePage() {
   const [actionLoading, setActionLoading] = useState<string | null>(null)
   const [confirmModal, setConfirmModal] = useState<{ open: boolean; title: string; message: string; onConfirm: () => void }>({
     open: false, title: '', message: '', onConfirm: () => {}
+  })
+  const [permissionsModal, setPermissionsModal] = useState<{ open: boolean; member: Member | null }>({
+    open: false, member: null
   })
 
   useEffect(() => {
@@ -230,6 +234,21 @@ export default function EquipePage() {
     loadData()
   }
 
+  async function handleSavePermissions(memberId: string, permissions: MemberPermissions) {
+    try {
+      await db.update('members', { custom_permissions: permissions }, { id: memberId })
+      toast('✅ Permissões atualizadas!', 'success')
+      loadData()
+    } catch (err) {
+      toast('Erro ao salvar permissões', 'error')
+      throw err
+    }
+  }
+
+  function openPermissionsModal(member: Member) {
+    setPermissionsModal({ open: true, member })
+  }
+
   async function handleRemoveMember(memberId: string, displayName: string) {
     setConfirmModal({
       open: true,
@@ -367,6 +386,19 @@ export default function EquipePage() {
                     <Badge variant={ROLE_COLORS[m.role as keyof typeof ROLE_COLORS] || 'default'}>
                       {ROLE_LABELS[m.role] || m.role}
                     </Badge>
+                  )}
+
+                  {/* Permissions button */}
+                  {isAdmin && !isCurrentUser && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openPermissionsModal(m)}
+                      className="text-zinc-400 hover:text-blue-500 hover:bg-blue-50"
+                      title="Configurar permissões"
+                    >
+                      <Settings2 className="w-4 h-4" />
+                    </Button>
                   )}
 
                   {/* Remove button */}
@@ -571,6 +603,16 @@ export default function EquipePage() {
           </div>
         </div>
       </Modal>
+
+      {/* Permissions modal (estilo mLabs) */}
+      {permissionsModal.member && (
+        <PermissionsModal
+          open={permissionsModal.open}
+          onClose={() => setPermissionsModal({ open: false, member: null })}
+          member={permissionsModal.member}
+          onSave={handleSavePermissions}
+        />
+      )}
     </div>
   )
 }

@@ -1,5 +1,130 @@
 export type UserRole = 'admin' | 'gestor' | 'designer' | 'cliente'
 
+// ============== SISTEMA DE PERMISSÕES GRANULARES (estilo mLabs) ==============
+
+export type PermissionLevel = 'full' | 'read' | 'none'
+export type WorkflowPermission = 'full' | 'creator' | 'approver_internal' | 'approver_external' | 'none'
+
+export interface MemberPermissions {
+  // Conexão de Canais (Redes Sociais)
+  canais: {
+    enabled: boolean
+    level: PermissionLevel // full = conectar/desconectar, read = ver apenas
+  }
+  // Agendar Post e Calendário
+  calendario: {
+    enabled: boolean
+    level: PermissionLevel // full = criar/editar/remover, read = visualizar
+  }
+  // Relatórios e Analytics
+  relatorios: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Workflow (mais granular)
+  workflow: {
+    enabled: boolean
+    level: WorkflowPermission
+    // full = tudo
+    // creator = criar conteúdo, ver refações
+    // approver_internal = aprovar/reprovar internamente
+    // approver_external = aprovar/reprovar como cliente
+  }
+  // Repositório de Mídia
+  repositorio: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Brand Book
+  brand: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Chat
+  chat: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Equipe (gerenciar membros)
+  equipe: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Configurações
+  configuracoes: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Clientes (criar/editar clientes)
+  clientes: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+}
+
+// Permissões padrão por role
+export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
+  admin: {
+    canais: { enabled: true, level: 'full' },
+    calendario: { enabled: true, level: 'full' },
+    relatorios: { enabled: true, level: 'full' },
+    workflow: { enabled: true, level: 'full' },
+    repositorio: { enabled: true, level: 'full' },
+    brand: { enabled: true, level: 'full' },
+    chat: { enabled: true, level: 'full' },
+    equipe: { enabled: true, level: 'full' },
+    configuracoes: { enabled: true, level: 'full' },
+    clientes: { enabled: true, level: 'full' },
+  },
+  gestor: {
+    canais: { enabled: true, level: 'full' },
+    calendario: { enabled: true, level: 'full' },
+    relatorios: { enabled: true, level: 'full' },
+    workflow: { enabled: true, level: 'full' },
+    repositorio: { enabled: true, level: 'full' },
+    brand: { enabled: true, level: 'full' },
+    chat: { enabled: true, level: 'full' },
+    equipe: { enabled: true, level: 'read' },
+    configuracoes: { enabled: true, level: 'read' },
+    clientes: { enabled: true, level: 'full' },
+  },
+  designer: {
+    canais: { enabled: false, level: 'none' },
+    calendario: { enabled: true, level: 'read' },
+    relatorios: { enabled: false, level: 'none' },
+    workflow: { enabled: true, level: 'creator' },
+    repositorio: { enabled: true, level: 'full' },
+    brand: { enabled: true, level: 'read' },
+    chat: { enabled: true, level: 'full' },
+    equipe: { enabled: false, level: 'none' },
+    configuracoes: { enabled: false, level: 'none' },
+    clientes: { enabled: true, level: 'read' },
+  },
+  cliente: {
+    canais: { enabled: false, level: 'none' },
+    calendario: { enabled: true, level: 'read' },
+    relatorios: { enabled: true, level: 'read' },
+    workflow: { enabled: true, level: 'approver_external' },
+    repositorio: { enabled: true, level: 'read' },
+    brand: { enabled: true, level: 'read' },
+    chat: { enabled: true, level: 'full' },
+    equipe: { enabled: false, level: 'none' },
+    configuracoes: { enabled: false, level: 'none' },
+    clientes: { enabled: false, level: 'none' },
+  },
+}
+
+// Preferências de notificação por email
+export interface EmailNotificationPrefs {
+  new_content: boolean // Novo conteúdo criado
+  approval_request: boolean // Solicitação de aprovação
+  approval_response: boolean // Resposta de aprovação
+  content_published: boolean // Conteúdo publicado
+  deadline_reminder: boolean // Lembrete de prazo
+  weekly_digest: boolean // Resumo semanal
+  chat_messages: boolean // Mensagens no chat
+}
+
 export interface Organization {
   id: string
   name: string
@@ -30,6 +155,13 @@ export interface Member {
   invited_by: string | null
   status: 'active' | 'pending' | 'inactive'
   created_at: string
+  // Permissões personalizadas (se null, usa DEFAULT_PERMISSIONS[role])
+  custom_permissions: MemberPermissions | null
+  // Preferências de notificação por email
+  email_notifications: EmailNotificationPrefs | null
+  // Info adicional
+  email?: string
+  last_login_at?: string
 }
 
 export interface Invite {

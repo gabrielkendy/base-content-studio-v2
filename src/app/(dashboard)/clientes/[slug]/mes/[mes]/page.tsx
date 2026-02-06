@@ -151,9 +151,9 @@ export default function ClienteMesPage() {
                     <Card className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group h-full">
                       {/* Thumbnail */}
                       <div className="relative aspect-square bg-gradient-to-br from-zinc-100 to-zinc-200 overflow-hidden">
-                        {(cont as any).midia_url ? (
-                          <img src={(cont as any).midia_url} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
-                        ) : (cont as any).midia_type?.startsWith('video') ? (
+                        {cont.midia_urls?.length > 0 ? (
+                          <img src={cont.midia_urls[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                        ) : cont.tipo?.toLowerCase().includes('video') || cont.tipo?.toLowerCase().includes('reels') ? (
                           <div className="w-full h-full flex items-center justify-center">
                             <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
                               <Play className="w-6 h-6 text-white" />

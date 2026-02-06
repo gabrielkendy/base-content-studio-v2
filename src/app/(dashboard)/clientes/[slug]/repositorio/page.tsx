@@ -586,10 +586,11 @@ export default function RepositorioPage() {
                 >
                   {isImage(asset.file_type) ? (
                     <img
-                      src={asset.thumbnail_url || asset.file_url}
+                      src={asset.file_url}
                       alt={asset.filename}
                       className="w-full h-full object-cover"
                       loading="lazy"
+                      onError={(e) => { e.currentTarget.style.display = 'none'; e.currentTarget.parentElement?.classList.add('flex', 'items-center', 'justify-center'); }}
                     />
                   ) : isVideo(asset.file_type) ? (
                     <div className="w-full h-full flex items-center justify-center bg-zinc-900">
@@ -671,7 +672,7 @@ export default function RepositorioPage() {
               >
                 <div className="w-10 h-10 rounded-lg bg-zinc-50 flex items-center justify-center shrink-0 overflow-hidden">
                   {isImage(asset.file_type) ? (
-                    <img src={asset.thumbnail_url || asset.file_url} alt="" className="w-full h-full object-cover rounded-lg" />
+                    <img src={asset.file_url} alt="" className="w-full h-full object-cover rounded-lg" onError={(e) => e.currentTarget.style.display = 'none'} />
                   ) : (
                     getFileIcon(asset.file_type, asset.filename)
                   )}

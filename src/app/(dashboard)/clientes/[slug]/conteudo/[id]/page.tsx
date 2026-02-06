@@ -93,13 +93,38 @@ export default function ConteudoDetailPage() {
     try {
       setLoading(true)
 
-      // Load conteudo with assignee
+      // Load conteudo (sem join - mais seguro)
       const { data: c, error: cErr } = await db.select('conteudos', {
-        select: '*, assignee:members!assigned_to(id, user_id, display_name, avatar_url, role)',
+        select: '*',
         filters: [{ op: 'eq', col: 'id', val: conteudoId }],
         single: true,
       })
       if (cErr) throw new Error(cErr)
+      
+      // Load team members for assignee dropdown
+      let members: Member[] = []
+      if (org?.id) {
+        const { data: membersData, error: memErr } = await db.select('members', {
+          filters: [
+            { op: 'eq', col: 'org_id', val: org.id },
+            { op: 'eq', col: 'status', val: 'active' },
+          ],
+          order: { col: 'display_name', asc: true },
+        })
+        if (!memErr && membersData) {
+          members = membersData
+          setTeamMembers(members)
+        }
+      }
+
+      // Se tem assigned_to, busca o member correspondente
+      if (c?.assigned_to && members.length > 0) {
+        const assignee = members.find(m => m.user_id === c.assigned_to)
+        if (assignee) {
+          c.assignee = assignee
+        }
+      }
+      
       setConteudo(c)
 
       // Load cliente
@@ -110,20 +135,6 @@ export default function ConteudoDetailPage() {
         })
         if (clErr) throw new Error(clErr)
         setCliente(cl)
-      }
-
-      // Load team members for assignee dropdown
-      if (org?.id) {
-        const { data: members, error: memErr } = await db.select('members', {
-          filters: [
-            { op: 'eq', col: 'org_id', val: org.id },
-            { op: 'eq', col: 'status', val: 'active' },
-          ],
-          order: { col: 'display_name', asc: true },
-        })
-        if (!memErr && members) {
-          setTeamMembers(members)
-        }
       }
     } catch (err) {
       console.error('Erro ao carregar conteúdo:', err)

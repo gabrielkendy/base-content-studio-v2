@@ -53,14 +53,17 @@ interface WorkflowTask {
 
 type ViewMode = 'list' | 'stats'
 type FilterView = 'all' | 'mine'
+type TaskStatus = 'pendentes' | 'concluidas'
 
 export default function TarefasPage() {
   const { org, member } = useAuth()
   const [tasks, setTasks] = useState<WorkflowTask[]>([])
+  const [completedTasks, setCompletedTasks] = useState<WorkflowTask[]>([])
   const [loading, setLoading] = useState(true)
   const [viewMode, setViewMode] = useState<ViewMode>('list')
   const [filterView, setFilterView] = useState<FilterView>('mine')
   const [filterType, setFilterType] = useState<string>('all')
+  const [taskStatus, setTaskStatus] = useState<TaskStatus>('pendentes')
   const [members, setMembers] = useState<Member[]>([])
   const [stats, setStats] = useState<any>(null)
 
@@ -69,6 +72,7 @@ export default function TarefasPage() {
   useEffect(() => {
     if (org?.id) {
       loadWorkflowTasks()
+      loadCompletedTasks()
       loadMembers()
     }
   }, [org?.id, filterView])
@@ -136,11 +140,65 @@ export default function TarefasPage() {
       setTasks(workflowTasks)
       
       // Calcular stats
-      calculateStats(workflowTasks)
+      calculateStats(workflowTasks, completedTasks)
     } catch (err) {
       console.error('Erro ao carregar tarefas:', err)
     } finally {
       setLoading(false)
+    }
+  }
+
+  // Carrega tarefas concluídas (conteúdos que saíram de produção/ajuste nos últimos 30 dias)
+  const loadCompletedTasks = async () => {
+    try {
+      // Status que indicam conclusão
+      const completedStatus = ['aprovacao', 'aprovacao_cliente', 'aprovacao_interna', 'agendado', 'publicado']
+      
+      // Data de 30 dias atrás
+      const thirtyDaysAgo = new Date()
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+      
+      let query: any = {
+        select: '*, empresa:clientes(id, nome, slug, logo_url)',
+        filters: [
+          { op: 'eq', col: 'org_id', val: org!.id },
+          { op: 'in', col: 'status', val: completedStatus },
+          { op: 'gte', col: 'updated_at', val: thirtyDaysAgo.toISOString() },
+        ],
+        order: [{ col: 'updated_at', ascending: false }],
+        limit: 50,
+      }
+      
+      // Se não é gestor, filtrar só os atribuídos ao usuário
+      if (!isGestor || filterView === 'mine') {
+        query.filters.push({ op: 'eq', col: 'assigned_to', val: member!.user_id })
+      }
+
+      const { data: conteudos, error } = await db.select('conteudos', query)
+      
+      if (error) throw new Error(error)
+
+      // Converter conteúdos em tarefas concluídas
+      const completed: WorkflowTask[] = (conteudos || []).map((c: any) => {
+        return {
+          id: c.id,
+          type: 'producao' as TaskType, // Todas foram produção
+          conteudo: c,
+          cliente: c.empresa,
+          titulo: c.titulo || c.tipo,
+          descricao: c.descricao || '',
+          prioridade: 'normal' as const,
+          createdAt: c.updated_at || c.created_at,
+          dueDate: c.data_publicacao,
+        }
+      })
+
+      setCompletedTasks(completed)
+      
+      // Calcular stats com ambas as listas
+      calculateStats(tasks, completed)
+    } catch (err) {
+      console.error('Erro ao carregar concluídas:', err)
     }
   }
 
@@ -151,18 +209,20 @@ export default function TarefasPage() {
     if (data) setMembers(data)
   }
 
-  const calculateStats = (taskList: WorkflowTask[]) => {
-    const producao = taskList.filter(t => t.type === 'producao').length
-    const ajustes = taskList.filter(t => t.type === 'ajuste').length
-    const revisao = taskList.filter(t => t.type === 'revisao').length
-    const urgentes = taskList.filter(t => t.prioridade === 'urgente').length
+  const calculateStats = (pendingList: WorkflowTask[], completedList: WorkflowTask[] = []) => {
+    const producao = pendingList.filter(t => t.type === 'producao').length
+    const ajustes = pendingList.filter(t => t.type === 'ajuste').length
+    const revisao = pendingList.filter(t => t.type === 'revisao').length
+    const urgentes = pendingList.filter(t => t.prioridade === 'urgente').length
+    const concluidas = completedList.length
     
     setStats({
-      total: taskList.length,
+      total: pendingList.length,
       producao,
       ajustes,
       revisao,
       urgentes,
+      concluidas,
     })
   }
 
@@ -192,8 +252,9 @@ export default function TarefasPage() {
     }
   }
 
-  // Filtrar por tipo
-  const filteredTasks = tasks.filter(t => {
+  // Filtrar por tipo e status (pendentes/concluídas)
+  const currentTasks = taskStatus === 'pendentes' ? tasks : completedTasks
+  const filteredTasks = currentTasks.filter(t => {
     if (filterType !== 'all' && t.type !== filterType) return false
     return true
   })
@@ -205,6 +266,7 @@ export default function TarefasPage() {
     ajustes: tasks.filter(t => t.type === 'ajuste').length,
     revisao: tasks.filter(t => t.type === 'revisao').length,
     urgentes: tasks.filter(t => t.prioridade === 'urgente').length,
+    concluidas: completedTasks.length,
   }
 
   if (!org || !member) {
@@ -265,7 +327,7 @@ export default function TarefasPage() {
       </div>
 
       {/* Quick Stats */}
-      <div className="grid grid-cols-2 md:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-6 gap-4 mb-6">
         <Card className="p-4 flex items-center gap-3">
           <div className="p-2 bg-gray-100 rounded-lg">
             <ListTodo className="w-5 h-5 text-gray-600" />
@@ -315,6 +377,22 @@ export default function TarefasPage() {
             <p className="text-xs text-gray-500">Urgentes</p>
           </div>
         </Card>
+        <Card 
+          className={`p-4 flex items-center gap-3 cursor-pointer transition-all hover:shadow-md ${
+            taskStatus === 'concluidas' ? 'border-green-300 bg-green-50 ring-2 ring-green-200' : ''
+          }`}
+          onClick={() => setTaskStatus(taskStatus === 'concluidas' ? 'pendentes' : 'concluidas')}
+        >
+          <div className={`p-2 rounded-lg ${quickStats.concluidas > 0 ? 'bg-green-100' : 'bg-gray-100'}`}>
+            <Trophy className={`w-5 h-5 ${quickStats.concluidas > 0 ? 'text-green-600' : 'text-gray-400'}`} />
+          </div>
+          <div>
+            <p className={`text-2xl font-bold ${quickStats.concluidas > 0 ? 'text-green-600' : 'text-gray-900'}`}>
+              {quickStats.concluidas}
+            </p>
+            <p className="text-xs text-gray-500">Concluídas (30d)</p>
+          </div>
+        </Card>
       </div>
 
       {/* Filters */}
@@ -356,6 +434,24 @@ export default function TarefasPage() {
         </div>
       </div>
 
+      {/* Task Status Header */}
+      {taskStatus === 'concluidas' && (
+        <div className="flex items-center justify-between mb-4 p-3 bg-green-50 rounded-lg border border-green-200">
+          <div className="flex items-center gap-2">
+            <Trophy className="w-5 h-5 text-green-600" />
+            <span className="font-medium text-green-800">Mostrando tarefas concluídas (últimos 30 dias)</span>
+          </div>
+          <Button 
+            size="sm" 
+            variant="outline" 
+            onClick={() => setTaskStatus('pendentes')}
+            className="border-green-300 text-green-700 hover:bg-green-100"
+          >
+            <X className="w-4 h-4 mr-1" /> Voltar para pendentes
+          </Button>
+        </div>
+      )}
+
       {/* Task List */}
       {loading ? (
         <div className="flex items-center justify-center h-64">
@@ -363,13 +459,25 @@ export default function TarefasPage() {
         </div>
       ) : filteredTasks.length === 0 ? (
         <Card className="p-12 text-center">
-          <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
-          <h3 className="text-lg font-medium text-gray-900 mb-2">Tudo em dia! 🎉</h3>
-          <p className="text-sm text-gray-500">
-            {filterView === 'mine' 
-              ? 'Você não tem tarefas pendentes no momento' 
-              : 'Nenhuma tarefa encontrada com os filtros atuais'}
-          </p>
+          {taskStatus === 'concluidas' ? (
+            <>
+              <Trophy className="w-12 h-12 text-gray-300 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Nenhuma tarefa concluída recentemente</h3>
+              <p className="text-sm text-gray-500">
+                As tarefas concluídas nos últimos 30 dias aparecerão aqui
+              </p>
+            </>
+          ) : (
+            <>
+              <CheckCircle2 className="w-12 h-12 text-green-400 mx-auto mb-4" />
+              <h3 className="text-lg font-medium text-gray-900 mb-2">Tudo em dia! 🎉</h3>
+              <p className="text-sm text-gray-500">
+                {filterView === 'mine' 
+                  ? 'Você não tem tarefas pendentes no momento' 
+                  : 'Nenhuma tarefa encontrada com os filtros atuais'}
+              </p>
+            </>
+          )}
         </Card>
       ) : (
         <div className="space-y-3">
@@ -385,18 +493,28 @@ export default function TarefasPage() {
               <Card 
                 key={task.id} 
                 className={`p-4 hover:shadow-md transition-all ${
-                  isUrgent || isOverdue ? 'border-red-200 bg-red-50/30' : ''
+                  taskStatus === 'concluidas' 
+                    ? 'border-green-200 bg-green-50/30' 
+                    : isUrgent || isOverdue 
+                      ? 'border-red-200 bg-red-50/30' 
+                      : ''
                 }`}
               >
                 <div className="flex items-start gap-4">
-                  {/* Checkbox para concluir */}
-                  <button
-                    onClick={() => completeTask(task)}
-                    className="mt-1 flex-shrink-0 text-gray-300 hover:text-green-500 hover:scale-110 transition-all"
-                    title="Marcar como concluído"
-                  >
-                    <Circle className="w-6 h-6" />
-                  </button>
+                  {/* Checkbox para concluir ou check de concluído */}
+                  {taskStatus === 'concluidas' ? (
+                    <div className="mt-1 flex-shrink-0 text-green-500">
+                      <CheckCircle2 className="w-6 h-6" />
+                    </div>
+                  ) : (
+                    <button
+                      onClick={() => completeTask(task)}
+                      className="mt-1 flex-shrink-0 text-gray-300 hover:text-green-500 hover:scale-110 transition-all"
+                      title="Marcar como concluído"
+                    >
+                      <Circle className="w-6 h-6" />
+                    </button>
+                  )}
 
                   {/* Content */}
                   <div className="flex-1 min-w-0">
@@ -427,11 +545,18 @@ export default function TarefasPage() {
 
                     {/* Meta */}
                     <div className="flex items-center gap-3 mt-3 flex-wrap">
-                      {/* Tipo */}
-                      <Badge className={`text-xs ${typeConfig.color}`}>
-                        <TypeIcon className="w-3 h-3 mr-1" />
-                        {typeConfig.label}
-                      </Badge>
+                      {/* Tipo ou Status atual (para concluídas) */}
+                      {taskStatus === 'concluidas' ? (
+                        <Badge className="text-xs bg-green-100 text-green-700 border-green-200">
+                          <CheckCircle2 className="w-3 h-3 mr-1" />
+                          {WORKFLOW_STATUS[task.conteudo?.status]?.label || task.conteudo?.status}
+                        </Badge>
+                      ) : (
+                        <Badge className={`text-xs ${typeConfig.color}`}>
+                          <TypeIcon className="w-3 h-3 mr-1" />
+                          {typeConfig.label}
+                        </Badge>
+                      )}
 
                       {/* Prioridade */}
                       <span className="flex items-center gap-1.5 text-xs text-gray-500">

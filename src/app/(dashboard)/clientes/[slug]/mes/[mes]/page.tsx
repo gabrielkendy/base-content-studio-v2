@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useCallback } from 'react'
-import { useParams } from 'next/navigation'
+import { useParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
@@ -11,9 +11,11 @@ import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { STATUS_CONFIG, TIPO_EMOJI, MESES, formatDate, normalizeStatus } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Image, Play, ArrowLeft, CheckCircle2, AlertCircle, FileText, Instagram, Youtube, Facebook, Music2 } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Image, Play, ArrowLeft, CheckCircle2, AlertCircle, FileText, Instagram, Youtube, Facebook, Music2, Pencil, Trash2, MoreVertical, X } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Solicitacao, Member } from '@/types/database'
+import { Modal } from '@/components/ui/modal'
+import { Input } from '@/components/ui/input'
 
 type DataImportante = { id: string; date: string; title: string; description?: string; priority: 'critical' | 'high' | 'medium' | 'low'; category: string }
 
@@ -21,6 +23,7 @@ const CANAL_ICONS: Record<string, any> = { instagram: Instagram, tiktok: Music2,
 
 export default function ClienteMesPage() {
   const params = useParams()
+  const router = useRouter()
   const slug = params.slug as string
   const mesParam = parseInt(params.mes as string)
   const { org } = useAuth()
@@ -33,6 +36,13 @@ export default function ClienteMesPage() {
   const [loading, setLoading] = useState(true)
   const [ano, setAno] = useState(new Date().getFullYear())
   const [mes, setMes] = useState(mesParam)
+  
+  // Estados para modais
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false)
+  const [conteudoToDelete, setConteudoToDelete] = useState<Conteudo | null>(null)
+  const [dataModalOpen, setDataModalOpen] = useState(false)
+  const [newData, setNewData] = useState({ title: '', date: '', priority: 'medium', category: 'evento' })
+  const [menuOpen, setMenuOpen] = useState<string | null>(null)
 
   useEffect(() => { if (org) loadData() }, [org, ano, mes])
 
@@ -62,6 +72,45 @@ export default function ClienteMesPage() {
     let novoMes = mes + delta, novoAno = ano
     if (novoMes > 12) { novoMes = 1; novoAno++ } else if (novoMes < 1) { novoMes = 12; novoAno-- }
     setMes(novoMes); setAno(novoAno)
+  }
+
+  // Função para deletar conteúdo
+  async function handleDeleteConteudo() {
+    if (!conteudoToDelete) return
+    try {
+      await db.delete('conteudos', { id: conteudoToDelete.id })
+      setConteudos(prev => prev.filter(c => c.id !== conteudoToDelete.id))
+      toast('Conteúdo excluído com sucesso!', 'success')
+      setDeleteModalOpen(false)
+      setConteudoToDelete(null)
+    } catch (err) {
+      toast('Não foi possível excluir o conteúdo.', 'error')
+    }
+  }
+
+  // Função para adicionar data importante
+  async function handleAddData() {
+    if (!cliente || !newData.title || !newData.date) return
+    try {
+      const { data } = await db.insert('client_calendar_dates', {
+        cliente_id: cliente.id,
+        title: newData.title,
+        date: newData.date,
+        priority: newData.priority,
+        category: newData.category
+      })
+      if (data) {
+        const dateObj = new Date(newData.date)
+        if (dateObj.getMonth() + 1 === mes) {
+          setDatasImportantes(prev => [...prev, data])
+        }
+        toast('Data importante cadastrada com sucesso!', 'success')
+      }
+      setDataModalOpen(false)
+      setNewData({ title: '', date: '', priority: 'medium', category: 'evento' })
+    } catch (err) {
+      toast('Não foi possível adicionar a data.', 'error')
+    }
   }
 
   if (loading) return <div className="space-y-6"><Skeleton className="h-16 w-full rounded-2xl" /><div className="grid grid-cols-2 md:grid-cols-3 gap-4">{Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-64 rounded-xl" />)}</div></div>
@@ -142,67 +191,90 @@ export default function ClienteMesPage() {
               </CardContent>
             </Card>
           ) : (
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-4 gap-3">
               {conteudos.map(cont => {
                 const statusCfg = STATUS_CONFIG[cont.status]
                 const canais = (cont as any).canais || []
+                const isMenuOpen = menuOpen === cont.id
                 return (
-                  <Link key={cont.id} href={`/clientes/${slug}/conteudo/${cont.id}`}>
-                    <Card className="overflow-hidden hover:shadow-lg transition-all cursor-pointer group h-full">
-                      {/* Thumbnail */}
-                      <div className="relative aspect-square bg-gradient-to-br from-zinc-100 to-zinc-200 overflow-hidden">
+                  <Card key={cont.id} className="overflow-hidden hover:shadow-lg transition-all group h-full relative">
+                    {/* Thumbnail - menor */}
+                    <div className="relative aspect-[4/3] bg-gradient-to-br from-zinc-100 to-zinc-200 overflow-hidden">
+                      <Link href={`/clientes/${slug}/conteudo/${cont.id}`}>
                         {cont.midia_urls?.length > 0 ? (
                           <img src={cont.midia_urls[0]} alt="" className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
                         ) : cont.tipo?.toLowerCase().includes('video') || cont.tipo?.toLowerCase().includes('reels') ? (
                           <div className="w-full h-full flex items-center justify-center">
-                            <div className="w-12 h-12 rounded-full bg-black/50 flex items-center justify-center">
-                              <Play className="w-6 h-6 text-white" />
+                            <div className="w-10 h-10 rounded-full bg-black/50 flex items-center justify-center">
+                              <Play className="w-5 h-5 text-white" />
                             </div>
                           </div>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center">
-                            <Image className="w-12 h-12 text-zinc-300" />
+                            <Image className="w-10 h-10 text-zinc-300" />
                           </div>
                         )}
-                        {/* Status badge */}
-                        <Badge className="absolute top-2 right-2 text-[10px] shadow-sm" style={{ backgroundColor: statusCfg?.color, color: '#fff' }}>
-                          {statusCfg?.emoji} {statusCfg?.label}
-                        </Badge>
-                        {/* Data */}
-                        {cont.data_publicacao && (
-                          <div className="absolute bottom-2 left-2 bg-black/60 text-white text-[10px] px-2 py-1 rounded-md flex items-center gap-1">
-                            <Calendar className="w-3 h-3" />
-                            {formatDate(cont.data_publicacao)}
-                          </div>
-                        )}
+                      </Link>
+                      {/* Status badge */}
+                      <Badge className="absolute top-1.5 right-1.5 text-[9px] shadow-sm px-1.5 py-0.5" style={{ backgroundColor: statusCfg?.color, color: '#fff' }}>
+                        {statusCfg?.emoji} {statusCfg?.label}
+                      </Badge>
+                      {/* Data */}
+                      {cont.data_publicacao && (
+                        <div className="absolute bottom-1.5 left-1.5 bg-black/60 text-white text-[9px] px-1.5 py-0.5 rounded flex items-center gap-1">
+                          <Calendar className="w-2.5 h-2.5" />
+                          {formatDate(cont.data_publicacao)}
+                        </div>
+                      )}
+                      {/* Menu de ações */}
+                      <div className="absolute top-1.5 left-1.5 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <div className="relative">
+                          <Button 
+                            size="sm" 
+                            variant="outline" 
+                            className="h-6 w-6 p-0 bg-white/90 hover:bg-white shadow-sm"
+                            onClick={(e) => { e.preventDefault(); setMenuOpen(isMenuOpen ? null : cont.id) }}
+                          >
+                            <MoreVertical className="w-3.5 h-3.5" />
+                          </Button>
+                          {isMenuOpen && (
+                            <div className="absolute top-7 left-0 bg-white rounded-lg shadow-lg border border-zinc-200 py-1 min-w-[120px] z-50">
+                              <button
+                                className="w-full px-3 py-1.5 text-left text-xs hover:bg-zinc-100 flex items-center gap-2"
+                                onClick={(e) => { e.preventDefault(); router.push(`/clientes/${slug}/conteudo/${cont.id}`); setMenuOpen(null) }}
+                              >
+                                <Pencil className="w-3.5 h-3.5" /> Editar
+                              </button>
+                              <button
+                                className="w-full px-3 py-1.5 text-left text-xs hover:bg-red-50 text-red-600 flex items-center gap-2"
+                                onClick={(e) => { e.preventDefault(); setConteudoToDelete(cont); setDeleteModalOpen(true); setMenuOpen(null) }}
+                              >
+                                <Trash2 className="w-3.5 h-3.5" /> Excluir
+                              </button>
+                            </div>
+                          )}
+                        </div>
                       </div>
-                      {/* Info */}
-                      <CardContent className="p-3">
-                        <h3 className="font-semibold text-sm text-zinc-900 truncate group-hover:text-blue-600 mb-1">
+                    </div>
+                    {/* Info - mais compacto */}
+                    <CardContent className="p-2">
+                      <Link href={`/clientes/${slug}/conteudo/${cont.id}`}>
+                        <h3 className="font-semibold text-xs text-zinc-900 truncate group-hover:text-blue-600 mb-1">
                           {cont.titulo || 'Sem título'}
                         </h3>
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center gap-1">
-                            <span className="text-xs text-zinc-500">{TIPO_EMOJI[cont.tipo] || '📄'} {cont.tipo}</span>
-                          </div>
-                          {/* Canais */}
-                          <div className="flex items-center gap-0.5">
-                            {canais.slice(0, 3).map((canal: string) => {
-                              const Icon = CANAL_ICONS[canal]
-                              return Icon ? <Icon key={canal} className="w-3.5 h-3.5 text-zinc-400" /> : null
-                            })}
-                          </div>
+                      </Link>
+                      <div className="flex items-center justify-between">
+                        <span className="text-[10px] text-zinc-500">{TIPO_EMOJI[cont.tipo] || '📄'} {cont.tipo}</span>
+                        {/* Canais */}
+                        <div className="flex items-center gap-0.5">
+                          {canais.slice(0, 3).map((canal: string) => {
+                            const Icon = CANAL_ICONS[canal]
+                            return Icon ? <Icon key={canal} className="w-3 h-3 text-zinc-400" /> : null
+                          })}
                         </div>
-                        {/* Assignee */}
-                        {cont.assignee && (
-                          <div className="flex items-center gap-1.5 mt-2 pt-2 border-t border-zinc-100">
-                            <Avatar name={cont.assignee.display_name} size="sm" className="w-5 h-5 text-[8px]" />
-                            <span className="text-[10px] text-zinc-500 truncate">{cont.assignee.display_name}</span>
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Link>
+                      </div>
+                    </CardContent>
+                  </Card>
                 )
               })}
             </div>
@@ -214,9 +286,14 @@ export default function ClienteMesPage() {
           {/* Datas importantes */}
           <Card>
             <CardContent className="p-4">
-              <h3 className="font-bold text-zinc-900 mb-3 flex items-center gap-2 text-sm">
-                <Calendar className="w-4 h-4 text-purple-500" /> Datas Importantes
-              </h3>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="font-bold text-zinc-900 flex items-center gap-2 text-sm">
+                  <Calendar className="w-4 h-4 text-purple-500" /> Datas Importantes
+                </h3>
+                <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setDataModalOpen(true)}>
+                  <Plus className="w-4 h-4" />
+                </Button>
+              </div>
               {datasImportantes.length === 0 ? (
                 <p className="text-xs text-zinc-400 text-center py-4">Nenhuma data neste mês</p>
               ) : (
@@ -286,6 +363,62 @@ export default function ClienteMesPage() {
           </Card>
         </div>
       </div>
+
+      {/* Modal de confirmação de exclusão */}
+      <Modal open={deleteModalOpen} onClose={() => setDeleteModalOpen(false)} title="Excluir conteúdo" size="sm">
+        <div className="space-y-4">
+          <p className="text-sm text-zinc-600">
+            Tem certeza que deseja excluir "<strong>{conteudoToDelete?.titulo || 'este conteúdo'}</strong>"? Esta ação não pode ser desfeita.
+          </p>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setDeleteModalOpen(false)}>Cancelar</Button>
+            <Button variant="danger" onClick={handleDeleteConteudo}>
+              <Trash2 className="w-4 h-4 mr-2" /> Excluir
+            </Button>
+          </div>
+        </div>
+      </Modal>
+
+      {/* Modal de adicionar data importante */}
+      <Modal open={dataModalOpen} onClose={() => setDataModalOpen(false)} title="Adicionar Data Importante" size="sm">
+        <div className="space-y-4">
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-700">Título</label>
+            <Input 
+              placeholder="Ex: Dia das Mães"
+              value={newData.title}
+              onChange={(e) => setNewData(prev => ({ ...prev, title: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-700">Data</label>
+            <Input 
+              type="date"
+              value={newData.date}
+              onChange={(e) => setNewData(prev => ({ ...prev, date: e.target.value }))}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium text-zinc-700">Prioridade</label>
+            <select 
+              className="w-full px-3 py-2 border border-zinc-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              value={newData.priority}
+              onChange={(e) => setNewData(prev => ({ ...prev, priority: e.target.value }))}
+            >
+              <option value="critical">🔴 Crítica</option>
+              <option value="high">🟠 Alta</option>
+              <option value="medium">🔵 Média</option>
+              <option value="low">⚪ Baixa</option>
+            </select>
+          </div>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setDataModalOpen(false)}>Cancelar</Button>
+            <Button onClick={handleAddData} disabled={!newData.title || !newData.date}>
+              <Plus className="w-4 h-4 mr-2" /> Adicionar
+            </Button>
+          </div>
+        </div>
+      </Modal>
     </div>
   )
 }

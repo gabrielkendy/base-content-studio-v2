@@ -495,34 +495,37 @@ export default function ConteudoDetailPage() {
   const promptsVideo = Array.isArray(conteudo.prompts_video) ? conteudo.prompts_video : []
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Back + Actions */}
-      <div className="flex items-center justify-between mb-6">
-        <Button variant="ghost" onClick={() => router.back()}>
+    <div className="p-4 sm:p-6 max-w-4xl mx-auto">
+      {/* Back + Actions - Mobile Optimized */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <Button variant="ghost" onClick={() => router.back()} className="self-start">
           <ArrowLeft className="w-4 h-4 mr-2" /> Voltar
         </Button>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={generateApprovalLink}>
-            {linkCopied ? <CheckCircle className="w-4 h-4 mr-2 text-green-600" /> : <Copy className="w-4 h-4 mr-2" />}
-            {linkCopied ? 'Link Copiado!' : 'Gerar Link de Aprovação'}
+        {/* Actions - horizontal scroll on mobile */}
+        <div className="flex items-center gap-2 overflow-x-auto pb-2 sm:pb-0 scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+          <Button variant="outline" onClick={generateApprovalLink} className="flex-shrink-0 text-sm">
+            {linkCopied ? <CheckCircle className="w-4 h-4 sm:mr-2 text-green-600" /> : <Copy className="w-4 h-4 sm:mr-2" />}
+            <span className="hidden sm:inline">{linkCopied ? 'Link Copiado!' : 'Link Aprovação'}</span>
           </Button>
           <Button 
             variant="outline" 
             onClick={() => setShowScheduleModal(true)}
-            className="border-purple-300 text-purple-700 hover:bg-purple-50"
+            className="border-purple-300 text-purple-700 hover:bg-purple-50 flex-shrink-0 text-sm"
           >
-            <Calendar className="w-4 h-4 mr-2" /> Agendar
+            <Calendar className="w-4 h-4 sm:mr-2" />
+            <span className="hidden sm:inline">Agendar</span>
           </Button>
           <Link href={`/clientes/${slug}/mes/${conteudo.mes}`}>
-            <Button className="bg-blue-600 hover:bg-blue-700">
-              <Edit className="w-4 h-4 mr-2" /> Editar
+            <Button className="bg-blue-600 hover:bg-blue-700 flex-shrink-0 text-sm">
+              <Edit className="w-4 h-4 sm:mr-2" />
+              <span className="hidden sm:inline">Editar</span>
             </Button>
           </Link>
         </div>
       </div>
 
       {/* Header Card */}
-      <Card className="p-6 mb-6">
+      <Card className="p-4 sm:p-6 mb-6">
         <div className="flex items-start justify-between mb-4">
           <div>
             <div className="flex items-center gap-3 mb-3">

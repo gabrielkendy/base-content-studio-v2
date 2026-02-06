@@ -231,20 +231,29 @@ export default function ConteudoDetailPage() {
         valueToSave = combinedDate.toISOString()
       }
 
-      const { error } = await db.update('conteudos', {
+      console.log('Salvando campo:', editingField, 'valor:', valueToSave)
+      
+      const { data: updated, error } = await db.update('conteudos', {
         [editingField]: valueToSave,
         updated_at: new Date().toISOString(),
       }, { id: conteudo.id })
 
-      if (error) throw new Error(error)
+      console.log('Resultado update:', { updated, error })
 
-      setConteudo(prev => prev ? { ...prev, [editingField]: valueToSave } : null)
+      if (error) {
+        console.error('Erro no update:', error)
+        throw new Error(error)
+      }
+
+      // Recarregar dados do banco para garantir sincronização
+      await loadData()
+      
       setEditingField(null)
       setEditValue('')
       setEditTimeValue('')
     } catch (err) {
       console.error('Erro ao salvar:', err)
-      alert('Erro ao salvar')
+      alert('Erro ao salvar: ' + (err instanceof Error ? err.message : 'Erro desconhecido'))
     } finally {
       setSaving(false)
     }

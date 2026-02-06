@@ -220,9 +220,9 @@ function WorkflowContent() {
       }, { id: rawId })
 
       const cfg = STATUS_CONFIG[newStatus]
-      toast(`Movido para ${cfg?.label || newStatus}`, 'success')
+      toast(`${cfg?.emoji || '✅'} Movido para ${cfg?.label || newStatus}`, 'success')
     } catch (err) {
-      toast('Erro ao mover card', 'error')
+      toast('❌ Erro ao mover card', 'error')
     }
     setDragging(null)
     await loadData()
@@ -421,7 +421,7 @@ function WorkflowContent() {
 
         {/* Kanban Board */}
         <div
-          className="flex-1 flex gap-3 overflow-x-auto pb-6 scroll-smooth"
+          className="flex-1 flex gap-4 overflow-x-auto pb-6 scroll-smooth snap-x"
           style={{ minHeight: '72vh' }}
         >
           {visibleStatuses.map(key => {
@@ -461,9 +461,13 @@ function WorkflowContent() {
             return (
               <div
                 key={key}
-                className="min-w-[260px] w-[260px] flex-shrink-0 flex flex-col max-sm:min-w-[220px] max-sm:w-[220px]"
-                onDragOver={e => e.preventDefault()}
-                onDrop={e => handleDrop(e, key)}
+                className={`min-w-[270px] w-[270px] flex-shrink-0 flex flex-col max-sm:min-w-[230px] max-sm:w-[230px] snap-start transition-all duration-200 ${
+                  isDragActive ? 'scale-[0.98]' : ''
+                }`}
+                onDragOver={e => { e.preventDefault(); e.dataTransfer.dropEffect = 'move' }}
+                onDragEnter={e => e.currentTarget.classList.add('ring-2', 'ring-blue-400', 'ring-offset-2', 'rounded-xl')}
+                onDragLeave={e => e.currentTarget.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2', 'rounded-xl')}
+                onDrop={e => { e.currentTarget.classList.remove('ring-2', 'ring-blue-400', 'ring-offset-2', 'rounded-xl'); handleDrop(e, key) }}
               >
                 {/* Column header */}
                 <div className="rounded-t-xl overflow-hidden">
@@ -488,9 +492,9 @@ function WorkflowContent() {
 
                 {/* Cards container */}
                 <div
-                  className={`flex-1 space-y-2.5 p-2.5 rounded-b-xl border-x border-b transition-all min-h-[80px] ${
+                  className={`flex-1 space-y-3 p-3 rounded-b-xl border-x border-b transition-all duration-200 min-h-[80px] ${
                     isDragActive
-                      ? 'bg-zinc-50 border-dashed border-zinc-300'
+                      ? 'bg-blue-50/50 border-dashed border-blue-300 ring-2 ring-blue-200 ring-inset'
                       : 'bg-zinc-50/30 border-zinc-100'
                   }`}
                 >
@@ -551,48 +555,53 @@ function SolicitacaoCard({
       draggable
       onDragStart={e => {
         e.dataTransfer.setData('text/plain', `sol_${sol.id}`)
+        e.dataTransfer.effectAllowed = 'move'
         onDragStart()
       }}
       onDragEnd={onDragEnd}
       className={`
-        bg-white rounded-xl p-3 cursor-grab active:cursor-grabbing
-        border-2 border-purple-200 hover:border-purple-300
-        hover:shadow-md hover:-translate-y-0.5 transition-all duration-150
-        ${isDragging ? 'opacity-30 scale-95 rotate-1' : 'shadow-sm'}
+        bg-white rounded-xl p-3.5 cursor-grab active:cursor-grabbing
+        border-2 border-purple-200 hover:border-purple-400
+        hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] transition-all duration-200 ease-out
+        ${isDragging ? 'opacity-40 scale-90 rotate-2 shadow-2xl' : 'shadow-sm'}
+        group/sol
       `}
     >
       {/* Priority badge */}
       {sol.prioridade && sol.prioridade !== 'normal' && (
-        <div className="mb-2">
-          <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-md border ${PRIORIDADE_STYLE[sol.prioridade] || ''}`}>
-            {sol.prioridade === 'urgente' ? '🔴' : '🟠'} {sol.prioridade}
+        <div className="mb-2.5">
+          <span className={`text-[10px] font-bold px-2 py-1 rounded-md border ${PRIORIDADE_STYLE[sol.prioridade] || ''} ${sol.prioridade === 'urgente' ? 'animate-pulse' : ''}`}>
+            {sol.prioridade === 'urgente' ? '🔴' : '🟠'} {sol.prioridade.toUpperCase()}
           </span>
         </div>
       )}
 
-      <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2">
+      <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2.5 group-hover/sol:text-purple-600 transition-colors">
         {sol.titulo}
       </h4>
 
       {/* Cliente */}
       {sol.cliente && (
-        <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 bg-zinc-50 rounded-lg px-2 py-1.5 -mx-1">
           <Avatar
             name={(sol.cliente as any).nome}
             color={(sol.cliente as any).cores?.primaria}
             size="sm"
-            className="w-4 h-4 text-[6px]"
+            className="w-5 h-5 text-[7px]"
           />
-          <span className="text-[10px] text-zinc-400 truncate">
+          <span className="text-[11px] font-medium text-zinc-600 truncate">
             {(sol.cliente as any).nome}
           </span>
         </div>
       )}
 
       {/* Status da solicitação */}
-      <div className="mt-2 pt-2 border-t border-zinc-100">
-        <span className="text-[10px] text-purple-500 font-medium">
+      <div className="mt-3 pt-2.5 border-t border-zinc-100 flex items-center justify-between">
+        <span className="text-[10px] text-purple-500 font-semibold">
           {sol.status === 'nova' ? '📩 Nova' : sol.status === 'em_analise' ? '🔍 Em análise' : '✅ Aprovada'}
+        </span>
+        <span className="text-[9px] text-zinc-400 opacity-0 group-hover/sol:opacity-100 transition-opacity">
+          Arraste →
         </span>
       </div>
     </div>
@@ -620,35 +629,37 @@ function KanbanCard({
       draggable
       onDragStart={e => {
         e.dataTransfer.setData('text/plain', item.id)
+        e.dataTransfer.effectAllowed = 'move'
         onDragStart()
       }}
       onDragEnd={onDragEnd}
       className={`
         bg-white rounded-xl overflow-hidden cursor-grab active:cursor-grabbing
-        hover:shadow-md hover:-translate-y-0.5 transition-all duration-150
-        ${isDragging ? 'opacity-30 scale-95 rotate-1' : 'shadow-sm'}
-        border border-zinc-150
+        hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] transition-all duration-200 ease-out
+        ${isDragging ? 'opacity-40 scale-90 rotate-2 shadow-2xl' : 'shadow-sm'}
+        border border-zinc-200 hover:border-zinc-300
+        group/card
       `}
     >
       {/* Thumbnail da mídia */}
       {item.midiaUrl && (
-        <div className="relative h-28 bg-zinc-100 overflow-hidden">
+        <div className="relative h-32 bg-gradient-to-br from-zinc-100 to-zinc-200 overflow-hidden">
           {item.midiaType?.startsWith('video') ? (
-            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/10">
-              <div className="w-10 h-10 rounded-full bg-white/90 flex items-center justify-center shadow-lg">
-                <Play className="w-5 h-5 text-zinc-700 ml-0.5" />
+            <div className="absolute inset-0 flex items-center justify-center bg-zinc-900/20 z-10">
+              <div className="w-11 h-11 rounded-full bg-white/95 flex items-center justify-center shadow-xl group-hover/card:scale-110 transition-transform">
+                <Play className="w-5 h-5 text-zinc-800 ml-0.5" />
               </div>
             </div>
           ) : null}
           <img
             src={item.midiaUrl}
             alt=""
-            className="w-full h-full object-cover"
+            className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
           />
         </div>
       )}
 
-      <div className="p-3">
+      <div className="p-3.5">
         {/* Badges row */}
         <div className="flex items-center gap-1.5 mb-2 flex-wrap">
           <span className="text-[10px] font-semibold text-zinc-500 bg-zinc-100 px-2 py-0.5 rounded-md">
@@ -694,12 +705,12 @@ function KanbanCard({
         )}
 
         {/* Title */}
-        <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-2.5 leading-snug">
+        <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-3 leading-snug group-hover/card:text-blue-600 transition-colors">
           {item.titulo}
         </h4>
 
         {/* Footer */}
-        <div className="flex items-center gap-2 pt-2 border-t border-zinc-50">
+        <div className="flex items-center gap-2 pt-2.5 border-t border-zinc-100 mt-auto">
           {item.empresa && (
             <div className="flex items-center gap-1.5 flex-1 min-w-0">
               <Avatar

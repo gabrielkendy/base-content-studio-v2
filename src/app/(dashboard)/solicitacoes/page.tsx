@@ -152,37 +152,39 @@ export default function SolicitacoesPage() {
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg">
-            <Inbox className="w-6 h-6 text-white" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-3 sm:gap-4">
+          <div className="p-2.5 sm:p-3 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-600 shadow-lg flex-shrink-0">
+            <Inbox className="w-5 h-5 sm:w-6 sm:h-6 text-white" />
           </div>
           <div>
-            <h1 className="text-2xl font-bold text-zinc-900">Solicitações</h1>
-            <p className="text-sm text-zinc-500">{solicitacoes.length} demandas dos clientes</p>
+            <h1 className="text-xl sm:text-2xl font-bold text-zinc-900">Solicitações</h1>
+            <p className="text-xs sm:text-sm text-zinc-500">{solicitacoes.length} demandas dos clientes</p>
           </div>
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={openNew} className="w-full sm:w-auto justify-center">
           <Plus className="w-4 h-4 mr-1" /> Nova Solicitação
         </Button>
       </div>
 
       {/* Filtros */}
-      <Card>
-        <CardContent className="p-4">
-          <div className="flex flex-wrap gap-3 items-center">
-            <div className="relative flex-1 min-w-[200px]">
+      <Card className="border-0 shadow-md">
+        <CardContent className="p-3 sm:p-4">
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
-              <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar..." className="pl-10" />
+              <Input value={busca} onChange={e => setBusca(e.target.value)} placeholder="Buscar..." className="pl-10 w-full" />
             </div>
-            <Select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="w-40">
-              <option value="todos">Todos status</option>
-              {Object.entries(STATUS_SOL_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}
-            </Select>
-            <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="w-44">
-              <option value="todos">Todos clientes</option>
-              {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
-            </Select>
+            <div className="flex gap-2 overflow-x-auto scrollbar-hide -mx-3 px-3 sm:mx-0 sm:px-0">
+              <Select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)} className="min-w-[130px] flex-shrink-0">
+                <option value="todos">Todos status</option>
+                {Object.entries(STATUS_SOL_CONFIG).map(([k, v]) => <option key={k} value={k}>{v.emoji} {v.label}</option>)}
+              </Select>
+              <Select value={filtroCliente} onChange={e => setFiltroCliente(e.target.value)} className="min-w-[140px] flex-shrink-0">
+                <option value="todos">Todos clientes</option>
+                {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
+              </Select>
+            </div>
           </div>
           {/* Stats badges */}
           {stats.length > 0 && (

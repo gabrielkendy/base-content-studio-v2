@@ -218,9 +218,9 @@ export default function NovaDemandaPage() {
         </div>
       </div>
 
-      <div className="space-y-6">
+      <div className="space-y-4 sm:space-y-6">
         {/* Título */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             <FileText className="w-4 h-4 inline mr-2" />
             Título da Demanda *
@@ -228,14 +228,14 @@ export default function NovaDemandaPage() {
           <Input
             value={titulo}
             onChange={(e) => setTitulo(e.target.value)}
-            placeholder="Ex: Post Dia das Mães, Reels Lançamento Produto..."
-            className="text-lg"
+            placeholder="Ex: Post Dia das Mães..."
+            className="text-base sm:text-lg"
           />
         </Card>
 
         {/* Cliente e Tipo */}
-        <Card className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
                 Cliente *
@@ -269,7 +269,7 @@ export default function NovaDemandaPage() {
         </Card>
 
         {/* Canais - Visual Selector */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
           <label className="block text-sm font-semibold text-gray-700 mb-3">
             Canais de Publicação *
           </label>
@@ -304,7 +304,7 @@ export default function NovaDemandaPage() {
         </Card>
 
         {/* Data e Hora */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-semibold text-gray-700 mb-2">
@@ -387,7 +387,7 @@ export default function NovaDemandaPage() {
         </Card>
 
         {/* Tags */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             <Tag className="w-4 h-4 inline mr-2" />
             Tags
@@ -422,7 +422,7 @@ export default function NovaDemandaPage() {
         </Card>
 
         {/* Briefing */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             📝 Briefing / Descrição
           </label>
@@ -436,7 +436,7 @@ export default function NovaDemandaPage() {
         </Card>
 
         {/* Arquivos de Referência */}
-        <Card className="p-6">
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
           <label className="block text-sm font-semibold text-gray-700 mb-2">
             <Upload className="w-4 h-4 inline mr-2" />
             Arquivos de Referência

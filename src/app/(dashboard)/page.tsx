@@ -15,7 +15,7 @@ import {
   TrendingUp, Users, Flame, Target,
 } from 'lucide-react'
 import Link from 'next/link'
-import type { Conteudo, Cliente, Notification, Solicitacao } from '@/types/database'
+import type { Conteudo, Cliente, Notification, Solicitacao, Approval } from '@/types/database'
 
 function timeAgo(dateStr: string) {
   const now = Date.now()
@@ -38,6 +38,7 @@ export default function DashboardPage() {
   const [proximos, setProximos] = useState<(Conteudo & { empresa?: Cliente })[]>([])
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [notificacoes, setNotificacoes] = useState<Notification[]>([])
+  const [atividades, setAtividades] = useState<(Approval & { conteudo?: any })[]>([])
   const [clientes, setClientes] = useState<Cliente[]>([])
   const [loading, setLoading] = useState(true)
 
@@ -113,6 +114,15 @@ export default function DashboardPage() {
       limit: 5,
     })
     setNotificacoes(notifs || [])
+
+    // Atividades recentes (aprovações/ajustes)
+    const { data: acts } = await db.select('approvals', {
+      select: '*, conteudo:conteudos(id, titulo, empresa:clientes(nome, slug))',
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      order: [{ col: 'created_at', asc: false }],
+      limit: 6,
+    })
+    setAtividades((acts as any) || [])
 
     // Clientes
     const { data: cls } = await db.select('clientes', {
@@ -385,6 +395,11 @@ export default function DashboardPage() {
                   <Bell className="w-4 h-4 text-zinc-400" />
                 )}
                 Notificações
+                {notificacoes.filter(n => !n.read).length > 0 && (
+                  <span className="bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                    {notificacoes.filter(n => !n.read).length}
+                  </span>
+                )}
               </h3>
               <Link href="/notificacoes" className="text-xs text-blue-600 hover:underline flex items-center gap-1">
                 Ver todas <ArrowRight className="w-3 h-3" />
@@ -398,24 +413,89 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-zinc-50">
-                  {notificacoes.map(n => (
-                    <Link
-                      key={n.id}
-                      href="/notificacoes"
-                      className={`flex gap-3 px-5 py-3 hover:bg-zinc-50 transition-colors ${!n.read ? 'bg-blue-50/30' : ''}`}
-                    >
-                      <div className={`w-2 h-2 rounded-full flex-shrink-0 mt-1.5 ${!n.read ? 'bg-blue-500' : 'bg-zinc-200'}`} />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-xs font-medium text-zinc-800 line-clamp-1">{n.title}</div>
-                        {n.body && <div className="text-[11px] text-zinc-400 line-clamp-1 mt-0.5">{n.body}</div>}
-                        <div className="text-[10px] text-zinc-300 mt-0.5">{timeAgo(n.created_at)}</div>
-                      </div>
-                    </Link>
-                  ))}
+                  {notificacoes.map(n => {
+                    const NOTIF_ICONS: Record<string, string> = {
+                      'content_approved': '✅',
+                      'content_adjustment': '🔄',
+                      'content.approved': '✅',
+                      'content.adjustment_requested': '🔄',
+                      'solicitacao': '📋',
+                      'solicitacao.nova': '📋',
+                      'mention': '📢',
+                      'deadline.approaching': '⏰',
+                    }
+                    return (
+                      <Link
+                        key={n.id}
+                        href={n.reference_id ? `/clientes/*/conteudo/${n.reference_id}` : '/notificacoes'}
+                        className={`flex gap-3 px-5 py-3 hover:bg-zinc-50 transition-colors ${!n.read ? 'bg-blue-50/40' : ''}`}
+                      >
+                        <div className="text-base flex-shrink-0">{NOTIF_ICONS[n.type] || '🔔'}</div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs font-medium text-zinc-800 line-clamp-1">{n.title}</div>
+                          {n.body && <div className="text-[11px] text-zinc-500 line-clamp-1 mt-0.5">{n.body}</div>}
+                          <div className="text-[10px] text-zinc-400 mt-0.5">{timeAgo(n.created_at)}</div>
+                        </div>
+                        {!n.read && <div className="w-2 h-2 rounded-full bg-blue-500 flex-shrink-0 mt-1" />}
+                      </Link>
+                    )
+                  })}
                 </div>
               )}
             </CardContent>
           </Card>
+
+          {/* Atividade da Equipe */}
+          {atividades.length > 0 && (
+            <Card>
+              <div className="px-6 py-4 border-b border-zinc-100">
+                <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+                  <Eye className="w-4 h-4 text-violet-500" /> Atividade da Equipe
+                </h3>
+              </div>
+              <CardContent className="p-0">
+                <div className="divide-y divide-zinc-50">
+                  {atividades.map(a => {
+                    const isApproved = a.status === 'approved'
+                    const isAdjustment = a.status === 'adjustment'
+                    const isPending = a.status === 'pending'
+                    const conteudo = a.conteudo as any
+                    
+                    return (
+                      <div key={a.id} className="flex gap-3 px-5 py-3">
+                        <div className={`text-base flex-shrink-0 ${
+                          isApproved ? '' : isAdjustment ? '' : ''
+                        }`}>
+                          {isApproved ? '✅' : isAdjustment ? '🔄' : isPending ? '📤' : '📋'}
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="text-xs text-zinc-600">
+                            <span className="font-medium text-zinc-800">{a.reviewer_name || 'Sistema'}</span>
+                            {' '}
+                            {isApproved ? 'aprovou' : isAdjustment ? 'pediu ajuste em' : isPending ? 'enviou para aprovação' : 'atualizou'}
+                          </div>
+                          {conteudo && (
+                            <Link 
+                              href={`/clientes/${conteudo.empresa?.slug}/conteudo/${conteudo.id}`}
+                              className="text-[11px] text-blue-600 hover:underline line-clamp-1 mt-0.5"
+                            >
+                              {conteudo.titulo}
+                            </Link>
+                          )}
+                          {a.comment && (
+                            <div className="text-[10px] text-orange-600 bg-orange-50 rounded px-2 py-1 mt-1 line-clamp-2">
+                              "{a.comment}"
+                            </div>
+                          )}
+                          <div className="text-[10px] text-zinc-400 mt-0.5">{timeAgo(a.created_at)}</div>
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
 
           {/* Clientes */}
           <Card>

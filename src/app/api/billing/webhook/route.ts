@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createClient } from '@supabase/supabase-js'
 import Stripe from 'stripe'
 import { PlanId } from '@/types/billing'
+import { notifyPaymentFailed, notifySubscriptionCanceled, notifyWelcome } from '@/lib/notifications'
 
 const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!, {
   apiVersion: '2024-12-18.acacia',
@@ -91,6 +92,28 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session) {
     })
     .eq('id', metadata.organization_id)
 
+  // Get user info and send welcome email
+  if (metadata.user_id) {
+    const { data: profile } = await supabase
+      .from('profiles')
+      .select('email, name')
+      .eq('id', metadata.user_id)
+      .single()
+    
+    const { data: org } = await supabase
+      .from('organizations')
+      .select('name')
+      .eq('id', metadata.organization_id)
+      .single()
+
+    if (profile?.email) {
+      await notifyWelcome(
+        { id: metadata.user_id, email: profile.email, name: profile.name },
+        org ? { id: metadata.organization_id, name: org.name } : undefined
+      )
+    }
+  }
+
   console.log(`Checkout complete for org ${metadata.organization_id}`)
 }
 
@@ -145,7 +168,7 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription) {
 }
 
 async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
-  const { customer } = subscription
+  const { customer, current_period_end } = subscription
 
   // Get organization by stripe_customer_id
   const { data: org } = await supabase
@@ -163,6 +186,22 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription) {
       plan_id: null,
     })
     .eq('id', org.id)
+
+  // Get org owner and send email
+  const { data: owner } = await supabase
+    .from('organization_members')
+    .select('user:profiles(id, email, name)')
+    .eq('organization_id', org.id)
+    .eq('role', 'admin')
+    .single()
+
+  if (owner?.user) {
+    const user = owner.user as any
+    const accessUntil = current_period_end 
+      ? new Date(current_period_end * 1000).toLocaleDateString('pt-BR')
+      : 'o fim do período pago'
+    await notifySubscriptionCanceled({ id: user.id, email: user.email, name: user.name }, accessUntil)
+  }
 
   console.log(`Subscription canceled for org ${org.id}`)
 }
@@ -219,7 +258,18 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice) {
     .update({ subscription_status: 'past_due' })
     .eq('id', org.id)
 
-  // TODO: Send notification email about failed payment
+  // Get org owner and send email
+  const { data: owner } = await supabase
+    .from('organization_members')
+    .select('user:profiles(id, email, name)')
+    .eq('organization_id', org.id)
+    .eq('role', 'admin')
+    .single()
+
+  if (owner?.user) {
+    const user = owner.user as any
+    await notifyPaymentFailed({ id: user.id, email: user.email, name: user.name })
+  }
 
   console.log(`Invoice payment failed: ${id} for org ${org.id}`)
 }

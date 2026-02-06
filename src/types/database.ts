@@ -60,6 +60,21 @@ export interface MemberPermissions {
     enabled: boolean
     level: PermissionLevel
   }
+  // Ads (impulsionar postagens)
+  ads: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Solicitações (gerenciar solicitações de clientes)
+  solicitacoes: {
+    enabled: boolean
+    level: PermissionLevel
+  }
+  // Webhooks e Integrações
+  webhooks: {
+    enabled: boolean
+    level: PermissionLevel
+  }
 }
 
 // Permissões padrão por role
@@ -75,6 +90,9 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     equipe: { enabled: true, level: 'full' },
     configuracoes: { enabled: true, level: 'full' },
     clientes: { enabled: true, level: 'full' },
+    ads: { enabled: true, level: 'full' },
+    solicitacoes: { enabled: true, level: 'full' },
+    webhooks: { enabled: true, level: 'full' },
   },
   gestor: {
     canais: { enabled: true, level: 'full' },
@@ -87,6 +105,9 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     equipe: { enabled: true, level: 'read' },
     configuracoes: { enabled: true, level: 'read' },
     clientes: { enabled: true, level: 'full' },
+    ads: { enabled: true, level: 'full' },
+    solicitacoes: { enabled: true, level: 'full' },
+    webhooks: { enabled: true, level: 'read' },
   },
   designer: {
     canais: { enabled: false, level: 'none' },
@@ -99,6 +120,9 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     equipe: { enabled: false, level: 'none' },
     configuracoes: { enabled: false, level: 'none' },
     clientes: { enabled: true, level: 'read' },
+    ads: { enabled: false, level: 'none' },
+    solicitacoes: { enabled: true, level: 'read' },
+    webhooks: { enabled: false, level: 'none' },
   },
   cliente: {
     canais: { enabled: false, level: 'none' },
@@ -111,6 +135,9 @@ export const DEFAULT_PERMISSIONS: Record<UserRole, MemberPermissions> = {
     equipe: { enabled: false, level: 'none' },
     configuracoes: { enabled: false, level: 'none' },
     clientes: { enabled: false, level: 'none' },
+    ads: { enabled: false, level: 'none' },
+    solicitacoes: { enabled: true, level: 'full' },
+    webhooks: { enabled: false, level: 'none' },
   },
 }
 

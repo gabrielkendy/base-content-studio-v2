@@ -25,7 +25,10 @@ import {
   Building2,
   ChevronDown,
   ChevronUp,
-  Check
+  Check,
+  Megaphone,
+  FileText,
+  Webhook
 } from 'lucide-react'
 
 interface PermissionSection {
@@ -139,6 +142,36 @@ const PERMISSION_SECTIONS: PermissionSection[] = [
     levels: [
       { value: 'full', label: 'Acesso total', desc: 'Pode alterar todas as configurações' },
       { value: 'read', label: 'Somente leitura', desc: 'Pode visualizar configurações' },
+    ]
+  },
+  {
+    id: 'ads',
+    label: 'Ads (Impulsionamento)',
+    icon: Megaphone,
+    description: 'Impulsionar e gerenciar anúncios de postagens',
+    levels: [
+      { value: 'full', label: 'Acesso total', desc: 'Pode criar, editar e gerenciar impulsionamentos' },
+      { value: 'read', label: 'Somente leitura', desc: 'Pode visualizar métricas de Ads' },
+    ]
+  },
+  {
+    id: 'solicitacoes',
+    label: 'Solicitações',
+    icon: FileText,
+    description: 'Gerenciar solicitações de conteúdo dos clientes',
+    levels: [
+      { value: 'full', label: 'Acesso total', desc: 'Pode criar, responder e gerenciar solicitações' },
+      { value: 'read', label: 'Somente leitura', desc: 'Pode visualizar solicitações' },
+    ]
+  },
+  {
+    id: 'webhooks',
+    label: 'Webhooks e Integrações',
+    icon: Webhook,
+    description: 'Configurar webhooks e integrações externas',
+    levels: [
+      { value: 'full', label: 'Acesso total', desc: 'Pode criar, editar e remover webhooks' },
+      { value: 'read', label: 'Somente leitura', desc: 'Pode visualizar webhooks configurados' },
     ]
   },
 ]

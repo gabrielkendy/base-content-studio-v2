@@ -450,19 +450,24 @@ export default function ConteudoDetailPage() {
         }
       }
 
-      console.log('🔵 Salvando campo:', editingField, 'valor:', valueToSave)
+      console.log('🔵 Salvando campo:', editingField)
+      console.log('🔵 editValue (data):', editValue)
+      console.log('🔵 editTimeValue (hora):', editTimeValue)
+      console.log('🔵 valueToSave:', valueToSave)
       
-      const { error } = await db.update('conteudos', {
+      const { error, data: updatedData } = await db.update('conteudos', {
         [editingField]: valueToSave,
         updated_at: new Date().toISOString(),
       }, { id: conteudo.id })
 
       if (error) {
         console.error('❌ Erro no update:', error)
+        alert(`Erro ao salvar: ${error}`)
         throw new Error(error)
       }
 
-      console.log('✅ Salvo com sucesso!')
+      console.log('✅ Salvo com sucesso! Resposta:', updatedData)
+      console.log('✅ Novo valor:', valueToSave)
 
       // IMPORTANTE: Atualizar estado local DIRETAMENTE (evita problema de cache)
       setConteudo(prev => {
@@ -815,14 +820,20 @@ export default function ConteudoDetailPage() {
                 <input
                   type="date"
                   value={editValue}
-                  onChange={(e) => setEditValue(e.target.value)}
+                  onChange={(e) => {
+                    console.log('📅 Data alterada para:', e.target.value)
+                    setEditValue(e.target.value)
+                  }}
                   className="text-sm border-2 border-blue-400 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                   autoFocus
                 />
                 <input
                   type="time"
                   value={editTimeValue}
-                  onChange={(e) => setEditTimeValue(e.target.value)}
+                  onChange={(e) => {
+                    console.log('⏰ Hora alterada para:', e.target.value)
+                    setEditTimeValue(e.target.value)
+                  }}
                   className="text-sm border-2 border-blue-400 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                 />
                 <div className="flex items-center gap-1">

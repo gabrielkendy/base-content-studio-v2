@@ -609,8 +609,8 @@ export default function ConteudoDetailPage() {
                 ) : (
                   <p className="text-sm text-amber-700">Verifique o histórico de aprovações para mais detalhes.</p>
                 )}
-                {(conteudo as any).cliente_nome && (
-                  <p className="text-xs text-amber-600 mt-2">— {(conteudo as any).cliente_nome}</p>
+                {((conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome) && (
+                  <p className="text-xs text-amber-600 mt-2">— {(conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome}</p>
                 )}
               </div>
             </div>

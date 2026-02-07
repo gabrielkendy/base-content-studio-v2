@@ -450,10 +450,8 @@ export default function ConteudoDetailPage() {
         }
       }
 
-      console.log('🔵 Salvando campo:', editingField)
-      console.log('🔵 editValue (data):', editValue)
-      console.log('🔵 editTimeValue (hora):', editTimeValue)
-      console.log('🔵 valueToSave:', valueToSave)
+      // DEBUG: Alert pra ver se está salvando
+      alert(`Salvando:\nData: ${editValue}\nHora: ${editTimeValue}\nValor final: ${valueToSave}`)
       
       const { error, data: updatedData } = await db.update('conteudos', {
         [editingField]: valueToSave,
@@ -466,8 +464,7 @@ export default function ConteudoDetailPage() {
         throw new Error(error)
       }
 
-      console.log('✅ Salvo com sucesso! Resposta:', updatedData)
-      console.log('✅ Novo valor:', valueToSave)
+      alert(`✅ Salvo com sucesso!\nNovo valor: ${valueToSave}`)
 
       // IMPORTANTE: Atualizar estado local DIRETAMENTE (evita problema de cache)
       setConteudo(prev => {

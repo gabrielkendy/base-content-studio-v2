@@ -41,6 +41,179 @@ import { ApprovalTimeline } from '@/components/ApprovalTimeline'
 import { InternalApprovalActions } from '@/components/InternalApprovalActions'
 import { ScheduleModal } from '@/components/ScheduleModal'
 
+// ============== COMPONENTE DE AJUSTES DO CLIENTE ==============
+interface AdjustmentCardProps {
+  conteudo: Conteudo
+  lastAdjustment: { comment: string; reviewer_name: string; reviewed_at: string } | null
+  onUpdate: () => void
+}
+
+function AdjustmentCard({ conteudo, lastAdjustment, onUpdate }: AdjustmentCardProps) {
+  const [isEditing, setIsEditing] = useState(false)
+  const [editText, setEditText] = useState('')
+  const [saving, setSaving] = useState(false)
+  const [markingDone, setMarkingDone] = useState(false)
+
+  const feedbackText = (conteudo as any).comentario_cliente || lastAdjustment?.comment || ''
+  const feedbackAuthor = (conteudo as any).cliente_nome_feedback || lastAdjustment?.reviewer_name || ''
+  const feedbackDate = lastAdjustment?.reviewed_at ? new Date(lastAdjustment.reviewed_at).toLocaleDateString('pt-BR') : ''
+
+  // Salvar observação manualmente
+  const handleSaveNote = async () => {
+    if (!editText.trim()) return
+    setSaving(true)
+    try {
+      const { error } = await db.update('conteudos', {
+        comentario_cliente: editText.trim(),
+        updated_at: new Date().toISOString(),
+      }, { id: conteudo.id })
+      if (error) throw new Error(error)
+      setIsEditing(false)
+      setEditText('')
+      onUpdate()
+    } catch (err) {
+      console.error('Erro ao salvar:', err)
+      alert('Erro ao salvar observação')
+    }
+    setSaving(false)
+  }
+
+  // Marcar ajustes como concluídos
+  const handleMarkDone = async () => {
+    if (!confirm('Marcar ajustes como concluídos? O conteúdo voltará para aprovação.')) return
+    setMarkingDone(true)
+    try {
+      const { error } = await db.update('conteudos', {
+        status: 'aprovacao',
+        updated_at: new Date().toISOString(),
+      }, { id: conteudo.id })
+      if (error) throw new Error(error)
+      onUpdate()
+    } catch (err) {
+      console.error('Erro:', err)
+      alert('Erro ao atualizar status')
+    }
+    setMarkingDone(false)
+  }
+
+  return (
+    <div className="mb-6 bg-gradient-to-br from-amber-50 to-orange-50 border-2 border-amber-400 rounded-2xl overflow-hidden shadow-lg">
+      {/* Header */}
+      <div className="bg-amber-400 px-5 py-3 flex items-center justify-between">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-full bg-white/30 flex items-center justify-center">
+            <MessageSquare className="w-5 h-5 text-amber-900" />
+          </div>
+          <div>
+            <h4 className="font-bold text-amber-900 text-lg">⚠️ Ajustes Solicitados</h4>
+            <p className="text-amber-800 text-xs">O cliente solicitou alterações neste conteúdo</p>
+          </div>
+        </div>
+        <Button
+          onClick={handleMarkDone}
+          disabled={markingDone}
+          size="sm"
+          className="bg-green-600 hover:bg-green-700 text-white shadow-md"
+        >
+          {markingDone ? (
+            <Loader2 className="w-4 h-4 animate-spin mr-1" />
+          ) : (
+            <CheckCircle className="w-4 h-4 mr-1" />
+          )}
+          Ajustes Concluídos
+        </Button>
+      </div>
+
+      {/* Conteúdo */}
+      <div className="p-5">
+        {feedbackText ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+              📝 Observações do Cliente:
+            </p>
+            <div className="bg-white rounded-xl p-4 border-2 border-amber-200 shadow-inner">
+              <p className="text-gray-800 whitespace-pre-wrap leading-relaxed">{feedbackText}</p>
+            </div>
+            {(feedbackAuthor || feedbackDate) && (
+              <p className="text-sm text-amber-700 flex items-center gap-2">
+                <User className="w-4 h-4" />
+                <span className="font-medium">{feedbackAuthor || 'Cliente'}</span>
+                {feedbackDate && (
+                  <>
+                    <span className="text-amber-400">•</span>
+                    <Clock className="w-3 h-3" />
+                    <span>{feedbackDate}</span>
+                  </>
+                )}
+              </p>
+            )}
+          </div>
+        ) : isEditing ? (
+          <div className="space-y-3">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-wide">
+              ✏️ Adicionar Observação:
+            </p>
+            <textarea
+              value={editText}
+              onChange={(e) => setEditText(e.target.value)}
+              placeholder="Descreva os ajustes solicitados pelo cliente..."
+              rows={4}
+              className="w-full px-4 py-3 text-gray-800 border-2 border-amber-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-amber-400 focus:border-amber-400 resize-none bg-white"
+              autoFocus
+            />
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleSaveNote}
+                disabled={saving || !editText.trim()}
+                size="sm"
+                className="bg-amber-600 hover:bg-amber-700 text-white"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : <Save className="w-4 h-4 mr-1" />}
+                Salvar
+              </Button>
+              <Button
+                onClick={() => { setIsEditing(false); setEditText('') }}
+                disabled={saving}
+                size="sm"
+                variant="outline"
+                className="border-amber-400 text-amber-700"
+              >
+                Cancelar
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-6">
+            <div className="w-16 h-16 rounded-full bg-amber-200/50 flex items-center justify-center mx-auto mb-3">
+              <FileText className="w-8 h-8 text-amber-600" />
+            </div>
+            <p className="text-amber-800 mb-3">Nenhuma observação registrada</p>
+            <Button
+              onClick={() => setIsEditing(true)}
+              size="sm"
+              variant="outline"
+              className="border-amber-400 text-amber-700 hover:bg-amber-100"
+            >
+              <Pencil className="w-4 h-4 mr-1" />
+              Adicionar Observação Manualmente
+            </Button>
+          </div>
+        )}
+
+        {/* Dica */}
+        {!feedbackText && !isEditing && (
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <p className="text-xs text-blue-700">
+              💡 <strong>Dica:</strong> Para que as observações apareçam automaticamente, gere um link de aprovação e envie ao cliente. 
+              Quando ele solicitar ajustes, o comentário será salvo aqui.
+            </p>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 function formatFileSize(bytes: number) {
   if (bytes < 1024) return bytes + ' B'
   if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
@@ -619,37 +792,13 @@ export default function ConteudoDetailPage() {
           </select>
         </div>
 
-        {/* 🔴 FEEDBACK DO CLIENTE - Aparece quando tem ajuste pendente */}
+        {/* 🔴 FEEDBACK DO CLIENTE - Card completo de ajustes */}
         {(conteudo.status === 'ajuste' || (conteudo as any).comentario_cliente || lastAdjustment) && (
-          <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-xl">
-            <div className="flex items-start gap-3">
-              <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
-                <MessageSquare className="w-5 h-5 text-amber-700" />
-              </div>
-              <div className="flex-1">
-                <h4 className="font-bold text-amber-800 mb-1">⚠️ Cliente pediu ajuste!</h4>
-                {((conteudo as any).comentario_cliente || lastAdjustment?.comment) ? (
-                  <div className="bg-white rounded-lg p-3 border border-amber-200">
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
-                      {(conteudo as any).comentario_cliente || lastAdjustment?.comment}
-                    </p>
-                  </div>
-                ) : (
-                  <p className="text-sm text-amber-700">Verifique o histórico de aprovações para mais detalhes.</p>
-                )}
-                {((conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome || lastAdjustment?.reviewer_name) && (
-                  <p className="text-xs text-amber-600 mt-2">
-                    — {(conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome || lastAdjustment?.reviewer_name}
-                    {lastAdjustment?.reviewed_at && !((conteudo as any).comentario_cliente) && (
-                      <span className="ml-2 text-amber-500">
-                        ({new Date(lastAdjustment.reviewed_at).toLocaleDateString('pt-BR')})
-                      </span>
-                    )}
-                  </p>
-                )}
-              </div>
-            </div>
-          </div>
+          <AdjustmentCard 
+            conteudo={conteudo}
+            lastAdjustment={lastAdjustment}
+            onUpdate={loadData}
+          />
         )}
 
         {/* Meta */}

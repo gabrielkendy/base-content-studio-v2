@@ -86,6 +86,9 @@ export default function ConteudoDetailPage() {
   // Preview mode (tamanho real)
   const [previewMode, setPreviewMode] = useState<'feed' | 'reels' | 'story' | null>(null)
 
+  // Último feedback de ajuste (do histórico de aprovações)
+  const [lastAdjustment, setLastAdjustment] = useState<{ comment: string; reviewer_name: string; reviewed_at: string } | null>(null)
+
   // Current user info for approvals
   const currentUser = member ? {
     id: member.user_id,
@@ -134,6 +137,29 @@ export default function ConteudoDetailPage() {
       }
       
       setConteudo(c)
+
+      // Load último feedback de ajuste (se status for ajuste e não tiver comentario_cliente)
+      if (c?.status === 'ajuste' && !c.comentario_cliente) {
+        try {
+          const res = await fetch(`/api/approvals?conteudo_id=${conteudoId}`)
+          const { data: approvals } = await res.json()
+          if (approvals && approvals.length > 0) {
+            // Pegar o último ajuste externo
+            const lastAdj = approvals.find((a: any) => 
+              a.type === 'external' && (a.status === 'adjustment' || a.status === 'rejected') && a.comment
+            )
+            if (lastAdj) {
+              setLastAdjustment({
+                comment: lastAdj.comment,
+                reviewer_name: lastAdj.reviewer_name || 'Cliente',
+                reviewed_at: lastAdj.reviewed_at || lastAdj.created_at,
+              })
+            }
+          }
+        } catch (err) {
+          console.error('Erro ao carregar feedback:', err)
+        }
+      }
 
       // Load cliente
       if (c?.empresa_id) {
@@ -594,7 +620,7 @@ export default function ConteudoDetailPage() {
         </div>
 
         {/* 🔴 FEEDBACK DO CLIENTE - Aparece quando tem ajuste pendente */}
-        {(conteudo.status === 'ajuste' || (conteudo as any).comentario_cliente) && (
+        {(conteudo.status === 'ajuste' || (conteudo as any).comentario_cliente || lastAdjustment) && (
           <div className="mb-4 p-4 bg-amber-50 border-2 border-amber-300 rounded-xl">
             <div className="flex items-start gap-3">
               <div className="w-10 h-10 rounded-full bg-amber-200 flex items-center justify-center flex-shrink-0">
@@ -602,15 +628,24 @@ export default function ConteudoDetailPage() {
               </div>
               <div className="flex-1">
                 <h4 className="font-bold text-amber-800 mb-1">⚠️ Cliente pediu ajuste!</h4>
-                {(conteudo as any).comentario_cliente ? (
+                {((conteudo as any).comentario_cliente || lastAdjustment?.comment) ? (
                   <div className="bg-white rounded-lg p-3 border border-amber-200">
-                    <p className="text-sm text-gray-700 whitespace-pre-wrap">{(conteudo as any).comentario_cliente}</p>
+                    <p className="text-sm text-gray-700 whitespace-pre-wrap">
+                      {(conteudo as any).comentario_cliente || lastAdjustment?.comment}
+                    </p>
                   </div>
                 ) : (
                   <p className="text-sm text-amber-700">Verifique o histórico de aprovações para mais detalhes.</p>
                 )}
-                {((conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome) && (
-                  <p className="text-xs text-amber-600 mt-2">— {(conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome}</p>
+                {((conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome || lastAdjustment?.reviewer_name) && (
+                  <p className="text-xs text-amber-600 mt-2">
+                    — {(conteudo as any).cliente_nome_feedback || (conteudo as any).cliente_nome || lastAdjustment?.reviewer_name}
+                    {lastAdjustment?.reviewed_at && !((conteudo as any).comentario_cliente) && (
+                      <span className="ml-2 text-amber-500">
+                        ({new Date(lastAdjustment.reviewed_at).toLocaleDateString('pt-BR')})
+                      </span>
+                    )}
+                  </p>
                 )}
               </div>
             </div>

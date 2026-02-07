@@ -433,8 +433,9 @@ export default function ConteudoDetailPage() {
           const hours = parseInt(timeParts[0]) || 12
           const minutes = parseInt(timeParts[1]) || 0
           
-          // Criar data combinada (usando UTC para evitar problemas de timezone)
-          const combinedDate = new Date(Date.UTC(year, month - 1, day, hours, minutes))
+          // Criar data combinada em HORÁRIO LOCAL (não UTC!)
+          // Isso garante que 21:00 selecionado = 21:00 exibido
+          const combinedDate = new Date(year, month - 1, day, hours, minutes)
           
           // Verificar se a data é válida
           if (isNaN(combinedDate.getTime())) {

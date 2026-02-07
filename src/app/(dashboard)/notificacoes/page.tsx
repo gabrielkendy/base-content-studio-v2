@@ -16,14 +16,16 @@ export default function NotificacoesPage() {
     'content.status_changed': '🔄',
     'content.approved': '✅',
     'content_approved': '✅',
-    'content.adjustment_requested': '🔄',
-    'content_adjustment': '🔄',
+    'content.adjustment_requested': '⚠️',
+    'content_adjustment': '⚠️',
     'content.comment': '💬',
     'member.invited': '👤',
     'deadline.approaching': '⏰',
     'mention': '📢',
     'solicitacao.nova': '📋',
     'aprovacao.pendente': '⏳',
+    'task_assigned': '📋',
+    'task_completed': '✅',
   }
 
   return (

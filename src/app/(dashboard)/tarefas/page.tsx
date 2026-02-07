@@ -123,17 +123,17 @@ export default function TarefasPage() {
           conteudo: c,
           cliente: c.empresa,
           titulo: type === 'ajuste' 
-            ? `Ajustar: ${c.titulo || c.tipo}`
+            ? `⚠️ Ajustar: ${c.titulo || c.tipo}`
             : type === 'revisao'
-            ? `Revisar: ${c.titulo || c.tipo}`
-            : `Produzir: ${c.titulo || c.tipo}`,
-          descricao: type === 'ajuste' && c.sub_status 
-            ? c.sub_status // Comentário do ajuste
+            ? `👁️ Revisar: ${c.titulo || c.tipo}`
+            : `🎨 Produzir: ${c.titulo || c.tipo}`,
+          descricao: type === 'ajuste' && (c.comentario_cliente || c.sub_status)
+            ? (c.comentario_cliente || c.sub_status) // Comentário do ajuste (cliente ou interno)
             : c.descricao || '',
           prioridade,
           createdAt: c.updated_at || c.created_at,
           dueDate: c.data_publicacao,
-          ajusteComment: type === 'ajuste' ? c.sub_status : undefined,
+          ajusteComment: type === 'ajuste' ? (c.comentario_cliente || c.sub_status) : undefined,
         }
       })
 

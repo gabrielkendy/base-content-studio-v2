@@ -169,11 +169,11 @@ export async function POST(request: NextRequest) {
               user_id: conteudo.assigned_to,
               type: status === 'aprovado' ? 'content_approved' : 'content_adjustment',
               title: status === 'aprovado' 
-                ? `✅ "${conteudo.titulo}" aprovado!`
-                : `🔄 "${conteudo.titulo}" precisa de ajustes`,
+                ? `✅ "${conteudo.titulo}" aprovado pelo cliente!`
+                : `⚠️ AJUSTE SOLICITADO: "${conteudo.titulo}"`,
               body: status === 'aprovado'
                 ? `O cliente aprovou o conteúdo. Pronto para agendar!`
-                : `Feedback: ${comentario || 'Ver detalhes'}`,
+                : `${cliente_nome || 'Cliente'} pediu ajustes:\n"${comentario ? comentario.substring(0, 200) : 'Ver detalhes'}"`,
               read: false,
               reference_id: conteudo.id,
               reference_type: 'conteudo',
@@ -193,11 +193,11 @@ export async function POST(request: NextRequest) {
               user_id: m.user_id,
               type: status === 'aprovado' ? 'content_approved' : 'content_adjustment',
               title: status === 'aprovado' 
-                ? `✅ "${conteudo.titulo}" aprovado!`
-                : `🔄 "${conteudo.titulo}" precisa de ajustes`,
+                ? `✅ "${conteudo.titulo}" aprovado pelo cliente!`
+                : `⚠️ AJUSTE SOLICITADO: "${conteudo.titulo}"`,
               body: status === 'aprovado'
                 ? `O cliente aprovou o conteúdo. Pronto para agendar!`
-                : `Feedback: ${comentario || 'Ver detalhes'}`,
+                : `${cliente_nome || 'Cliente'} pediu ajustes:\n"${comentario ? comentario.substring(0, 200) : 'Ver detalhes'}"`,
               read: false,
               reference_id: conteudo.id,
               reference_type: 'conteudo',
@@ -250,6 +250,61 @@ export async function POST(request: NextRequest) {
       } catch (approvalErr) {
         console.error('Error inserting approval record:', approvalErr)
         // Continue mesmo se falhar - não é crítico
+      }
+
+      // 🆕 CRIAR TASK AUTOMÁTICA quando cliente pede ajuste
+      if (status === 'ajuste') {
+        try {
+          // Buscar nome do cliente
+          const { data: client } = await supabase
+            .from('clientes')
+            .select('nome')
+            .eq('id', conteudo.cliente_id || conteudo.empresa_id)
+            .single()
+
+          // Buscar um admin/gestor pra atribuir a task (ou usar assigned_to do conteúdo)
+          let assignTo = conteudo.assigned_to
+          if (!assignTo) {
+            const { data: admins } = await supabase
+              .from('members')
+              .select('user_id')
+              .eq('org_id', conteudo.org_id)
+              .in('role', ['admin', 'gestor'])
+              .eq('status', 'active')
+              .limit(1)
+            
+            if (admins && admins.length > 0) {
+              assignTo = admins[0].user_id
+            }
+          }
+
+          // Criar a task
+          await supabase
+            .from('tasks')
+            .insert({
+              org_id: conteudo.org_id,
+              titulo: `🔄 Ajustes: ${conteudo.titulo || 'Conteúdo'}`,
+              descricao: `**Cliente:** ${client?.nome || 'Cliente'}\n**Solicitação:**\n${comentario || 'Ver detalhes no conteúdo'}\n\n---\n_Task criada automaticamente a partir de solicitação de ajuste do cliente._`,
+              prioridade: 'alta',
+              status: 'pendente',
+              assigned_to: assignTo,
+              created_by: assignTo, // Sistema cria em nome do responsável
+              due_date: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // Prazo: 2 dias
+              cliente_id: conteudo.cliente_id || conteudo.empresa_id,
+              conteudo_id: conteudo.id,
+              tags: ['ajuste-cliente', 'automático'],
+              checklist: [
+                { id: '1', text: 'Revisar solicitação do cliente', done: false },
+                { id: '2', text: 'Fazer os ajustes', done: false },
+                { id: '3', text: 'Enviar novamente para aprovação', done: false },
+              ],
+            })
+
+          console.log('✅ Task de ajuste criada automaticamente')
+        } catch (taskErr) {
+          console.error('Error creating adjustment task:', taskErr)
+          // Continue - não é crítico
+        }
       }
 
       // Dispatch webhook (server-side, using internal fetch)

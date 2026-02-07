@@ -59,7 +59,7 @@ export default function ConteudoDetailPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
   const [linkCopied, setLinkCopied] = useState(false)
-  const [showHistory, setShowHistory] = useState(false)
+  const [showHistory, setShowHistory] = useState(true) // Sempre mostrar histórico por padrão
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
   // Team members for assignee dropdown

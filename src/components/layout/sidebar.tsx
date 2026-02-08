@@ -24,6 +24,9 @@ import {
   ExternalLink,
   Share2,
   ListTodo,
+  Sparkles,
+  Factory,
+  Brain,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -37,7 +40,11 @@ const NAV_ITEMS = [
   { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/notificacoes', label: 'Notificações', icon: Bell },
   { divider: true },
-  { href: '/tarefas', label: 'Max Tasks', icon: ListTodo, highlight: true },
+  { href: '/discovery', label: 'Discovery', icon: Sparkles, highlight: true, badge: 'V4' },
+  { href: '/factory', label: 'Factory', icon: Factory },
+  { href: '/training', label: 'Treinar IA', icon: Brain },
+  { divider: true },
+  { href: '/tarefas', label: 'Max Tasks', icon: ListTodo },
   { divider: true },
   { href: '/equipe', label: 'Equipe', icon: Users },
   { href: '/webhooks', label: 'Webhooks', icon: Webhook },

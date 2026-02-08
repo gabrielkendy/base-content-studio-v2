@@ -1,5 +1,8 @@
 export type UserRole = 'admin' | 'gestor' | 'designer' | 'cliente'
 
+// Categorias de entrega (define o fluxo de trabalho)
+export type CategoriaEntrega = 'post_social' | 'material_grafico' | 'apresentacao' | 'video_offline'
+
 // ============== SISTEMA DE PERMISSÕES GRANULARES (estilo mLabs) ==============
 
 export type PermissionLevel = 'full' | 'read' | 'none'
@@ -233,6 +236,7 @@ export interface Conteudo {
   data_publicacao: string | null
   titulo: string | null
   tipo: string
+  categoria: CategoriaEntrega  // post_social, material_grafico, apresentacao, video_offline
   badge: string | null
   descricao: string | null
   slides: string[]
@@ -373,6 +377,8 @@ export interface Solicitacao {
   id: string
   org_id: string
   cliente_id: string
+  categoria: CategoriaEntrega  // post_social, material_grafico, apresentacao, video_offline
+  tipo: string | null          // tipo específico dentro da categoria
   titulo: string
   descricao: string | null
   referencias: string[]
@@ -449,4 +455,180 @@ export interface TaskStats {
   atrasadas: number
   concluidas_no_prazo: number
   tempo_medio_conclusao_horas: number | null
+}
+
+// ============== V4 - CONTENT DISCOVERY & FACTORY ==============
+
+export type Platform = 'instagram' | 'tiktok' | 'youtube' | 'twitter' | 'website'
+export type ContentType = 'post' | 'carrossel' | 'reels' | 'video' | 'story' | 'thread'
+export type DiscoveredStatus = 'new' | 'reviewed' | 'queued' | 'created' | 'discarded'
+export type CreationStatus = 'pending' | 'generating' | 'review' | 'approved' | 'published' | 'discarded'
+
+// Frameworks do BrandsDecoded
+export type BrandsDecodedFramework = 
+  | 'curiosidade'      // Abertura Curiosa
+  | 'autoridade'       // Autoridade
+  | 'beneficio'        // Benefício Direto
+  | 'pergunta'         // Pergunta Impactante
+  | 'testemunho'       // Testemunho Real
+  | 'lista'            // Lista Valiosa
+  | 'problema_solucao' // Problema e Solução
+  | 'passo_a_passo'    // Passo a Passo
+  | 'segredo'          // Segredo Revelado
+
+export interface ContentSource {
+  id: string
+  tenant_id: string
+  platform: Platform
+  handle: string
+  name: string | null
+  avatar_url: string | null
+  niche: string[]
+  language: string
+  followers_count: number
+  avg_engagement: number
+  is_active: boolean
+  last_scraped_at: string | null
+  scrape_frequency: 'daily' | 'weekly' | 'manual'
+  created_at: string
+  updated_at: string
+}
+
+export interface DiscoveredContent {
+  id: string
+  tenant_id: string
+  source_id: string | null
+  platform: Platform
+  external_id: string
+  external_url: string | null
+  content_type: ContentType
+  caption: string | null
+  thumbnail_url: string | null
+  media_urls: string[]
+  slide_count: number
+  duration_seconds: number | null
+  // Métricas
+  likes_count: number
+  comments_count: number
+  shares_count: number
+  saves_count: number
+  views_count: number
+  // Scores IA
+  virality_score: number
+  relevance_score: number
+  adaptability_score: number
+  overall_score: number
+  // IA Analysis
+  ai_summary: string | null
+  ai_topics: string[]
+  ai_suggested_framework: BrandsDecodedFramework | null
+  // Status
+  status: DiscoveredStatus
+  discovered_at: string
+  posted_at: string | null
+  created_at: string
+  updated_at: string
+  // Joined
+  source?: ContentSource
+}
+
+export interface CreationSlide {
+  number: number
+  type: 'hook' | 'content' | 'proof' | 'cta'
+  text: string
+  image_prompt?: string
+  image_url?: string
+}
+
+export interface GeneratedContent {
+  slides: CreationSlide[]
+  cta: string
+  hashtags: string[]
+  first_comment?: string
+  source_credit: string
+}
+
+export interface CreationQueueItem {
+  id: string
+  tenant_id: string
+  discovered_content_id: string | null
+  title: string
+  source_url: string | null
+  source_handle: string | null
+  source_platform: Platform | null
+  target_format: 'carrossel' | 'reels' | 'post' | 'thread'
+  target_slides: number
+  framework: BrandsDecodedFramework | null
+  custom_instructions: string | null
+  cliente_id: string | null
+  status: CreationStatus
+  generated_content: GeneratedContent | null
+  generated_images: string[]
+  priority: number
+  position: number
+  created_at: string
+  updated_at: string
+  started_at: string | null
+  completed_at: string | null
+  approved_at: string | null
+  published_at: string | null
+  // Joined
+  discovered_content?: DiscoveredContent
+  cliente?: Cliente
+}
+
+export interface CreationMessage {
+  id: string
+  creation_id: string
+  role: 'user' | 'assistant' | 'system'
+  content: string
+  metadata: {
+    model?: string
+    tokens?: number
+    [key: string]: unknown
+  }
+  created_at: string
+}
+
+export interface KnowledgeBase {
+  id: string
+  tenant_id: string
+  type: 'pdf' | 'text' | 'url'
+  name: string
+  description: string | null
+  file_url: string | null
+  content: string | null
+  category: 'general' | 'framework' | 'voice' | 'visual'
+  is_active: boolean
+  processed: boolean
+  created_at: string
+  updated_at: string
+}
+
+export interface CreationSettings {
+  id: string
+  tenant_id: string
+  default_framework: BrandsDecodedFramework
+  default_slides: number
+  default_format: 'carrossel' | 'reels' | 'post' | 'thread'
+  voice_instructions: string | null
+  default_hashtags: Record<string, string[]>
+  default_cta: string | null
+  image_style: string
+  image_prompt_template: string | null
+  created_at: string
+  updated_at: string
+}
+
+// Filtros para busca
+export interface DiscoveryFilters {
+  platform?: Platform[]
+  niche?: string[]
+  content_type?: ContentType[]
+  hashtags?: string[]
+  min_views?: number
+  min_likes?: number
+  period?: '24h' | '7d' | '30d' | '90d'
+  language?: string[]
+  sort_by?: 'viral' | 'recent' | 'relevance'
 }

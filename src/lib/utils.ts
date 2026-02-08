@@ -10,16 +10,113 @@ export const MESES = [
   'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
 ]
 
+// ============== CATEGORIAS DE ENTREGA ==============
+
+export const CATEGORIAS_ENTREGA = [
+  { value: 'post_social', label: 'Post para Redes', emoji: '📱', desc: 'Instagram, TikTok, YouTube, etc', color: '#E4405F' },
+  { value: 'material_grafico', label: 'Material Gráfico', emoji: '🎨', desc: 'Banner, flyer, PDF, mockup', color: '#8B5CF6' },
+  { value: 'apresentacao', label: 'Apresentação', emoji: '📊', desc: 'Pitch, proposta, slides', color: '#3B82F6' },
+  { value: 'video_offline', label: 'Vídeo', emoji: '🎬', desc: 'Institucional, animação, depoimento', color: '#F59E0B' },
+] as const
+
+export type CategoriaEntrega = typeof CATEGORIAS_ENTREGA[number]['value']
+
+export const CATEGORIA_EMOJI: Record<string, string> = {
+  'post_social': '📱',
+  'material_grafico': '🎨',
+  'apresentacao': '📊',
+  'video_offline': '🎬',
+}
+
+// Tipos por categoria
+export const TIPOS_POR_CATEGORIA: Record<string, { value: string; label: string; emoji: string }[]> = {
+  post_social: [
+    { value: 'post', label: 'Post', emoji: '📝' },
+    { value: 'carrossel', label: 'Carrossel', emoji: '📑' },
+    { value: 'stories', label: 'Stories', emoji: '📱' },
+    { value: 'reels', label: 'Reels', emoji: '🎬' },
+    { value: 'feed', label: 'Feed', emoji: '🖼️' },
+    { value: 'video', label: 'Vídeo', emoji: '🎥' },
+  ],
+  material_grafico: [
+    { value: 'banner', label: 'Banner', emoji: '🏷️' },
+    { value: 'flyer', label: 'Flyer', emoji: '📄' },
+    { value: 'cartao', label: 'Cartão de Visita', emoji: '💳' },
+    { value: 'folder', label: 'Folder', emoji: '📁' },
+    { value: 'ebook', label: 'E-book', emoji: '📚' },
+    { value: 'pdf', label: 'PDF', emoji: '📕' },
+    { value: 'mockup', label: 'Mockup', emoji: '🖼️' },
+    { value: 'logo', label: 'Logo', emoji: '✨' },
+    { value: 'outro_material', label: 'Outro', emoji: '📎' },
+  ],
+  apresentacao: [
+    { value: 'pitch', label: 'Pitch', emoji: '🎤' },
+    { value: 'proposta', label: 'Proposta', emoji: '📋' },
+    { value: 'relatorio', label: 'Relatório', emoji: '📈' },
+    { value: 'slides', label: 'Slides', emoji: '📊' },
+    { value: 'outro_apresentacao', label: 'Outro', emoji: '📎' },
+  ],
+  video_offline: [
+    { value: 'institucional', label: 'Institucional', emoji: '🏢' },
+    { value: 'animacao', label: 'Animação', emoji: '🎞️' },
+    { value: 'depoimento', label: 'Depoimento', emoji: '🗣️' },
+    { value: 'tutorial', label: 'Tutorial', emoji: '📹' },
+    { value: 'outro_video', label: 'Outro', emoji: '📎' },
+  ],
+}
+
+// Helper: verifica se categoria permite agendamento em redes sociais
+export function podeAgendar(categoria: string | undefined | null): boolean {
+  return categoria === 'post_social' || !categoria // retrocompatibilidade: sem categoria = post_social
+}
+
+// Helper: obter label da categoria
+export function getCategoriaLabel(categoria: string | undefined | null): string {
+  const cat = CATEGORIAS_ENTREGA.find(c => c.value === categoria)
+  return cat?.label || 'Post para Redes'
+}
+
+// Helper: obter emoji da categoria
+export function getCategoriaEmoji(categoria: string | undefined | null): string {
+  return CATEGORIA_EMOJI[categoria || 'post_social'] || '📱'
+}
+
+// ============== TIPOS DE CONTEÚDO (legado + novos) ==============
+
 export const TIPOS_CONTEUDO = ['carrossel', 'post', 'stories', 'reels', 'feed', 'vídeo'] as const
 export type TipoConteudo = typeof TIPOS_CONTEUDO[number]
 
 export const TIPO_EMOJI: Record<string, string> = {
+  // Post Social
   'carrossel': '📑',
   'post': '📝',
   'stories': '📱',
   'reels': '🎬',
-  'feed': '🏠',
+  'feed': '🖼️',
   'vídeo': '🎥',
+  'video': '🎥',
+  // Material Gráfico
+  'banner': '🏷️',
+  'flyer': '📄',
+  'cartao': '💳',
+  'folder': '📁',
+  'ebook': '📚',
+  'pdf': '📕',
+  'mockup': '🖼️',
+  'logo': '✨',
+  'outro_material': '📎',
+  // Apresentação
+  'pitch': '🎤',
+  'proposta': '📋',
+  'relatorio': '📈',
+  'slides': '📊',
+  'outro_apresentacao': '📎',
+  // Vídeo Offline
+  'institucional': '🏢',
+  'animacao': '🎞️',
+  'depoimento': '🗣️',
+  'tutorial': '📹',
+  'outro_video': '📎',
 }
 
 // Status principal do workflow (10 status - estilo mLabs)

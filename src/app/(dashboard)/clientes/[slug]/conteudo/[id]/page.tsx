@@ -450,9 +450,6 @@ export default function ConteudoDetailPage() {
         }
       }
 
-      // DEBUG: Alert pra ver se está salvando
-      alert(`Salvando:\nData: ${editValue}\nHora: ${editTimeValue}\nValor final: ${valueToSave}`)
-      
       const { error, data: updatedData } = await db.update('conteudos', {
         [editingField]: valueToSave,
         updated_at: new Date().toISOString(),
@@ -460,21 +457,11 @@ export default function ConteudoDetailPage() {
 
       if (error) {
         console.error('❌ Erro no update:', error)
-        alert(`Erro ao salvar: ${error}`)
         throw new Error(error)
       }
 
-      alert(`✅ Salvo com sucesso!\nNovo valor: ${valueToSave}`)
-
-      // IMPORTANTE: Atualizar estado local DIRETAMENTE (evita problema de cache)
-      setConteudo(prev => {
-        if (!prev) return prev
-        return {
-          ...prev,
-          [editingField]: valueToSave,
-          updated_at: new Date().toISOString(),
-        }
-      })
+      // Recarregar dados do banco pra garantir consistência
+      await loadData()
       
       setEditingField(null)
       setEditValue('')

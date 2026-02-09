@@ -17,6 +17,7 @@ import {
   Image as ImageIcon, Video, FileText, File, Music,
   FolderOpen, FolderPlus, Folder, ChevronRight, Home,
   Grid3X3, List, Search, Tag, Move, Edit3, MoreVertical,
+  Link2, ExternalLink, Cloud,
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente } from '@/types/database'
@@ -78,6 +79,12 @@ export default function RepositorioPage() {
   const [editDesc, setEditDesc] = useState('')
   const [moveTarget, setMoveTarget] = useState('/')
   const [actionMenuId, setActionMenuId] = useState<string | null>(null)
+  
+  // External link modal (Google Drive, Dropbox, etc.)
+  const [externalLinkOpen, setExternalLinkOpen] = useState(false)
+  const [externalUrl, setExternalUrl] = useState('')
+  const [externalName, setExternalName] = useState('')
+  const [addingExternal, setAddingExternal] = useState(false)
 
   useEffect(() => {
     if (!org) return
@@ -303,6 +310,43 @@ export default function RepositorioPage() {
     }
   }
 
+  // Add external link (Google Drive, Dropbox, Figma, etc.)
+  async function handleAddExternalLink(e: React.FormEvent) {
+    e.preventDefault()
+    if (!externalUrl.trim() || !cliente || !org) return
+
+    setAddingExternal(true)
+    try {
+      const res = await fetch('/api/assets/external', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          url: externalUrl.trim(),
+          name: externalName.trim() || null,
+          clienteId: cliente.id,
+          orgId: org.id,
+          folder: currentFolder,
+        }),
+      })
+      const json = await res.json()
+      
+      if (json.error) {
+        toast(json.error, 'error')
+        return
+      }
+      
+      toast(json.message || '✅ Link adicionado!', 'success')
+      setExternalLinkOpen(false)
+      setExternalUrl('')
+      setExternalName('')
+      await loadAssets()
+    } catch (err) {
+      toast('Erro ao adicionar link', 'error')
+    } finally {
+      setAddingExternal(false)
+    }
+  }
+
   // Drag & drop handlers
   const handleDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault()
@@ -357,7 +401,25 @@ export default function RepositorioPage() {
   const breadcrumbs = currentFolder.split('/').filter(Boolean)
 
   // File helpers
-  const getFileIcon = (type: string | null, name: string) => {
+  const getFileIcon = (type: string | null, name: string, url?: string) => {
+    // External service icons
+    if (url?.includes('drive.google.com') || url?.includes('docs.google.com')) {
+      return <span className="text-2xl">🔗</span>
+    }
+    if (url?.includes('dropbox.com')) {
+      return <span className="text-2xl">📦</span>
+    }
+    if (url?.includes('figma.com')) {
+      return <span className="text-2xl">🎨</span>
+    }
+    if (url?.includes('canva.com')) {
+      return <span className="text-2xl">✨</span>
+    }
+    if (url?.includes('onedrive') || url?.includes('1drv.ms')) {
+      return <span className="text-2xl">☁️</span>
+    }
+    
+    // File type icons
     if (type?.startsWith('image/')) return <ImageIcon className="w-6 h-6 text-blue-400" />
     if (type?.startsWith('video/')) return <Video className="w-6 h-6 text-purple-400" />
     if (type?.startsWith('audio/')) return <Music className="w-6 h-6 text-green-400" />
@@ -368,6 +430,17 @@ export default function RepositorioPage() {
     if (/\.(zip|rar|7z)$/i.test(name)) return <File className="w-6 h-6 text-yellow-500" />
     if (/\.(ai|psd|sketch|fig)$/i.test(name)) return <ImageIcon className="w-6 h-6 text-pink-500" />
     return <File className="w-6 h-6 text-zinc-400" />
+  }
+  
+  // Check if URL is external (Drive, Dropbox, etc.)
+  const isExternalUrl = (url: string) => {
+    return url?.includes('drive.google.com') || 
+           url?.includes('docs.google.com') || 
+           url?.includes('dropbox.com') || 
+           url?.includes('figma.com') || 
+           url?.includes('canva.com') ||
+           url?.includes('onedrive') ||
+           url?.includes('1drv.ms')
   }
 
   const isImage = (type: string | null) => type?.startsWith('image/')
@@ -445,6 +518,10 @@ export default function RepositorioPage() {
 
         <Button variant="outline" onClick={() => setNewFolderOpen(true)}>
           <FolderPlus className="w-4 h-4 mr-2" /> Nova Pasta
+        </Button>
+
+        <Button variant="outline" onClick={() => setExternalLinkOpen(true)}>
+          <Cloud className="w-4 h-4 mr-2" /> Adicionar Link
         </Button>
 
         {/* Search */}
@@ -916,6 +993,61 @@ export default function RepositorioPage() {
             <Button type="button" variant="ghost" onClick={() => setNewFolderOpen(false)}>Cancelar</Button>
             <Button type="submit" variant="primary">
               <FolderPlus className="w-4 h-4 mr-2" /> Criar
+            </Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* External Link Modal (Google Drive, Dropbox, Figma, etc.) */}
+      <Modal open={externalLinkOpen} onClose={() => setExternalLinkOpen(false)} title="Adicionar Link Externo" size="sm">
+        <form onSubmit={handleAddExternalLink} className="space-y-4">
+          <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg text-sm text-blue-700">
+            <Cloud className="w-5 h-5 shrink-0" />
+            <p>Cole o link do Google Drive, Dropbox, Figma, Canva ou qualquer URL externa.</p>
+          </div>
+          
+          <div>
+            <Label>URL do arquivo *</Label>
+            <Input
+              value={externalUrl}
+              onChange={(e) => setExternalUrl(e.target.value)}
+              placeholder="https://drive.google.com/file/d/..."
+              autoFocus
+              required
+            />
+          </div>
+          
+          <div>
+            <Label>Nome do arquivo (opcional)</Label>
+            <Input
+              value={externalName}
+              onChange={(e) => setExternalName(e.target.value)}
+              placeholder="Ex: Logo Principal.psd"
+            />
+            <p className="text-xs text-zinc-400 mt-1">Se não informar, será detectado automaticamente</p>
+          </div>
+          
+          <div className="flex flex-wrap gap-2 text-xs text-zinc-500">
+            <span className="px-2 py-1 bg-zinc-100 rounded">🔗 Google Drive</span>
+            <span className="px-2 py-1 bg-zinc-100 rounded">📦 Dropbox</span>
+            <span className="px-2 py-1 bg-zinc-100 rounded">🎨 Figma</span>
+            <span className="px-2 py-1 bg-zinc-100 rounded">✨ Canva</span>
+            <span className="px-2 py-1 bg-zinc-100 rounded">☁️ OneDrive</span>
+          </div>
+          
+          <div className="flex justify-end gap-2 pt-2">
+            <Button type="button" variant="ghost" onClick={() => setExternalLinkOpen(false)}>Cancelar</Button>
+            <Button type="submit" variant="primary" disabled={addingExternal}>
+              {addingExternal ? (
+                <>
+                  <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                  Adicionando...
+                </>
+              ) : (
+                <>
+                  <Link2 className="w-4 h-4 mr-2" /> Adicionar
+                </>
+              )}
             </Button>
           </div>
         </form>

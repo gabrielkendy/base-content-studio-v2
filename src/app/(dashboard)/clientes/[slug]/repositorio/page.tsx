@@ -324,13 +324,27 @@ export default function RepositorioPage() {
     if (files.length) handleUpload(files)
   }, [cliente, org, currentFolder])
 
-  // Navigation
+  // Navigation - with duplicate prevention
   function navigateToFolder(folderName: string) {
-    if (currentFolder === '/') {
-      setCurrentFolder(`/${folderName}`)
-    } else {
-      setCurrentFolder(`${currentFolder}/${folderName}`)
+    // Prevent duplicate navigation (clicking same folder twice)
+    const targetPath = currentFolder === '/' 
+      ? `/${folderName}` 
+      : `${currentFolder}/${folderName}`
+    
+    // Check if we're already in this folder (prevents double-click issues)
+    if (currentFolder === targetPath) {
+      console.log('Already in folder:', targetPath)
+      return
     }
+    
+    // Check if folder name is already the last part of current path (prevent duplication)
+    const currentParts = currentFolder.split('/').filter(Boolean)
+    if (currentParts.length > 0 && currentParts[currentParts.length - 1] === folderName) {
+      console.log('Folder already in path:', folderName)
+      return
+    }
+    
+    setCurrentFolder(targetPath)
     setSearchQuery('')
   }
 

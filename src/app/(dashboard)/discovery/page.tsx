@@ -74,29 +74,18 @@ export default function DiscoveryPage() {
       const data = await res.json()
       
       if (data.error) {
-        toast({
-          title: 'Erro na busca',
-          description: data.error,
-          variant: 'destructive',
-        })
+        toast(data.error, 'error')
         return
       }
 
       setContents(data.contents || [])
       
       if (data.contents?.length > 0) {
-        toast({
-          title: 'Busca concluída!',
-          description: `${data.contents.length} conteúdos encontrados`,
-        })
+        toast(`${data.contents.length} conteúdos encontrados`, 'success')
       }
     } catch (error) {
       console.error('Search error:', error)
-      toast({
-        title: 'Erro na busca',
-        description: 'Não foi possível buscar conteúdos. Tente novamente.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível buscar conteúdos. Tente novamente.', 'error')
     } finally {
       setIsSearching(false)
     }
@@ -113,11 +102,7 @@ export default function DiscoveryPage() {
       const data = await res.json()
 
       if (data.error) {
-        toast({
-          title: 'Erro ao adicionar',
-          description: data.error,
-          variant: 'destructive',
-        })
+        toast(data.error, 'error')
         return
       }
 
@@ -127,17 +112,10 @@ export default function DiscoveryPage() {
       ))
       setQueueCount(prev => prev + 1)
 
-      toast({
-        title: 'Adicionado à fila!',
-        description: `"${content.ai_summary?.slice(0, 50)}..." foi adicionado`,
-      })
+      toast('Adicionado à fila!', 'success')
     } catch (error) {
       console.error('Add to queue error:', error)
-      toast({
-        title: 'Erro ao adicionar',
-        description: 'Não foi possível adicionar à fila.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível adicionar à fila.', 'error')
     } finally {
       setAddingIds(prev => prev.filter(id => id !== content.id))
     }

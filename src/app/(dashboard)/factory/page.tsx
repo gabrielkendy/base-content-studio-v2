@@ -44,11 +44,7 @@ export default function FactoryPage() {
       setQueueItems(data.items || [])
     } catch (error) {
       console.error('Error loading queue:', error)
-      toast({
-        title: 'Erro ao carregar fila',
-        description: 'Não foi possível carregar os itens da fila.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível carregar os itens da fila.', 'error')
     } finally {
       setLoading(false)
     }
@@ -94,10 +90,7 @@ export default function FactoryPage() {
           : i
       ))
 
-      toast({
-        title: 'Conteúdo gerado!',
-        description: 'O carrossel foi criado com sucesso. Revise e aprove.',
-      })
+      toast('O carrossel foi criado com sucesso. Revise e aprove.', 'success')
 
       // Navigate to review page
       router.push(`/factory/${item.id}`)
@@ -110,11 +103,7 @@ export default function FactoryPage() {
         i.id === item.id ? { ...i, status: 'pending' as const } : i
       ))
 
-      toast({
-        title: 'Erro na geração',
-        description: 'Não foi possível gerar o conteúdo. Tente novamente.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível gerar o conteúdo. Tente novamente.', 'error')
     } finally {
       setGeneratingId(null)
     }
@@ -124,16 +113,9 @@ export default function FactoryPage() {
     try {
       await fetch(`/api/discovery/queue?id=${id}`, { method: 'DELETE' })
       setQueueItems(prev => prev.filter(i => i.id !== id))
-      toast({
-        title: 'Removido',
-        description: 'Item removido da fila.',
-      })
+      toast('Item removido da fila.', 'success')
     } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível remover o item.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível remover o item.', 'error')
     }
   }
 

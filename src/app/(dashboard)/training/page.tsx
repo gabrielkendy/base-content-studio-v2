@@ -95,11 +95,7 @@ export default function TrainingPage() {
     if (!file) return
 
     if (!file.name.endsWith('.pdf') && !file.name.endsWith('.txt') && !file.name.endsWith('.md')) {
-      toast({
-        title: 'Formato inválido',
-        description: 'Apenas arquivos PDF, TXT ou MD são aceitos.',
-        variant: 'destructive',
-      })
+      toast('Apenas arquivos PDF, TXT ou MD são aceitos.', 'error')
       return
     }
 
@@ -128,18 +124,11 @@ export default function TrainingPage() {
         setKnowledgeBase(prev => prev.map(item => 
           item.id === newItem.id ? { ...item, processed: true } : item
         ))
-        toast({
-          title: 'Processado!',
-          description: `${file.name} foi adicionado à base de conhecimento.`,
-        })
+        toast(`${file.name} foi adicionado à base de conhecimento.`, 'success')
       }, 2000)
 
     } catch (error) {
-      toast({
-        title: 'Erro no upload',
-        description: 'Não foi possível fazer upload do arquivo.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível fazer upload do arquivo.', 'error')
     } finally {
       setUploading(false)
     }
@@ -147,7 +136,7 @@ export default function TrainingPage() {
 
   async function handleDeleteKnowledge(id: string) {
     setKnowledgeBase(prev => prev.filter(item => item.id !== id))
-    toast({ title: 'Removido', description: 'Arquivo removido da base.' })
+    toast('Arquivo removido da base.', 'success')
   }
 
   async function handleSaveSettings() {
@@ -155,16 +144,9 @@ export default function TrainingPage() {
     try {
       // In production, save to API
       await new Promise(resolve => setTimeout(resolve, 1000))
-      toast({
-        title: 'Salvo!',
-        description: 'Configurações atualizadas com sucesso.',
-      })
+      toast('Configurações atualizadas com sucesso.', 'success')
     } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível salvar as configurações.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível salvar as configurações.', 'error')
     } finally {
       setSaving(false)
     }
@@ -247,11 +229,9 @@ export default function TrainingPage() {
                         onChange={(e) => handleFileUpload(e, category.id)}
                         disabled={uploading}
                       />
-                      <Button size="sm" variant="outline" className="gap-2" asChild>
-                        <span>
-                          <Upload className="w-4 h-4" />
-                          Upload
-                        </span>
+                      <Button size="sm" variant="outline" className="gap-2">
+                        <Upload className="w-4 h-4" />
+                        Upload
                       </Button>
                     </label>
                   </div>

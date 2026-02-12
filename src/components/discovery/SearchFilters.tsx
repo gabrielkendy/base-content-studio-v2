@@ -107,13 +107,13 @@ export function SearchFilters({ filters, onFiltersChange, onSearch, isLoading }:
   }
 
   const activeFiltersCount = [
-    filters.platform?.length,
-    filters.content_type?.length,
-    filters.niche?.length,
-    filters.hashtags?.length,
+    filters.platform?.length ?? 0,
+    filters.content_type?.length ?? 0,
+    filters.niche?.length ?? 0,
+    filters.hashtags?.length ?? 0,
     filters.min_views ? 1 : 0,
     filters.period ? 1 : 0,
-  ].reduce((a, b) => (a || 0) + (b || 0), 0)
+  ].reduce((a, b) => a + b, 0)
 
   return (
     <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-6 space-y-6">

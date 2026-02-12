@@ -102,11 +102,7 @@ Quer que eu ajuste algo específico?`,
 
     } catch (error) {
       console.error('Error loading item:', error)
-      toast({
-        title: 'Erro ao carregar',
-        description: 'Não foi possível carregar o conteúdo.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível carregar o conteúdo.', 'error')
     } finally {
       setLoading(false)
     }
@@ -173,11 +169,7 @@ Quer que eu ajuste algo específico?`,
 
     } catch (error) {
       console.error('Chat error:', error)
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível enviar a mensagem.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível enviar a mensagem.', 'error')
     } finally {
       setSending(false)
     }
@@ -194,20 +186,13 @@ Quer que eu ajuste algo específico?`,
       // In production, update in Supabase and create workflow task
       setItem(prev => prev ? { ...prev, status: 'approved', approved_at: new Date().toISOString() } : null)
       
-      toast({
-        title: 'Aprovado! ✅',
-        description: 'Conteúdo aprovado e enviado para o workflow.',
-      })
+      toast('Conteúdo aprovado e enviado para o workflow! ✅', 'success')
 
       // Redirect to factory
       setTimeout(() => router.push('/factory'), 1500)
 
     } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível aprovar o conteúdo.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível aprovar o conteúdo.', 'error')
     }
   }
 
@@ -217,19 +202,12 @@ Quer que eu ajuste algo específico?`,
     try {
       setItem(prev => prev ? { ...prev, status: 'discarded' } : null)
       
-      toast({
-        title: 'Descartado',
-        description: 'Conteúdo removido da fila.',
-      })
+      toast('Conteúdo removido da fila.', 'success')
 
       router.push('/factory')
 
     } catch (error) {
-      toast({
-        title: 'Erro',
-        description: 'Não foi possível descartar o conteúdo.',
-        variant: 'destructive',
-      })
+      toast('Não foi possível descartar o conteúdo.', 'error')
     }
   }
 
@@ -241,7 +219,7 @@ Quer que eu ajuste algo específico?`,
       .join('\n\n')
     
     navigator.clipboard.writeText(text)
-    toast({ title: 'Copiado!', description: 'Todos os slides copiados.' })
+    toast('Todos os slides copiados!', 'success')
   }
 
   if (authLoading || loading) {

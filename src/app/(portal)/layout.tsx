@@ -4,7 +4,7 @@ import { useAuth } from '@/hooks/use-auth'
 import { ToastProvider } from '@/components/ui/toast'
 import { ChatWidget } from '@/components/chat/chat-widget'
 import { db } from '@/lib/api'
-import { LogOut, Home, Grid3X3, Plus, CheckCircle, Bell, X, FileText, Hash, BarChart3, Palette, FolderOpen } from 'lucide-react'
+import { LogOut, Home, Grid3X3, Plus, CheckCircle, Bell, X, FileText, Hash, BarChart3, Palette, FolderOpen, Target } from 'lucide-react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { cn } from '@/lib/utils'
@@ -14,6 +14,7 @@ import type { Notification } from '@/types/database'
 const NAV = [
   { href: '/portal', label: 'Dashboard', icon: Home, exact: true },
   { href: '/portal/conteudos', label: 'Conteúdos', icon: Grid3X3 },
+  { href: '/portal/planejamento', label: 'Planejamento', icon: Target },
   { href: '/portal/solicitacoes', label: 'Solicitações', icon: FileText },
   { href: '/portal/solicitar', label: 'Solicitar', icon: Plus },
   { href: '/portal/aprovacoes', label: 'Aprovações', icon: CheckCircle },

@@ -344,7 +344,7 @@ export default function ImovelDetailPage() {
                     {imovel.carrossel_gerado?.map((slide: any, i: number) => (
                       <div key={i} className="border rounded-lg p-4 bg-zinc-50">
                         <div className="flex items-center justify-between mb-2">
-                          <Badge variant="secondary">Slide {slide.numero}</Badge>
+                          <Badge variant="outline">Slide {slide.numero}</Badge>
                           <span className="text-xs text-zinc-400">{slide.tipo}</span>
                         </div>
                         {slide.titulo && (

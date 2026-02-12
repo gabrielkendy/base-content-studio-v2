@@ -14,7 +14,6 @@ import {
   FileText, Image, Trash2, ExternalLink
 } from 'lucide-react'
 import Link from 'next/link'
-import ReactMarkdown from 'react-markdown'
 
 interface Imovel {
   id: string
@@ -401,8 +400,8 @@ export default function ImovelDetailPage() {
                     </Button>
                   </div>
                   
-                  <div className="bg-zinc-50 rounded-lg p-6 prose prose-sm max-w-none overflow-auto max-h-[500px]">
-                    <ReactMarkdown>{imovel.roteiro_video || ''}</ReactMarkdown>
+                  <div className="bg-zinc-50 rounded-lg p-6 text-sm overflow-auto max-h-[500px] whitespace-pre-wrap font-mono">
+                    {imovel.roteiro_video || ''}
                   </div>
                 </div>
               )}

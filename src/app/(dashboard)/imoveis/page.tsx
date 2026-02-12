@@ -259,7 +259,7 @@ export default function ImoveisPage() {
                     
                     {/* Tipo */}
                     <div className="absolute bottom-2 left-2">
-                      <Badge variant="secondary" className="bg-white/90 backdrop-blur-sm text-xs">
+                      <Badge variant="outline" className="bg-white/90 backdrop-blur-sm text-xs">
                         {tipoConfig?.emoji} {tipoConfig?.label}
                       </Badge>
                     </div>

@@ -241,7 +241,7 @@ export default function ImovelDetailPage() {
                 <p className="font-medium text-zinc-700 mb-2">✨ Diferenciais</p>
                 <div className="flex flex-wrap gap-1.5">
                   {imovel.diferenciais.map((d, i) => (
-                    <Badge key={i} variant="secondary" className="text-xs">{d}</Badge>
+                    <Badge key={i} variant="outline" className="text-xs">{d}</Badge>
                   ))}
                 </div>
               </div>
@@ -274,9 +274,9 @@ export default function ImovelDetailPage() {
                 <div className="pt-2 mt-2 border-t">
                   <p className="text-sm">
                     <span className="font-medium">Resposta gravação:</span>{' '}
-                    <Badge variant={imovel.resposta_gravacao === 'sim' ? 'success' : 'secondary'}>
+                    <span className={`px-2 py-0.5 rounded text-xs font-medium ${imovel.resposta_gravacao === 'sim' ? 'bg-green-100 text-green-700' : 'bg-zinc-100 text-zinc-600'}`}>
                       {imovel.resposta_gravacao === 'sim' ? '✅ Vai gravar' : '❌ Não vai gravar'}
-                    </Badge>
+                    </span>
                   </p>
                   {imovel.respondido_por && (
                     <p className="text-xs text-zinc-500 mt-1">por {imovel.respondido_por}</p>

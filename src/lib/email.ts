@@ -383,3 +383,46 @@ export async function sendEmail({ to, type, data }: SendEmailParams): Promise<{ 
 export async function sendEmailBatch(emails: SendEmailParams[]): Promise<void> {
   await Promise.all(emails.map(sendEmail))
 }
+
+// Envio direto com HTML customizado (para módulos específicos como Imóveis)
+interface SendRawEmailParams {
+  to: string
+  subject: string
+  html: string
+}
+
+export async function sendRawEmail({ to, subject, html }: SendRawEmailParams): Promise<{ success: boolean; error?: string }> {
+  if (!RESEND_API_KEY) {
+    console.log(`📧 [DEV] Raw email would be sent:`, { to, subject })
+    return { success: true }
+  }
+
+  try {
+    const res = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${RESEND_API_KEY}`,
+      },
+      body: JSON.stringify({
+        from: EMAIL_FROM,
+        to: [to],
+        subject,
+        html,
+      }),
+    })
+
+    const result = await res.json()
+
+    if (res.ok) {
+      console.log(`📧 Raw email sent to ${to}`)
+      return { success: true }
+    } else {
+      console.error('Resend error:', result)
+      return { success: false, error: result.message || 'Erro ao enviar' }
+    }
+  } catch (err: any) {
+    console.error('Raw email send error:', err)
+    return { success: false, error: err.message }
+  }
+}

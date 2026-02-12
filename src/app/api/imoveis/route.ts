@@ -3,7 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { gerarCarrossel, gerarLegenda, gerarRoteiro, gerarEmailKendy, gerarEmailEquipe } from '@/lib/imoveis-templates'
-import { sendEmail } from '@/lib/email'
+import { sendRawEmail } from '@/lib/email'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -185,7 +185,7 @@ export async function POST(request: NextRequest) {
     const emailKendyContent = gerarEmailKendy(body, carrossel, legenda)
     
     try {
-      await sendEmail({
+      await sendRawEmail({
         to: emailGestor,
         subject: emailKendyContent.subject,
         html: emailKendyContent.html,
@@ -205,7 +205,7 @@ export async function POST(request: NextRequest) {
       
       try {
         for (const email of emailsEquipe) {
-          await sendEmail({
+          await sendRawEmail({
             to: email,
             subject: emailEquipeContent.subject,
             html: emailEquipeContent.html,

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { sendEmail } from '@/lib/email'
+import { sendRawEmail } from '@/lib/email'
 
 // GET - Página de resposta (redireciona após registrar)
 export async function GET(
@@ -61,7 +61,7 @@ export async function GET(
     const respostaTexto = resposta === 'sim' ? '✅ SIM, vai gravar!' : resposta === 'nao' ? '❌ Não pode gravar' : '⏳ Vai responder depois'
     
     try {
-      await sendEmail({
+      await sendRawEmail({
         to: emailGestor,
         subject: `🎬 Resposta: ${imovel.titulo} - ${respostaTexto}`,
         html: `

@@ -40,13 +40,14 @@ function LoginForm() {
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
     
-    if (recaptchaLoaded && window.grecaptcha) {
-      const token = window.grecaptcha.getResponse()
-      if (!token) {
-        setError('Por favor, complete o reCAPTCHA')
-        return
-      }
-    }
+    // reCAPTCHA temporarily disabled
+    // if (recaptchaLoaded && window.grecaptcha) {
+    //   const token = window.grecaptcha.getResponse()
+    //   if (!token) {
+    //     setError('Por favor, complete o reCAPTCHA')
+    //     return
+    //   }
+    // }
     
     setLoading(true)
     setError('')
@@ -245,14 +246,14 @@ function LoginForm() {
                 </div>
               </div>
 
-              {/* reCAPTCHA */}
-              <div className="flex justify-center [&_.g-recaptcha]:!mx-auto" style={{ colorScheme: 'dark' }}>
+              {/* reCAPTCHA - temporarily disabled */}
+              {/* <div className="flex justify-center [&_.g-recaptcha]:!mx-auto" style={{ colorScheme: 'dark' }}>
                 <div 
                   className="g-recaptcha" 
                   data-sitekey={RECAPTCHA_SITE_KEY}
                   data-theme="dark"
                 />
-              </div>
+              </div> */}
 
               <button
                 type="submit"

@@ -31,28 +31,36 @@ export default function ClientesPage() {
   }, [org])
 
   async function loadClientes() {
+    try {
+      // Optimized: single API call instead of N+3 queries
+      const res = await fetch('/api/clientes/list')
+      if (!res.ok) {
+        throw new Error('Failed to fetch clientes')
+      }
+      const { data } = await res.json()
+      setClientes(data || [])
+    } catch (err) {
+      console.error('Error loading clientes:', err)
+      // Fallback to old method if new endpoint fails
+      await loadClientesFallback()
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  // Fallback: old N+1 method (only used if optimized endpoint fails)
+  async function loadClientesFallback() {
     const { data: cls } = await db.select('clientes', {
       filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
       order: [{ col: 'nome', asc: true }],
     })
 
-    // Get member_clients to check who has access
     const { data: memberClients } = await db.select('member_clients', {
       filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
     })
 
-    // Get pending invites to check who was invited
-    const { data: pendingInvites } = await db.select('invites', {
-      filters: [
-        { op: 'eq', col: 'org_id', val: org!.id },
-        { op: 'eq', col: 'role', val: 'cliente' },
-        { op: 'is', col: 'accepted_at', val: null },
-      ],
-    })
-
     const clienteIdsWithAccess = new Set((memberClients || []).map((mc: any) => mc.cliente_id))
 
-    // Get content counts
     const withCounts = await Promise.all(
       (cls || []).map(async (c: any) => {
         const { data: countData } = await db.select('conteudos', {
@@ -64,7 +72,6 @@ export default function ClientesPage() {
     )
 
     setClientes(withCounts)
-    setLoading(false)
   }
 
   function openNew() {

@@ -24,7 +24,6 @@ import {
   ExternalLink,
   Share2,
   ListTodo,
-  Home,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -32,7 +31,6 @@ const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/solicitacoes', label: 'Solicitações', icon: FileText },
-  { href: '/imoveis', label: 'Imóveis', icon: Home, highlight: true, badge: 'NEW' },
   { href: '/agendar', label: 'Agendar Post', icon: CalendarPlus },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/workflow', label: 'Workflow', icon: Kanban },

@@ -173,7 +173,7 @@ export async function POST(request: NextRequest) {
                 : `⚠️ AJUSTE SOLICITADO: "${conteudo.titulo}"`,
               body: status === 'aprovado'
                 ? `O cliente aprovou o conteúdo. Pronto para agendar!`
-                : `${cliente_nome || 'Cliente'} pediu ajustes:\n"${comentario ? comentario.substring(0, 200) : 'Ver detalhes'}"`,
+                : `${cliente_nome || 'Cliente'} pediu ajustes:\n\n${comentario || 'Clique para ver detalhes no conteúdo'}`,
               read: false,
               reference_id: conteudo.id,
               reference_type: 'conteudo',
@@ -197,7 +197,7 @@ export async function POST(request: NextRequest) {
                 : `⚠️ AJUSTE SOLICITADO: "${conteudo.titulo}"`,
               body: status === 'aprovado'
                 ? `O cliente aprovou o conteúdo. Pronto para agendar!`
-                : `${cliente_nome || 'Cliente'} pediu ajustes:\n"${comentario ? comentario.substring(0, 200) : 'Ver detalhes'}"`,
+                : `${cliente_nome || 'Cliente'} pediu ajustes:\n\n${comentario || 'Clique para ver detalhes no conteúdo'}`,
               read: false,
               reference_id: conteudo.id,
               reference_type: 'conteudo',

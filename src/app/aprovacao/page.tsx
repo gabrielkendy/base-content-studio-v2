@@ -269,6 +269,7 @@ function AprovacaoContent() {
   const [submitted, setSubmitted] = useState(false)
   const [expired, setExpired] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
 
   useEffect(() => {
     if (!token) return
@@ -317,10 +318,16 @@ function AprovacaoContent() {
   }, [token])
 
   async function handleSubmit(aprovado: boolean) {
-    if (!aprovado && !comentario.trim()) {
-      alert('Por favor, descreva os ajustes necessários.')
+    // Validação para ajustes
+    const comentarioTrimmed = comentario.trim()
+    if (!aprovado && !comentarioTrimmed) {
+      alert('Por favor, descreva os ajustes necessários no campo de comentários.')
       return
     }
+
+    // Prevenir duplo clique
+    if (submitting) return
+    setSubmitting(true)
 
     const newStatus = aprovado ? 'aprovado' : 'ajuste'
     
@@ -331,21 +338,36 @@ function AprovacaoContent() {
         body: JSON.stringify({
           token: token!,
           status: newStatus,
-          comentario: comentario || null,
-          cliente_nome: nomeCliente || null,
+          comentario: comentarioTrimmed || null,
+          cliente_nome: nomeCliente.trim() || null,
         }),
       })
 
+      const data = await res.json()
+      
       if (!res.ok) {
-        const { error } = await res.json()
-        throw new Error(error || 'Erro ao enviar aprovação')
+        // Mensagens de erro mais claras
+        if (res.status === 409) {
+          alert('Este link já foi utilizado. Se precisar fazer mais alterações, solicite um novo link.')
+          setSubmitted(true)
+          setStatus('usado')
+          return
+        }
+        if (res.status === 410) {
+          alert('Este link expirou. Solicite um novo link para aprovação.')
+          setExpired(true)
+          return
+        }
+        throw new Error(data.error || 'Erro ao enviar. Tente novamente.')
       }
 
       setSubmitted(true)
       setStatus(newStatus)
     } catch (error) {
       console.error('Erro ao enviar aprovação:', error)
-      alert(`Erro ao enviar aprovação: ${error instanceof Error ? error.message : 'Erro desconhecido'}`)
+      alert(`Erro ao enviar: ${error instanceof Error ? error.message : 'Erro de conexão. Verifique sua internet e tente novamente.'}`)
+    } finally {
+      setSubmitting(false)
     }
   }
 
@@ -651,27 +673,42 @@ function AprovacaoContent() {
                   <textarea
                     value={comentario}
                     onChange={(e) => setComentario(e.target.value)}
+                    onBlur={(e) => setComentario(e.target.value)}
                     placeholder="Adicione observações, sugestões de ajuste ou feedback..."
                     rows={4}
-                    className="w-full px-4 py-3 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+                    className="w-full px-4 py-3 text-base border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-y"
+                    style={{ fontSize: '16px' }}
                   />
+                  {comentario.trim() && (
+                    <p className="text-xs text-green-600 mt-1">✓ Comentário preenchido</p>
+                  )}
                 </div>
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <Button
                     onClick={() => handleSubmit(true)}
-                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-4 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all"
+                    disabled={submitting}
+                    className="flex-1 bg-green-600 hover:bg-green-700 text-white py-4 text-lg font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <CheckCircle className="w-6 h-6 mr-2" />
-                    ✅ Aprovar Conteúdo
+                    {submitting ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2" />
+                    ) : (
+                      <CheckCircle className="w-6 h-6 mr-2" />
+                    )}
+                    {submitting ? 'Enviando...' : '✅ Aprovar Conteúdo'}
                   </Button>
                   <Button
                     onClick={() => handleSubmit(false)}
+                    disabled={submitting}
                     variant="outline"
-                    className="flex-1 border-2 border-orange-400 text-orange-600 hover:bg-orange-50 py-4 text-lg font-semibold rounded-xl"
+                    className="flex-1 border-2 border-orange-400 text-orange-600 hover:bg-orange-50 py-4 text-lg font-semibold rounded-xl disabled:opacity-50 disabled:cursor-not-allowed"
                   >
-                    <AlertTriangle className="w-6 h-6 mr-2" />
-                    📝 Pedir Ajuste
+                    {submitting ? (
+                      <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-orange-400 mr-2" />
+                    ) : (
+                      <AlertTriangle className="w-6 h-6 mr-2" />
+                    )}
+                    {submitting ? 'Enviando...' : '📝 Pedir Ajuste'}
                   </Button>
                 </div>
               </div>

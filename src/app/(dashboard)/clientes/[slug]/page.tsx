@@ -13,7 +13,7 @@ import { MESES, STATUS_CONFIG } from '@/lib/utils'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, BarChart3, Palette, FolderOpen, Share2, Target } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, BarChart3, Palette, FolderOpen, Share2, Target, FileText } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Member, MemberClient } from '@/types/database'
 import { normalizeStatus } from '@/lib/utils'
@@ -96,6 +96,7 @@ export default function ClienteDetailPage() {
     { id: 'brand', label: 'Brand Book', icon: Palette, href: `/clientes/${slug}/brand` },
     { id: 'repositorio', label: 'Repositório', icon: FolderOpen, href: `/clientes/${slug}/repositorio` },
     { id: 'redes' as ViewTab, label: 'Redes Sociais', icon: Share2, href: `/clientes/${slug}/redes` },
+    { id: 'blog' as ViewTab, label: 'Blog', icon: FileText, href: `/clientes/${slug}/blog` },
   ]
 
   return (

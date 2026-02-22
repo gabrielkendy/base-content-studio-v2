@@ -93,6 +93,7 @@ export default function ClienteDetailPage() {
     { id: 'acessos', label: 'Acessos', icon: Users },
     { id: 'planejamento' as ViewTab, label: 'Planejamento', icon: Target, href: `/clientes/${slug}/planejamento` },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, href: `/clientes/${slug}/analytics` },
+    { id: 'campanhas' as ViewTab, label: 'Campanhas', icon: Target, href: `/clientes/${slug}/campanhas` },
     { id: 'brand', label: 'Brand Book', icon: Palette, href: `/clientes/${slug}/brand` },
     { id: 'repositorio', label: 'Repositório', icon: FolderOpen, href: `/clientes/${slug}/repositorio` },
     { id: 'redes' as ViewTab, label: 'Redes Sociais', icon: Share2, href: `/clientes/${slug}/redes` },

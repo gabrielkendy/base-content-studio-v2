@@ -16,6 +16,98 @@ import {
 } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente } from '@/types/database'
+import { Input, Label } from '@/components/ui/input'
+
+// Componente de Setup da Conta de Anúncios
+function SetupAdAccount({ cliente, slug, onSuccess }: { cliente: Cliente; slug: string; onSuccess: () => void }) {
+  const [adAccountId, setAdAccountId] = useState('')
+  const [adAccountName, setAdAccountName] = useState('')
+  const [saving, setSaving] = useState(false)
+  const { toast } = useToast()
+
+  async function handleSave() {
+    if (!adAccountId.trim()) {
+      toast('Informe o ID da conta de anúncios', 'error')
+      return
+    }
+
+    setSaving(true)
+    try {
+      // Formatar ID (adicionar act_ se não tiver)
+      const formattedId = adAccountId.startsWith('act_') ? adAccountId : `act_${adAccountId}`
+      
+      await db.update('clientes', cliente.id, {
+        ad_account_id: formattedId,
+        ad_account_name: adAccountName || `Conta ${formattedId}`,
+      })
+      
+      toast('Conta de anúncios configurada!', 'success')
+      onSuccess()
+    } catch (error) {
+      toast('Erro ao salvar', 'error')
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  return (
+    <div className="space-y-6 animate-fade-in">
+      <div className="flex items-center gap-4">
+        <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
+          <Target className="w-6 h-6 text-white" />
+        </div>
+        <div>
+          <h1 className="text-2xl font-bold text-zinc-900">Campanhas</h1>
+          <p className="text-sm text-zinc-500">{cliente.nome}</p>
+        </div>
+      </div>
+
+      <Card>
+        <CardContent className="p-8">
+          <div className="text-center mb-6">
+            <div className="text-5xl mb-4">📢</div>
+            <h3 className="text-xl font-bold text-zinc-900 mb-2">Configurar Conta de Anúncios</h3>
+            <p className="text-sm text-zinc-500 max-w-md mx-auto">
+              Vincule a conta de anúncios do Facebook para visualizar as campanhas deste cliente.
+            </p>
+          </div>
+
+          <div className="max-w-md mx-auto space-y-4">
+            <div>
+              <Label>ID da Conta de Anúncios *</Label>
+              <Input
+                placeholder="Ex: act_123456789 ou apenas 123456789"
+                value={adAccountId}
+                onChange={(e) => setAdAccountId(e.target.value)}
+              />
+              <p className="text-xs text-zinc-400 mt-1">
+                Encontre no Facebook Ads Manager → Configurações → ID da conta
+              </p>
+            </div>
+
+            <div>
+              <Label>Nome da Conta (opcional)</Label>
+              <Input
+                placeholder="Ex: Conta Principal"
+                value={adAccountName}
+                onChange={(e) => setAdAccountName(e.target.value)}
+              />
+            </div>
+
+            <Button
+              variant="primary"
+              className="w-full"
+              onClick={handleSave}
+              disabled={saving || !adAccountId.trim()}
+            >
+              {saving ? 'Salvando...' : 'Salvar e Continuar'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+}
 
 interface Campaign {
   campaign_id: string
@@ -203,35 +295,7 @@ export default function CampanhasPage() {
 
   // Estado: precisa configurar conta de anúncios
   if (needsSetup) {
-    return (
-      <div className="space-y-6 animate-fade-in">
-        <div className="flex items-center gap-4">
-          <div className="p-3 rounded-xl bg-gradient-to-br from-blue-500 to-indigo-600">
-            <Target className="w-6 h-6 text-white" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-zinc-900">Campanhas</h1>
-            <p className="text-sm text-zinc-500">{cliente.nome}</p>
-          </div>
-        </div>
-
-        <Card>
-          <CardContent className="p-12 text-center">
-            <div className="text-5xl mb-4">📢</div>
-            <h3 className="text-xl font-bold text-zinc-900 mb-2">Conta de anúncios não configurada</h3>
-            <p className="text-sm text-zinc-500 mb-6 max-w-md mx-auto">
-              Configure a conta de anúncios do Facebook para visualizar as campanhas deste cliente.
-            </p>
-            <Link href={`/clientes/${slug}`}>
-              <Button variant="primary">
-                <Settings className="w-4 h-4 mr-2" />
-                Configurar Conta
-              </Button>
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    )
+    return <SetupAdAccount cliente={cliente} slug={slug} onSuccess={() => loadData()} />
   }
 
   return (

@@ -48,9 +48,56 @@ interface AnalyticsData {
   raw_data: any
 }
 
-async function fetchUploadPostAnalytics(profileUsername: string): Promise<AnalyticsData[]> {
+async function fetchUploadPostAnalytics(profileUsername: string, platforms: string[] = ['instagram', 'tiktok', 'youtube', 'facebook', 'linkedin']): Promise<AnalyticsData[]> {
+  const results: AnalyticsData[] = []
+  
+  // Upload-Post API requires platforms parameter - fetch each separately
+  for (const platform of platforms) {
+    try {
+      const res = await fetch(`${API_URL}/api/analytics/${encodeURIComponent(profileUsername)}?platforms=${platform}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Apikey ${API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        next: { revalidate: 0 },
+      })
+
+      if (!res.ok) {
+        console.error(`Upload-Post analytics error for ${platform}: HTTP ${res.status}`)
+        continue
+      }
+
+      const data = await res.json()
+      
+      // Parse platform-specific response
+      if (data[platform]) {
+        const m = data[platform]
+        results.push({
+          platform,
+          followers: m.followers || 0,
+          impressions: m.impressions || 0,
+          reach: m.reach || 0,
+          profile_views: m.profile_views || m.profileViews || 0,
+          likes: m.likes || 0,
+          comments: m.comments || 0,
+          shares: m.shares || 0,
+          engagement_rate: m.engagement_rate || m.engagementRate || 0,
+          raw_data: m,
+        })
+      }
+    } catch (error: any) {
+      console.error(`Failed to fetch ${platform} analytics:`, error.message)
+    }
+  }
+  
+  return results
+}
+
+// Keep old function for backwards compatibility but mark as deprecated
+async function fetchUploadPostAnalyticsLegacy(profileUsername: string): Promise<AnalyticsData[]> {
   try {
-    const res = await fetch(`${API_URL}/api/analytics/${encodeURIComponent(profileUsername)}`, {
+    const res = await fetch(`${API_URL}/api/analytics/${encodeURIComponent(profileUsername)}?platforms=instagram`, {
       method: 'GET',
       headers: {
         'Authorization': `Apikey ${API_KEY}`,

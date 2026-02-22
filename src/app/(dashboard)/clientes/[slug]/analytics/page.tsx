@@ -64,6 +64,45 @@ function formatDate(dateStr: any): string {
   return d.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })
 }
 
+// Calculate trend percentage and return alert tag
+function getTrendTag(current: number, previous: number): { type: 'up' | 'down' | 'stable'; percent: number; color: string; bgColor: string } {
+  if (!previous || previous === 0) {
+    return { type: 'stable', percent: 0, color: 'text-zinc-500', bgColor: 'bg-zinc-100' }
+  }
+  
+  const percent = ((current - previous) / previous) * 100
+  
+  if (percent >= 10) {
+    return { type: 'up', percent, color: 'text-green-700', bgColor: 'bg-green-100' }
+  } else if (percent <= -20) {
+    return { type: 'down', percent, color: 'text-red-700', bgColor: 'bg-red-100' }
+  } else if (percent <= -5) {
+    return { type: 'down', percent, color: 'text-amber-700', bgColor: 'bg-amber-100' }
+  } else if (percent >= 5) {
+    return { type: 'up', percent, color: 'text-green-600', bgColor: 'bg-green-50' }
+  }
+  
+  return { type: 'stable', percent, color: 'text-zinc-500', bgColor: 'bg-zinc-100' }
+}
+
+function TrendBadge({ current, previous, label }: { current: number; previous: number; label?: string }) {
+  const trend = getTrendTag(current, previous)
+  
+  if (trend.type === 'stable' && Math.abs(trend.percent) < 1) {
+    return null
+  }
+  
+  const Icon = trend.type === 'up' ? ArrowUpRight : trend.type === 'down' ? ArrowDownRight : null
+  
+  return (
+    <Badge className={`${trend.bgColor} ${trend.color} text-xs font-medium`}>
+      {Icon && <Icon className="w-3 h-3 mr-0.5" />}
+      {trend.percent > 0 ? '+' : ''}{trend.percent.toFixed(1)}%
+      {label && <span className="ml-1 opacity-70">{label}</span>}
+    </Badge>
+  )
+}
+
 export default function AnalyticsPage() {
   const params = useParams()
   const slug = params.slug as string
@@ -183,6 +222,32 @@ export default function AnalyticsPage() {
     return Object.values(dateMap).sort((a, b) => a.date.localeCompare(b.date))
   })()
 
+  // Calculate previous period metrics for comparison (last 7 days vs previous 7 days)
+  const getPeriodMetrics = (daysAgo: number, periodLength: number) => {
+    const today = new Date()
+    const startDate = new Date(today)
+    startDate.setDate(startDate.getDate() - daysAgo - periodLength)
+    const endDate = new Date(today)
+    endDate.setDate(endDate.getDate() - daysAgo)
+    
+    return history.filter(h => {
+      const d = new Date(h.snapshot_date)
+      return d >= startDate && d < endDate
+    })
+  }
+
+  const currentPeriod = getPeriodMetrics(0, 7)
+  const previousPeriod = getPeriodMetrics(7, 7)
+
+  const currentReach = currentPeriod.reduce((sum, s) => sum + (s.reach || 0), 0)
+  const previousReach = previousPeriod.reduce((sum, s) => sum + (s.reach || 0), 0)
+  
+  const currentInteractions = currentPeriod.reduce((sum, s) => sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0), 0)
+  const previousInteractions = previousPeriod.reduce((sum, s) => sum + (s.likes || 0) + (s.comments || 0) + (s.shares || 0), 0)
+
+  // Get follower trend from first and last data points
+  const previousFollowers = chartData.length > 7 ? chartData[chartData.length - 8]?.followers || 0 : 0
+
   // Platform-specific history
   const platformHistory = activePlatform
     ? history.filter(h => h.platform === activePlatform).sort((a, b) => a.snapshot_date.localeCompare(b.snapshot_date))
@@ -272,12 +337,7 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-lg bg-blue-500/20">
                   <Users className="w-5 h-5 text-blue-600" />
                 </div>
-                {totalFollowers > 0 && (
-                  <Badge className="bg-green-100 text-green-700 text-xs">
-                    <ArrowUpRight className="w-3 h-3 mr-0.5" />
-                    Ativo
-                  </Badge>
-                )}
+                <TrendBadge current={totalFollowers} previous={previousFollowers} />
               </div>
               <div className="text-2xl font-bold text-zinc-900">{formatNumber(totalFollowers)}</div>
               <div className="text-xs text-zinc-500 mt-1">Total seguidores</div>
@@ -292,6 +352,7 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-lg bg-purple-500/20">
                   <Eye className="w-5 h-5 text-purple-600" />
                 </div>
+                <TrendBadge current={currentReach} previous={previousReach} />
               </div>
               <div className="text-2xl font-bold text-zinc-900">{formatNumber(avgReach)}</div>
               <div className="text-xs text-zinc-500 mt-1">Alcance médio</div>
@@ -320,6 +381,7 @@ export default function AnalyticsPage() {
                 <div className="p-2 rounded-lg bg-rose-500/20">
                   <Heart className="w-5 h-5 text-rose-600" />
                 </div>
+                <TrendBadge current={currentInteractions} previous={previousInteractions} />
               </div>
               <div className="text-2xl font-bold text-zinc-900">{formatNumber(totalInteractions)}</div>
               <div className="text-xs text-zinc-500 mt-1">Interações totais</div>

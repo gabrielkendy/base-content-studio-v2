@@ -46,6 +46,7 @@ export async function GET(
           url_original,
           url_thumbnail,
           url_download,
+          drive_file_id,
           ordem
         )
       `)

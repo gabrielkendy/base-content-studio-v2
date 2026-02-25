@@ -36,26 +36,101 @@ async function getUserMembership(userId: string) {
   return data
 }
 
-// Função para listar arquivos do Google Drive
+// Função para listar arquivos do Google Drive (via página pública)
 async function listDriveFiles(folderId: string) {
+  // Método 1: Tentar API com key (funciona para alguns casos)
   const apiKey = process.env.GOOGLE_DRIVE_API_KEY
   
-  if (!apiKey) {
-    throw new Error('GOOGLE_DRIVE_API_KEY não configurada')
+  if (apiKey) {
+    try {
+      const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,size,thumbnailLink,webContentLink,webViewLink)&key=${apiKey}`
+      const response = await fetch(url)
+      
+      if (response.ok) {
+        const data = await response.json()
+        if (data.files && data.files.length > 0) {
+          return data.files
+        }
+      }
+    } catch (e) {
+      console.log('API key method failed, trying scrape method')
+    }
   }
 
-  const url = `https://www.googleapis.com/drive/v3/files?q='${folderId}'+in+parents+and+trashed=false&fields=files(id,name,mimeType,size,thumbnailLink,webContentLink,webViewLink)&key=${apiKey}`
-  
-  const response = await fetch(url)
+  // Método 2: Scrape da página pública do Drive
+  const pageUrl = `https://drive.google.com/drive/folders/${folderId}`
+  const response = await fetch(pageUrl, {
+    headers: {
+      'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+    }
+  })
   
   if (!response.ok) {
-    const error = await response.text()
-    console.error('Google Drive API error:', error)
-    throw new Error('Erro ao acessar Google Drive')
+    throw new Error('Pasta não encontrada ou não é pública')
   }
   
-  const data = await response.json()
-  return data.files || []
+  const html = await response.text()
+  
+  // Extrair arquivos do HTML/JSON embarcado
+  const files: any[] = []
+  
+  // Padrão 1: Buscar data-id e nomes de arquivos
+  const fileMatches = html.matchAll(/data-id="([^"]+)"[^>]*>([^<]*\.(png|jpg|jpeg|gif|pdf|psd|ai|svg|mp4|mov))/gi)
+  const seenIds = new Set<string>()
+  
+  for (const match of fileMatches) {
+    const id = match[1]
+    const name = match[2]
+    if (!seenIds.has(id)) {
+      seenIds.add(id)
+      const ext = name.split('.').pop()?.toLowerCase() || ''
+      const mimeType = getMimeType(ext)
+      files.push({
+        id,
+        name,
+        mimeType,
+        size: 0
+      })
+    }
+  }
+  
+  // Se não encontrou pelo método 1, tentar extrair do JSON embutido
+  if (files.length === 0) {
+    // Buscar padrões de nome de arquivo com extensão conhecida
+    const namePattern = /\[?"([^"]+\.(png|jpg|jpeg|gif|pdf|psd|ai|svg|mp4|mov))"\]/gi
+    const nameMatches = html.matchAll(namePattern)
+    
+    for (const match of nameMatches) {
+      const name = match[1]
+      if (!files.some(f => f.name === name)) {
+        const ext = name.split('.').pop()?.toLowerCase() || ''
+        files.push({
+          id: `file-${files.length}`,
+          name,
+          mimeType: getMimeType(ext),
+          size: 0
+        })
+      }
+    }
+  }
+  
+  return files
+}
+
+function getMimeType(ext: string): string {
+  const mimeTypes: Record<string, string> = {
+    'png': 'image/png',
+    'jpg': 'image/jpeg',
+    'jpeg': 'image/jpeg',
+    'gif': 'image/gif',
+    'svg': 'image/svg+xml',
+    'pdf': 'application/pdf',
+    'psd': 'image/vnd.adobe.photoshop',
+    'ai': 'application/illustrator',
+    'mp4': 'video/mp4',
+    'mov': 'video/quicktime'
+  }
+  return mimeTypes[ext] || 'application/octet-stream'
 }
 
 // POST - Sincronizar arquivos do Drive
@@ -113,17 +188,20 @@ export async function POST(
       .eq('acervo_id', id)
 
     // Inserir novos arquivos
-    const arquivosParaInserir = driveFiles.map((file: any, index: number) => ({
-      acervo_id: id,
-      nome: file.name,
-      tipo: file.mimeType,
-      tamanho: parseInt(file.size) || 0,
-      url_original: file.webViewLink || `https://drive.google.com/file/d/${file.id}/view`,
-      url_thumbnail: file.thumbnailLink || null,
-      url_download: file.webContentLink || `https://drive.google.com/uc?export=download&id=${file.id}`,
-      drive_file_id: file.id,
-      ordem: index
-    }))
+    const arquivosParaInserir = driveFiles.map((file: any, index: number) => {
+      const fileId = file.id.startsWith('file-') ? null : file.id
+      return {
+        acervo_id: id,
+        nome: file.name,
+        tipo: file.mimeType,
+        tamanho: parseInt(file.size) || 0,
+        url_original: fileId ? `https://drive.google.com/file/d/${fileId}/view` : null,
+        url_thumbnail: file.thumbnailLink || (fileId ? `https://drive.google.com/thumbnail?id=${fileId}&sz=w400` : null),
+        url_download: file.webContentLink || (fileId ? `https://drive.google.com/uc?export=download&id=${fileId}` : null),
+        drive_file_id: fileId,
+        ordem: index
+      }
+    })
 
     if (arquivosParaInserir.length > 0) {
       const { error: insertError } = await admin

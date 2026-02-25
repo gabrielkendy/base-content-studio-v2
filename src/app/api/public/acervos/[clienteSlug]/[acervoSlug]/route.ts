@@ -37,6 +37,7 @@ export async function GET(
         icone, 
         total_arquivos, 
         ultimo_sync,
+        drive_folder_url,
         arquivos:acervo_arquivos(
           id,
           nome,

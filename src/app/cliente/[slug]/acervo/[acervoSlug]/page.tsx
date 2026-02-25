@@ -39,6 +39,7 @@ export default function AcervoDetalhePage() {
   
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [acervo, setAcervo] = useState<Acervo | null>(null)
+  const [driveUrl, setDriveUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   
@@ -65,6 +66,7 @@ export default function AcervoDetalhePage() {
       const data = await res.json()
       setCliente(data.cliente)
       setAcervo(data.acervo)
+      setDriveUrl(data.acervo?.drive_folder_url || null)
     } catch (err) {
       setError('Erro ao carregar dados')
     } finally {
@@ -188,9 +190,28 @@ export default function AcervoDetalhePage() {
       <main className="max-w-6xl mx-auto px-4 py-6">
         {!acervo?.arquivos.length ? (
           <div className="text-center py-16 bg-white rounded-2xl shadow-sm">
-            <div className="text-5xl mb-4">📭</div>
-            <h2 className="text-xl font-semibold text-slate-700 mb-2">Nenhum arquivo</h2>
-            <p className="text-slate-500">Este acervo ainda não possui arquivos.</p>
+            <div className="text-5xl mb-4">{driveUrl ? '📁' : '📭'}</div>
+            <h2 className="text-xl font-semibold text-slate-700 mb-2">
+              {driveUrl ? 'Arquivos no Google Drive' : 'Nenhum arquivo'}
+            </h2>
+            <p className="text-slate-500 mb-6">
+              {driveUrl 
+                ? 'Clique no botão abaixo para acessar os arquivos' 
+                : 'Este acervo ainda não possui arquivos.'}
+            </p>
+            {driveUrl && (
+              <a
+                href={driveUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors shadow-lg hover:shadow-xl"
+              >
+                <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 0C5.372 0 0 5.372 0 12s5.372 12 12 12 12-5.372 12-12S18.628 0 12 0zm6.804 14.544l-3.6 6.24H8.796l3.6-6.24h6.408zm-7.2-10.08l3.6 6.24H5.196l3.6-6.24h2.808zm.792 6.24l3.6 6.24h-7.2l3.6-6.24z"/>
+                </svg>
+                Abrir no Google Drive
+              </a>
+            )}
           </div>
         ) : (
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">

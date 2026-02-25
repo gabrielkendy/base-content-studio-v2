@@ -79,7 +79,7 @@ export async function POST(req: NextRequest) {
 
     // Buscar org_id do cliente
     const { data: cliente } = await supabase
-      .from('empresas')
+      .from('clientes')
       .select('org_id')
       .eq('id', empresa_id)
       .single()

@@ -152,8 +152,14 @@ export function getDirectDownloadLink(fileId: string): string {
   return `https://drive.google.com/uc?export=download&id=${fileId}`;
 }
 
-// Gerar link de visualização
+// Gerar link de visualização direta (para embed/display)
 export function getViewLink(fileId: string): string {
+  // Usar uc?export=view para exibição direta da imagem
+  return `https://drive.google.com/uc?export=view&id=${fileId}`;
+}
+
+// Gerar link da página do Drive (para abrir em nova aba)
+export function getDrivePageLink(fileId: string): string {
   return `https://drive.google.com/file/d/${fileId}/view`;
 }
 

@@ -24,12 +24,14 @@ import {
   ExternalLink,
   Share2,
   ListTodo,
+  FolderOpen,
 } from 'lucide-react'
 import { useState } from 'react'
 
 const NAV_ITEMS = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
+  { href: '/acervos', label: 'Acervo Digital', icon: FolderOpen },
   { href: '/solicitacoes', label: 'Solicitações', icon: FileText },
   { href: '/agendar', label: 'Agendar Post', icon: CalendarPlus },
   { href: '/calendario', label: 'Calendário', icon: Calendar },

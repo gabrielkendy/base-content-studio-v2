@@ -317,7 +317,7 @@ export default function CampanhasPage() {
           <div className="relative">
             <Button
               size="sm"
-              variant="secondary"
+              variant="outline"
               onClick={() => setShowDatePicker(!showDatePicker)}
             >
               <Calendar className="w-4 h-4 mr-1" />
@@ -426,14 +426,14 @@ export default function CampanhasPage() {
       <div className="flex gap-2 flex-wrap">
         <Button
           size="sm"
-          variant={statusFilter === 'all' ? 'primary' : 'secondary'}
+          variant={statusFilter === 'all' ? 'primary' : 'outline'}
           onClick={() => setStatusFilter('all')}
         >
           Todas ({campaigns.length})
         </Button>
         <Button
           size="sm"
-          variant={statusFilter === 'ACTIVE' ? 'primary' : 'secondary'}
+          variant={statusFilter === 'ACTIVE' ? 'primary' : 'outline'}
           onClick={() => setStatusFilter('ACTIVE')}
         >
           <Play className="w-3 h-3 mr-1" />
@@ -441,7 +441,7 @@ export default function CampanhasPage() {
         </Button>
         <Button
           size="sm"
-          variant={statusFilter === 'PAUSED' ? 'primary' : 'secondary'}
+          variant={statusFilter === 'PAUSED' ? 'primary' : 'outline'}
           onClick={() => setStatusFilter('PAUSED')}
         >
           <Pause className="w-3 h-3 mr-1" />

@@ -256,6 +256,8 @@ export interface Conteudo {
   internal_approved_at: string | null
   created_at: string
   updated_at: string
+  // WordPress Blog
+  wp_post_url?: string | null
   // Joined
   empresa?: Cliente
   assignee?: Member

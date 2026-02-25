@@ -1,9 +1,9 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useParams } from 'next/navigation'
 import Link from 'next/link'
-import { ArrowLeft, Download, X, ChevronLeft, ChevronRight, FileText, Image as ImageIcon, File } from 'lucide-react'
+import { ArrowLeft, Download, X, ChevronLeft, ChevronRight, FileText, Image as ImageIcon, File, Loader2, RefreshCw } from 'lucide-react'
 
 interface Arquivo {
   id: string
@@ -13,6 +13,7 @@ interface Arquivo {
   url_original: string
   url_thumbnail: string | null
   url_download: string
+  drive_file_id?: string
   ordem: number
 }
 
@@ -32,6 +33,99 @@ interface Cliente {
   logo_url: string | null
 }
 
+// Helper: extrair file ID da URL do Drive
+function extractFileId(url: string): string | null {
+  const patterns = [
+    /\/d\/([a-zA-Z0-9_-]+)/,
+    /id=([a-zA-Z0-9_-]+)/,
+  ]
+  for (const pattern of patterns) {
+    const match = url.match(pattern)
+    if (match) return match[1]
+  }
+  return null
+}
+
+// Helper: gerar URLs alternativas para o Drive
+function getDriveImageUrls(fileId: string): string[] {
+  return [
+    `https://drive.google.com/uc?export=view&id=${fileId}`,
+    `https://drive.google.com/thumbnail?id=${fileId}&sz=w1600`,
+    `https://lh3.googleusercontent.com/d/${fileId}`,
+    `https://drive.google.com/uc?export=download&id=${fileId}`,
+  ]
+}
+
+// Componente de imagem com fallback
+function DriveImage({ 
+  arquivo, 
+  className, 
+  isThumbnail = false,
+  onLoad,
+  onError 
+}: { 
+  arquivo: Arquivo
+  className?: string
+  isThumbnail?: boolean
+  onLoad?: () => void
+  onError?: () => void
+}) {
+  const [currentUrlIndex, setCurrentUrlIndex] = useState(0)
+  const [loading, setLoading] = useState(true)
+  const [failed, setFailed] = useState(false)
+  
+  const fileId = arquivo.drive_file_id || extractFileId(arquivo.url_original)
+  
+  // Para thumbnails, usar URL de thumbnail do Drive
+  const urls = fileId ? (
+    isThumbnail 
+      ? [`https://drive.google.com/thumbnail?id=${fileId}&sz=w400`, ...getDriveImageUrls(fileId)]
+      : getDriveImageUrls(fileId)
+  ) : [arquivo.url_original]
+  
+  const handleError = () => {
+    if (currentUrlIndex < urls.length - 1) {
+      setCurrentUrlIndex(prev => prev + 1)
+    } else {
+      setFailed(true)
+      setLoading(false)
+      onError?.()
+    }
+  }
+  
+  const handleLoad = () => {
+    setLoading(false)
+    onLoad?.()
+  }
+
+  if (failed) {
+    return (
+      <div className={`flex flex-col items-center justify-center bg-slate-100 ${className}`}>
+        <ImageIcon className="w-8 h-8 text-slate-300 mb-2" />
+        <span className="text-xs text-slate-400">Erro ao carregar</span>
+      </div>
+    )
+  }
+
+  return (
+    <div className={`relative ${className}`}>
+      {loading && (
+        <div className="absolute inset-0 flex items-center justify-center bg-slate-50">
+          <Loader2 className="w-6 h-6 text-slate-300 animate-spin" />
+        </div>
+      )}
+      <img
+        src={urls[currentUrlIndex]}
+        alt={arquivo.nome}
+        className={`w-full h-full object-cover ${loading ? 'opacity-0' : 'opacity-100'} transition-opacity`}
+        loading="lazy"
+        onLoad={handleLoad}
+        onError={handleError}
+      />
+    </div>
+  )
+}
+
 export default function AcervoDetalhePage() {
   const params = useParams()
   const clienteSlug = params.slug as string
@@ -45,13 +139,12 @@ export default function AcervoDetalhePage() {
   
   // Preview modal
   const [previewIndex, setPreviewIndex] = useState<number | null>(null)
+  const [previewLoading, setPreviewLoading] = useState(false)
 
-  useEffect(() => {
-    loadData()
-  }, [clienteSlug, acervoSlug])
-
-  async function loadData() {
+  const loadData = useCallback(async () => {
     try {
+      setLoading(true)
+      setError(null)
       const res = await fetch(`/api/public/acervos/${clienteSlug}/${acervoSlug}`)
       
       if (!res.ok) {
@@ -72,7 +165,11 @@ export default function AcervoDetalhePage() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [clienteSlug, acervoSlug])
+
+  useEffect(() => {
+    loadData()
+  }, [loadData])
 
   function formatFileSize(bytes: number): string {
     if (!bytes) return '—'
@@ -82,7 +179,13 @@ export default function AcervoDetalhePage() {
   }
 
   function isImage(tipo: string): boolean {
+    // Incluir PSD como "não-imagem" para mostrar ícone
+    if (tipo === 'image/x-photoshop' || tipo === 'image/vnd.adobe.photoshop') return false
     return tipo?.startsWith('image/')
+  }
+
+  function isPSD(tipo: string): boolean {
+    return tipo === 'image/x-photoshop' || tipo === 'image/vnd.adobe.photoshop'
   }
 
   function isPDF(tipo: string): boolean {
@@ -90,6 +193,13 @@ export default function AcervoDetalhePage() {
   }
 
   function getFileIcon(tipo: string) {
+    if (isPSD(tipo)) return (
+      <div className="flex flex-col items-center">
+        <div className="w-12 h-12 bg-blue-600 rounded-lg flex items-center justify-center">
+          <span className="text-white font-bold text-xs">PSD</span>
+        </div>
+      </div>
+    )
     if (isImage(tipo)) return <ImageIcon className="w-8 h-8 text-blue-500" />
     if (isPDF(tipo)) return <FileText className="w-8 h-8 text-red-500" />
     return <File className="w-8 h-8 text-slate-400" />
@@ -97,19 +207,23 @@ export default function AcervoDetalhePage() {
 
   function openPreview(index: number) {
     setPreviewIndex(index)
+    setPreviewLoading(true)
   }
 
   function closePreview() {
     setPreviewIndex(null)
+    setPreviewLoading(false)
   }
 
   function prevPreview() {
     if (previewIndex === null || !acervo) return
+    setPreviewLoading(true)
     setPreviewIndex(previewIndex > 0 ? previewIndex - 1 : acervo.arquivos.length - 1)
   }
 
   function nextPreview() {
     if (previewIndex === null || !acervo) return
+    setPreviewLoading(true)
     setPreviewIndex(previewIndex < acervo.arquivos.length - 1 ? previewIndex + 1 : 0)
   }
 
@@ -128,9 +242,9 @@ export default function AcervoDetalhePage() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-slate-100 flex items-center justify-center">
-        <div className="animate-pulse text-center">
-          <div className="w-16 h-16 bg-slate-200 rounded-2xl mx-auto mb-4" />
-          <div className="h-6 w-48 bg-slate-200 rounded mx-auto" />
+        <div className="text-center">
+          <Loader2 className="w-12 h-12 text-blue-500 animate-spin mx-auto mb-4" />
+          <p className="text-slate-500">Carregando arquivos...</p>
         </div>
       </div>
     )
@@ -142,9 +256,17 @@ export default function AcervoDetalhePage() {
         <div className="text-center">
           <div className="text-5xl mb-4">😕</div>
           <h1 className="text-xl font-bold text-slate-800 mb-2">{error}</h1>
-          <Link href={`/cliente/${clienteSlug}/acervo`} className="text-blue-500 hover:underline">
-            ← Voltar ao acervo
-          </Link>
+          <div className="flex gap-4 justify-center">
+            <button 
+              onClick={loadData}
+              className="flex items-center gap-2 text-blue-500 hover:text-blue-600"
+            >
+              <RefreshCw className="w-4 h-4" /> Tentar novamente
+            </button>
+            <Link href={`/cliente/${clienteSlug}/acervo`} className="text-slate-500 hover:underline">
+              ← Voltar ao acervo
+            </Link>
+          </div>
         </div>
       </div>
     )
@@ -226,17 +348,16 @@ export default function AcervoDetalhePage() {
                   onClick={() => openPreview(index)}
                 >
                   {isImage(arquivo.tipo) ? (
-                    <img
-                      src={arquivo.url_thumbnail || arquivo.url_original}
-                      alt={arquivo.nome}
-                      className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                      loading="lazy"
+                    <DriveImage 
+                      arquivo={arquivo} 
+                      className="w-full h-full group-hover:scale-105 transition-transform"
+                      isThumbnail
                     />
                   ) : (
                     <div className="flex flex-col items-center gap-2 p-4">
                       {getFileIcon(arquivo.tipo)}
                       <span className="text-xs text-slate-400 text-center line-clamp-1">
-                        {arquivo.tipo?.split('/')[1]?.toUpperCase() || 'FILE'}
+                        {isPSD(arquivo.tipo) ? 'Photoshop' : arquivo.tipo?.split('/')[1]?.toUpperCase() || 'FILE'}
                       </span>
                     </div>
                   )}
@@ -277,7 +398,7 @@ export default function AcervoDetalhePage() {
         >
           {/* Close button */}
           <button 
-            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors"
+            className="absolute top-4 right-4 p-2 text-white/70 hover:text-white transition-colors z-10"
             onClick={closePreview}
           >
             <X className="w-8 h-8" />
@@ -287,18 +408,25 @@ export default function AcervoDetalhePage() {
           {acervo && acervo.arquivos.length > 1 && (
             <>
               <button 
-                className="absolute left-4 p-2 text-white/70 hover:text-white transition-colors"
+                className="absolute left-4 p-2 text-white/70 hover:text-white transition-colors z-10"
                 onClick={e => { e.stopPropagation(); prevPreview() }}
               >
                 <ChevronLeft className="w-10 h-10" />
               </button>
               <button 
-                className="absolute right-4 p-2 text-white/70 hover:text-white transition-colors"
+                className="absolute right-4 p-2 text-white/70 hover:text-white transition-colors z-10"
                 onClick={e => { e.stopPropagation(); nextPreview() }}
               >
                 <ChevronRight className="w-10 h-10" />
               </button>
             </>
+          )}
+
+          {/* Loading overlay */}
+          {previewLoading && (
+            <div className="absolute inset-0 flex items-center justify-center z-5">
+              <Loader2 className="w-12 h-12 text-white animate-spin" />
+            </div>
           )}
 
           {/* Content */}
@@ -307,22 +435,37 @@ export default function AcervoDetalhePage() {
             onClick={e => e.stopPropagation()}
           >
             {isImage(currentFile.tipo) ? (
-              <img
-                src={currentFile.url_original}
-                alt={currentFile.nome}
-                className="max-w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
+              <DriveImage
+                arquivo={currentFile}
+                className="max-w-full max-h-[80vh] rounded-lg shadow-2xl"
+                onLoad={() => setPreviewLoading(false)}
+                onError={() => setPreviewLoading(false)}
               />
             ) : isPDF(currentFile.tipo) ? (
               <iframe
                 src={currentFile.url_original}
                 className="w-[90vw] h-[80vh] bg-white rounded-lg"
                 title={currentFile.nome}
+                onLoad={() => setPreviewLoading(false)}
               />
             ) : (
               <div className="bg-white p-8 rounded-xl text-center">
                 {getFileIcon(currentFile.tipo)}
                 <p className="text-lg font-medium mt-4">{currentFile.nome}</p>
-                <p className="text-slate-500">{formatFileSize(currentFile.tamanho)}</p>
+                <p className="text-slate-500 mb-4">{formatFileSize(currentFile.tamanho)}</p>
+                {isPSD(currentFile.tipo) && (
+                  <p className="text-sm text-slate-400 mb-4">
+                    Arquivos PSD não podem ser visualizados no navegador
+                  </p>
+                )}
+                <a
+                  href={currentFile.url_download}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-medium transition-colors"
+                >
+                  <Download className="w-5 h-5" /> Baixar arquivo
+                </a>
               </div>
             )}
 

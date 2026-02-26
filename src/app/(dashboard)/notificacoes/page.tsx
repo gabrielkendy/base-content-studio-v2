@@ -1,18 +1,57 @@
 'use client'
 
+import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { useNotifications } from '@/hooks/use-notifications'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Bell, Check, CheckCheck, ExternalLink } from 'lucide-react'
+import { Avatar } from '@/components/ui/avatar'
+import { Bell, Check, CheckCheck, ExternalLink, Clock, Paintbrush } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 import { db } from '@/lib/api'
+import Link from 'next/link'
+
+type DemandasAguardando = {
+  id: string
+  demanda_id: number | null
+  titulo: string
+  tipo: string
+  created_at: string
+  empresa?: { nome: string; slug: string; cores?: { primaria?: string } }
+}
 
 export default function NotificacoesPage() {
-  const { user } = useAuth()
+  const { user, org } = useAuth()
   const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications(user?.id)
   const router = useRouter()
+  const [demandasAguardando, setDemandasAguardando] = useState<DemandasAguardando[]>([])
+  const [loadingDemandas, setLoadingDemandas] = useState(true)
+
+  // Buscar demandas aguardando design
+  useEffect(() => {
+    if (!org) return
+    
+    const fetchDemandas = async () => {
+      try {
+        const { data } = await db.select('conteudos', {
+          select: 'id, demanda_id, titulo, tipo, created_at, empresa:clientes(nome, slug, cores)',
+          filters: [
+            { op: 'eq', col: 'org_id', val: org.id },
+            { op: 'eq', col: 'status', val: 'aguardando_design' },
+          ],
+          order: [{ col: 'created_at', asc: false }],
+        })
+        setDemandasAguardando((data as DemandasAguardando[]) || [])
+      } catch (err) {
+        console.error('Erro ao buscar demandas:', err)
+      } finally {
+        setLoadingDemandas(false)
+      }
+    }
+    
+    fetchDemandas()
+  }, [org])
 
   // Navegar para o conteúdo quando clicar na notificação
   const handleNotificationClick = async (n: any) => {
@@ -67,6 +106,30 @@ export default function NotificacoesPage() {
     'task_completed': '✅',
   }
 
+  const TIPO_EMOJI: Record<string, string> = {
+    'carrossel': '📑',
+    'post': '📝',
+    'stories': '📱',
+    'reels': '🎬',
+    'feed': '🖼️',
+    'video': '🎥',
+  }
+
+  const formatTimeAgo = (dateStr: string) => {
+    const date = new Date(dateStr)
+    const now = new Date()
+    const diffMs = now.getTime() - date.getTime()
+    const diffMins = Math.floor(diffMs / 60000)
+    const diffHours = Math.floor(diffMins / 60)
+    const diffDays = Math.floor(diffHours / 24)
+
+    if (diffMins < 1) return 'agora'
+    if (diffMins < 60) return `${diffMins}min atrás`
+    if (diffHours < 24) return `${diffHours}h atrás`
+    if (diffDays === 1) return 'ontem'
+    return `${diffDays} dias atrás`
+  }
+
   return (
     <div className="space-y-6 animate-fade-in">
       <div className="flex items-center justify-between">
@@ -76,12 +139,92 @@ export default function NotificacoesPage() {
         </div>
         {unreadCount > 0 && (
           <Button variant="ghost" size="sm" onClick={markAllRead}>
-            <CheckCheck className="w-4 h-4" /> Marcar todas como lidas
+            <CheckCheck className="w-4 h-4 mr-1" /> Marcar todas como lidas
           </Button>
         )}
       </div>
 
+      {/* Demandas Aguardando Design */}
+      {demandasAguardando.length > 0 && (
+        <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+          <CardHeader className="pb-3">
+            <CardTitle className="flex items-center gap-2 text-lg">
+              <div className="p-2 rounded-lg bg-yellow-100">
+                <Paintbrush className="w-5 h-5 text-yellow-600" />
+              </div>
+              <span>Aguardando Design</span>
+              <Badge variant="outline" className="ml-2 bg-yellow-100 text-yellow-700 border-yellow-300">
+                {demandasAguardando.length}
+              </Badge>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="pt-0">
+            <div className="space-y-3">
+              {demandasAguardando.map(demanda => (
+                <Link 
+                  key={demanda.id} 
+                  href={`/clientes/${demanda.empresa?.slug}/conteudo/${demanda.id}`}
+                  className="block"
+                >
+                  <div className="flex items-center gap-4 p-3 bg-white rounded-xl border border-yellow-100 hover:border-yellow-300 hover:shadow-md transition-all cursor-pointer group">
+                    {/* Cliente Avatar */}
+                    <Avatar
+                      name={demanda.empresa?.nome || '?'}
+                      color={demanda.empresa?.cores?.primaria}
+                      size="md"
+                      className="w-10 h-10 text-sm flex-shrink-0"
+                    />
+                    
+                    {/* Info */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        {demanda.demanda_id && (
+                          <Badge variant="outline" className="text-xs font-mono bg-purple-50 text-purple-600 border-purple-200">
+                            #{String(demanda.demanda_id).padStart(3, '0')}
+                          </Badge>
+                        )}
+                        <span className="text-sm font-medium text-zinc-900 truncate group-hover:text-yellow-700 transition-colors">
+                          {demanda.titulo || 'Sem título'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mt-1">
+                        <span className="text-xs text-zinc-500">
+                          {demanda.empresa?.nome}
+                        </span>
+                        <span className="text-zinc-300">•</span>
+                        <span className="text-xs text-zinc-400">
+                          {TIPO_EMOJI[demanda.tipo] || '📄'} {demanda.tipo}
+                        </span>
+                        <span className="text-zinc-300">•</span>
+                        <span className="text-xs text-zinc-400 flex items-center gap-1">
+                          <Clock className="w-3 h-3" />
+                          {formatTimeAgo(demanda.created_at)}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Arrow */}
+                    <div className="text-zinc-300 group-hover:text-yellow-500 transition-colors">
+                      <ExternalLink className="w-4 h-4" />
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Notificações Gerais */}
       <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <div className="p-2 rounded-lg bg-zinc-100">
+              <Bell className="w-5 h-5 text-zinc-600" />
+            </div>
+            <span>Todas as Notificações</span>
+          </CardTitle>
+        </CardHeader>
         <CardContent className="p-0">
           {notifications.length === 0 ? (
             <div className="py-16 text-center">

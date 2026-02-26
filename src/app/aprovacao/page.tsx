@@ -32,7 +32,15 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [aspectRatios, setAspectRatios] = useState<Record<number, 'landscape' | 'portrait' | 'square'>>({})
   
-  const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)
+  const isImage = (url: string) => {
+    // Extensões tradicionais
+    if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)) return true
+    // URLs do Google Drive (thumbnail, uc?export=view)
+    if (url.includes('drive.google.com/thumbnail') || url.includes('drive.google.com/uc')) return true
+    if (url.includes('lh3.googleusercontent.com')) return true
+    // Fallback: assume imagem se não for vídeo conhecido
+    return false
+  }
   const isVideo = (url: string) => /\.(mp4|webm|mov)(\?|$)/i.test(url)
 
   // Detect aspect ratio when media loads

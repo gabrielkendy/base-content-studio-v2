@@ -27,12 +27,13 @@ const CLIENTES: Record<string, string> = {
   'manchester': '6600751f-e914-4523-8ad0-29560c888e12',
   'grupo-manchester': '6600751f-e914-4523-8ad0-29560c888e12',
   'flexbyo': '0b60ae60-4e5c-44c1-8fab-c1e7e5384ead',
-  'itb': 'ITB_ID_AQUI', // Atualizar com ID real
-  'beat': 'BEAT_ID_AQUI', // Atualizar com ID real
-  'beat-club': 'BEAT_ID_AQUI',
-  'just-burn': 'JUST_ID_AQUI', // Atualizar com ID real
-  'rt': 'RT_ID_AQUI', // Atualizar com ID real
-  'rovertraining': 'RT_ID_AQUI',
+  'itb': 'fd605200-cb68-45db-b566-7713e6aca52f',
+  'beat': 'ef2dff35-c584-491a-a400-beeb656d3cc1',
+  'beat-club': 'ef2dff35-c584-491a-a400-beeb656d3cc1',
+  'thebeatlifeclub': 'ef2dff35-c584-491a-a400-beeb656d3cc1',
+  'rovertraining': '41ed75a1-ae63-4e1b-8ba5-6cb6ed18e183',
+  'rt': '41ed75a1-ae63-4e1b-8ba5-6cb6ed18e183',
+  'kendyproducoes': 'a37e8074-acc9-431c-a421-7e05910c4356',
 }
 
 // Mapeamento tipo form → tipo sistema

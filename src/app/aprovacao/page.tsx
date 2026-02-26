@@ -32,16 +32,23 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
   const [touchStart, setTouchStart] = useState<number | null>(null)
   const [aspectRatios, setAspectRatios] = useState<Record<number, 'landscape' | 'portrait' | 'square'>>({})
   
+  // Detectar tipo de mídia
   const isImage = (url: string) => {
-    // Extensões tradicionais
     if (/\.(jpg|jpeg|png|gif|webp)(\?|$)/i.test(url)) return true
-    // URLs do Google Drive (thumbnail, uc?export=view)
-    if (url.includes('drive.google.com/thumbnail') || url.includes('drive.google.com/uc')) return true
+    if (url.includes('drive.google.com')) return true
     if (url.includes('lh3.googleusercontent.com')) return true
-    // Fallback: assume imagem se não for vídeo conhecido
+    if (url.includes('/api/proxy/image')) return true
     return false
   }
   const isVideo = (url: string) => /\.(mp4|webm|mov)(\?|$)/i.test(url)
+  
+  // Converter URL do Google Drive para proxy local (evita CORS)
+  const getProxiedUrl = (url: string) => {
+    if (url.includes('drive.google.com') || url.includes('lh3.googleusercontent.com')) {
+      return `/api/proxy/image?url=${encodeURIComponent(url)}`
+    }
+    return url
+  }
 
   // Detect aspect ratio when media loads
   const handleImageLoad = (e: React.SyntheticEvent<HTMLImageElement>, index: number) => {
@@ -123,7 +130,7 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
         <div className={`relative flex items-center justify-center transition-all duration-300 ${aspectClass}`}>
           {isImage(currentUrl) ? (
             <img
-              src={currentUrl}
+              src={getProxiedUrl(currentUrl)}
               alt={`Mídia ${currentIndex + 1}`}
               className="w-full h-full object-contain"
               onLoad={(e) => handleImageLoad(e, currentIndex)}
@@ -209,7 +216,7 @@ function MediaCarousel({ urls, titulo }: { urls: string[]; titulo?: string | nul
               }`}
             >
               {isImage(url) ? (
-                <img src={url} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
+                <img src={getProxiedUrl(url)} alt={`Thumb ${i + 1}`} className="w-full h-full object-cover" />
               ) : isVideo(url) ? (
                 <div className="w-full h-full bg-gray-800 flex items-center justify-center">
                   <Video className="w-5 h-5 text-white" />

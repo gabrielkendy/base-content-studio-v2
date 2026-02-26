@@ -17,6 +17,7 @@ import crypto from 'crypto'
  *   - midia_urls?: string[] (array de URLs) - PREFERIDO
  *   - midia_url?: string (URL única - legado, aceito para retrocompatibilidade)
  *   - psd_url?: string (URL do PSD no Drive)
+ *   - demanda_id?: number (opcional - se informado, ATUALIZA demanda existente)
  */
 
 const WEBHOOK_SECRET = process.env.WEBHOOK_DEMANDA_SECRET || 'base-demanda-2026'
@@ -34,14 +35,21 @@ const CLIENTES: Record<string, string> = {
   'rovertraining': '41ed75a1-ae63-4e1b-8ba5-6cb6ed18e183',
   'rt': '41ed75a1-ae63-4e1b-8ba5-6cb6ed18e183',
   'kendyproducoes': 'a37e8074-acc9-431c-a421-7e05910c4356',
+  'just-burn': 'JUST_BURN_ID_AQUI',
+  'portella': 'PORTELLA_ID_AQUI',
+  'alliance-autos': 'ALLIANCE_AUTOS_ID_AQUI',
+  'alliance-financiamentos': 'ALLIANCE_FIN_ID_AQUI',
 }
 
 // Mapeamento tipo form → tipo sistema
 const TIPOS: Record<string, string> = {
   'Post Feed': 'post',
+  'Post': 'post',
   'Stories': 'stories',
   'Carrossel': 'carrossel',
   'Reels': 'reels',
+  'Vídeo': 'video',
+  'Video': 'video',
   'Material Gráfico': 'material_grafico',
 }
 
@@ -54,20 +62,109 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { cliente_slug, titulo, tipo, legenda, midia_url, midia_urls, psd_url } = body
+    const { cliente_slug, titulo, tipo, legenda, midia_url, midia_urls, psd_url, demanda_id } = body
 
     // Normalizar mídia: aceita array (midia_urls) ou string única (midia_url)
     let midias: string[] = []
     
     if (midia_urls && Array.isArray(midia_urls)) {
-      // Novo formato: array de URLs
       midias = midia_urls.filter((url: string) => url && url.trim())
     } else if (midia_url) {
-      // Formato legado: URL única
       midias = [midia_url]
     }
 
-    // Validações
+    const supabase = createServiceClient()
+
+    // ========================================
+    // MODO ATUALIZAÇÃO: Se demanda_id foi informado
+    // ========================================
+    if (demanda_id) {
+      console.log(`[nova-demanda] Atualizando demanda #${demanda_id}`)
+      
+      // Buscar demanda existente
+      const { data: demandaExistente, error: buscaError } = await supabase
+        .from('conteudos')
+        .select('id, titulo, legenda, empresa_id')
+        .eq('demanda_id', demanda_id)
+        .single()
+      
+      if (buscaError || !demandaExistente) {
+        return NextResponse.json({ 
+          error: `Demanda #${demanda_id} não encontrada`,
+          demanda_id 
+        }, { status: 404 })
+      }
+
+      // Atualizar APENAS midia_urls e status (preserva legenda, titulo, etc)
+      const { data: atualizado, error: updateError } = await supabase
+        .from('conteudos')
+        .update({
+          midia_urls: midias,
+          status: 'aprovacao_cliente', // Muda pra aprovação
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', demandaExistente.id)
+        .select()
+        .single()
+
+      if (updateError) {
+        console.error('Erro ao atualizar demanda:', updateError)
+        return NextResponse.json({ error: updateError.message }, { status: 500 })
+      }
+
+      // Gerar/atualizar link de aprovação
+      const token = crypto.randomBytes(24).toString('hex')
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 30)
+
+      // Verificar se já existe link
+      const { data: linkExistente } = await supabase
+        .from('aprovacoes_links')
+        .select('id')
+        .eq('conteudo_id', demandaExistente.id)
+        .single()
+
+      if (linkExistente) {
+        // Atualizar link existente
+        await supabase
+          .from('aprovacoes_links')
+          .update({
+            token,
+            status: 'pendente',
+            expires_at: expiresAt.toISOString(),
+          })
+          .eq('id', linkExistente.id)
+      } else {
+        // Criar novo link
+        await supabase
+          .from('aprovacoes_links')
+          .insert({
+            conteudo_id: demandaExistente.id,
+            empresa_id: demandaExistente.empresa_id,
+            token,
+            status: 'pendente',
+            expires_at: expiresAt.toISOString(),
+          })
+      }
+
+      const linkAprovacao = `https://base-content-studio-v2.vercel.app/aprovacao?token=${token}`
+
+      return NextResponse.json({
+        success: true,
+        mode: 'update',
+        demanda_id,
+        conteudo_id: demandaExistente.id,
+        link_aprovacao: linkAprovacao,
+        total_midias: midias.length,
+        message: `Demanda #${demanda_id} atualizada com ${midias.length} arquivo(s)! Legenda original preservada.`
+      })
+    }
+
+    // ========================================
+    // MODO CRIAÇÃO: Criar nova demanda
+    // ========================================
+
+    // Validações para criação
     if (!cliente_slug || !titulo || !tipo || midias.length === 0) {
       return NextResponse.json({ 
         error: 'Campos obrigatórios: cliente_slug, titulo, tipo, midia_urls (array) ou midia_url (string)' 
@@ -87,8 +184,6 @@ export async function POST(req: NextRequest) {
 
     // Mapear tipo
     const tipoMapeado = TIPOS[tipo] || 'post'
-
-    const supabase = createServiceClient()
 
     // Buscar org_id do cliente
     const { data: cliente } = await supabase
@@ -111,7 +206,7 @@ export async function POST(req: NextRequest) {
         titulo,
         tipo: tipoMapeado,
         legenda: legenda || '',
-        midia_urls: midias, // Agora usa o array normalizado
+        midia_urls: midias,
         status: 'aprovacao_cliente',
         mes: now.getMonth() + 1,
         ano: now.getFullYear(),
@@ -128,7 +223,7 @@ export async function POST(req: NextRequest) {
     // Gerar link de aprovação
     const token = crypto.randomBytes(24).toString('hex')
     const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 30) // 30 dias
+    expiresAt.setDate(expiresAt.getDate() + 30)
 
     const { data: aprovacao, error: aprovacaoError } = await supabase
       .from('aprovacoes_links')
@@ -144,7 +239,6 @@ export async function POST(req: NextRequest) {
 
     if (aprovacaoError) {
       console.error('Erro ao criar link:', aprovacaoError)
-      // Não falha, só loga
     }
 
     const linkAprovacao = aprovacao 
@@ -153,7 +247,9 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({
       success: true,
+      mode: 'create',
       conteudo_id: conteudo.id,
+      demanda_id: (conteudo as any).demanda_id,
       link_aprovacao: linkAprovacao,
       total_midias: midias.length,
       message: `Demanda criada com sucesso! (${midias.length} arquivo${midias.length > 1 ? 's' : ''})`
@@ -171,25 +267,31 @@ export async function GET() {
     status: 'ok', 
     endpoint: '/api/webhooks/nova-demanda',
     method: 'POST',
+    modes: {
+      create: 'Cria nova demanda (padrão)',
+      update: 'Atualiza demanda existente (quando demanda_id é informado)'
+    },
     campos: {
-      cliente_slug: 'string (obrigatório)',
-      titulo: 'string (obrigatório)',
-      tipo: 'string (obrigatório) - Post Feed, Stories, Carrossel, Reels, Material Gráfico',
+      cliente_slug: 'string (obrigatório para criar)',
+      titulo: 'string (obrigatório para criar)',
+      tipo: 'string (obrigatório) - Post, Carrossel, Vídeo, etc',
       legenda: 'string (opcional)',
       midia_urls: 'string[] (obrigatório) - Array de URLs dos arquivos',
-      midia_url: 'string (legado) - URL única (aceito para retrocompatibilidade)',
+      midia_url: 'string (legado) - URL única',
       psd_url: 'string (opcional) - URL do PSD',
+      demanda_id: 'number (opcional) - Se informado, ATUALIZA demanda existente preservando legenda'
     },
-    exemplo: {
+    exemplo_criar: {
       cliente_slug: 'nechio',
       titulo: 'Post Carnaval',
       tipo: 'Carrossel',
       legenda: 'Aproveite as promoções!',
-      midia_urls: [
-        'https://drive.google.com/file1.jpg',
-        'https://drive.google.com/file2.jpg',
-        'https://drive.google.com/file3.jpg'
-      ]
+      midia_urls: ['https://...', 'https://...']
+    },
+    exemplo_atualizar: {
+      demanda_id: 247,
+      midia_urls: ['https://...', 'https://...'],
+      tipo: 'Carrossel'
     }
   })
 }

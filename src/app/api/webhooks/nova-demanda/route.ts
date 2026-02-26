@@ -14,7 +14,8 @@ import crypto from 'crypto'
  *   - titulo: string
  *   - tipo: string (Post Feed, Stories, Carrossel, Reels, Material Gráfico)
  *   - legenda?: string
- *   - midia_url: string (URL do arquivo no Drive)
+ *   - midia_urls?: string[] (array de URLs) - PREFERIDO
+ *   - midia_url?: string (URL única - legado, aceito para retrocompatibilidade)
  *   - psd_url?: string (URL do PSD no Drive)
  */
 
@@ -52,12 +53,23 @@ export async function POST(req: NextRequest) {
     }
 
     const body = await req.json()
-    const { cliente_slug, titulo, tipo, legenda, midia_url, psd_url } = body
+    const { cliente_slug, titulo, tipo, legenda, midia_url, midia_urls, psd_url } = body
+
+    // Normalizar mídia: aceita array (midia_urls) ou string única (midia_url)
+    let midias: string[] = []
+    
+    if (midia_urls && Array.isArray(midia_urls)) {
+      // Novo formato: array de URLs
+      midias = midia_urls.filter((url: string) => url && url.trim())
+    } else if (midia_url) {
+      // Formato legado: URL única
+      midias = [midia_url]
+    }
 
     // Validações
-    if (!cliente_slug || !titulo || !tipo || !midia_url) {
+    if (!cliente_slug || !titulo || !tipo || midias.length === 0) {
       return NextResponse.json({ 
-        error: 'Campos obrigatórios: cliente_slug, titulo, tipo, midia_url' 
+        error: 'Campos obrigatórios: cliente_slug, titulo, tipo, midia_urls (array) ou midia_url (string)' 
       }, { status: 400 })
     }
 
@@ -98,7 +110,7 @@ export async function POST(req: NextRequest) {
         titulo,
         tipo: tipoMapeado,
         legenda: legenda || '',
-        midia_urls: [midia_url],
+        midia_urls: midias, // Agora usa o array normalizado
         status: 'aprovacao_cliente',
         mes: now.getMonth() + 1,
         ano: now.getFullYear(),
@@ -142,7 +154,8 @@ export async function POST(req: NextRequest) {
       success: true,
       conteudo_id: conteudo.id,
       link_aprovacao: linkAprovacao,
-      message: 'Demanda criada com sucesso!'
+      total_midias: midias.length,
+      message: `Demanda criada com sucesso! (${midias.length} arquivo${midias.length > 1 ? 's' : ''})`
     })
 
   } catch (err: any) {
@@ -162,8 +175,20 @@ export async function GET() {
       titulo: 'string (obrigatório)',
       tipo: 'string (obrigatório) - Post Feed, Stories, Carrossel, Reels, Material Gráfico',
       legenda: 'string (opcional)',
-      midia_url: 'string (obrigatório) - URL do arquivo',
+      midia_urls: 'string[] (obrigatório) - Array de URLs dos arquivos',
+      midia_url: 'string (legado) - URL única (aceito para retrocompatibilidade)',
       psd_url: 'string (opcional) - URL do PSD',
+    },
+    exemplo: {
+      cliente_slug: 'nechio',
+      titulo: 'Post Carnaval',
+      tipo: 'Carrossel',
+      legenda: 'Aproveite as promoções!',
+      midia_urls: [
+        'https://drive.google.com/file1.jpg',
+        'https://drive.google.com/file2.jpg',
+        'https://drive.google.com/file3.jpg'
+      ]
     }
   })
 }

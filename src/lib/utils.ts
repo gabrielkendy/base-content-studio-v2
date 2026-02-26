@@ -119,9 +119,10 @@ export const TIPO_EMOJI: Record<string, string> = {
   'outro_video': '📎',
 }
 
-// Status principal do workflow (10 status - estilo mLabs)
+// Status principal do workflow (11 status - estilo mLabs)
 export const STATUS_CONFIG: Record<string, { emoji: string; label: string; color: string; description: string }> = {
   rascunho:               { emoji: '📝', label: 'Rascunho', color: '#6B7280', description: 'Briefing e ideia registrada' },
+  aguardando_design:      { emoji: '🎨', label: 'Aguardando Design', color: '#FBBF24', description: 'Demanda criada, aguardando designer' },
   conteudo:               { emoji: '⚙️', label: 'Conteúdo', color: '#3B82F6', description: 'Copy + Design em andamento' },
   aprovacao_interna:      { emoji: '👁️', label: 'Aprov. Interna', color: '#8B5CF6', description: 'Revisão da equipe' },
   aprovacao_cliente:      { emoji: '📤', label: 'Aprov. Cliente', color: '#F59E0B', description: 'Aguardando aprovação do cliente' },

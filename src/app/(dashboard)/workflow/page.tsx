@@ -17,6 +17,7 @@ import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/ty
 
 type KanbanItem = {
   id: string
+  demanda_id?: number | null
   titulo: string
   tipo: string
   status: string
@@ -35,7 +36,7 @@ type KanbanItem = {
 }
 
 // Colunas que aparecem no Kanban (exclui cancelado e arquivado por padrão)
-const KANBAN_VISIBLE_STATUSES = ['rascunho', 'conteudo', 'aprovacao_interna', 'aprovacao_cliente', 'ajuste', 'aguardando_agendamento', 'agendado', 'publicado']
+const KANBAN_VISIBLE_STATUSES = ['rascunho', 'aguardando_design', 'conteudo', 'aprovacao_interna', 'aprovacao_cliente', 'ajuste', 'aguardando_agendamento', 'agendado', 'publicado']
 
 function WorkflowContent() {
   const { org } = useAuth()
@@ -131,7 +132,13 @@ function WorkflowContent() {
     if (filtroMes !== 'todos' && c.mes !== parseInt(filtroMes)) return
     if (filtroResponsavel !== 'todos' && c.assigned_to !== filtroResponsavel) return
     if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) return
-    if (busca && !(c.titulo || '').toLowerCase().includes(busca.toLowerCase())) return
+    // Busca por título OU por ID (aceita #123 ou 123)
+    if (busca) {
+      const buscaLower = busca.toLowerCase().replace('#', '')
+      const tituloMatch = (c.titulo || '').toLowerCase().includes(buscaLower)
+      const idMatch = (c as any).demanda_id?.toString() === buscaLower
+      if (!tituloMatch && !idMatch) return
+    }
 
     // Esconder cancelados/arquivados se não estiver mostrando
     if (!showArchived && (c.status === 'cancelado' || c.status === 'arquivado')) return
@@ -142,6 +149,7 @@ function WorkflowContent() {
 
     kanbanItems.push({
       id: c.id,
+      demanda_id: (c as any).demanda_id,
       titulo: c.titulo || 'Sem título',
       tipo: c.tipo,
       status: c.status || 'rascunho',
@@ -175,7 +183,7 @@ function WorkflowContent() {
   const solicitacoesPendentes = solicitacoes.filter(s => {
     if (!pendingSolStatuses.includes(s.status)) return false
     if (filtroCliente !== 'todos' && s.cliente_id !== filtroCliente) return false
-    if (busca && !s.titulo.toLowerCase().includes(busca.toLowerCase())) return false
+    if (busca && !s.titulo.toLowerCase().includes(busca.toLowerCase().replace('#', ''))) return false
     return true
   })
 
@@ -705,10 +713,17 @@ function KanbanCard({
           </div>
         )}
 
-        {/* Title */}
-        <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 mb-3 leading-snug group-hover/card:text-blue-600 transition-colors">
-          {item.titulo}
-        </h4>
+        {/* ID Badge + Title */}
+        <div className="flex items-start gap-2 mb-3">
+          {item.demanda_id && (
+            <span className="flex-shrink-0 text-[10px] font-mono font-bold text-purple-600 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200">
+              #{String(item.demanda_id).padStart(3, '0')}
+            </span>
+          )}
+          <h4 className="text-[13px] font-semibold text-zinc-900 line-clamp-2 leading-snug group-hover/card:text-blue-600 transition-colors">
+            {item.titulo}
+          </h4>
+        </div>
 
         {/* Footer */}
         <div className="flex items-center gap-2 pt-2.5 border-t border-zinc-100 mt-auto">

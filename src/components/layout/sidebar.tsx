@@ -25,6 +25,7 @@ import {
   Share2,
   ListTodo,
   FolderOpen,
+  UserCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -42,6 +43,7 @@ const NAV_ITEMS = [
   { href: '/tarefas', label: 'Max Tasks', icon: ListTodo },
   { divider: true },
   { href: '/equipe', label: 'Equipe', icon: Users },
+  { href: '/aprovadores', label: 'Aprovadores', icon: UserCheck },
   { href: '/webhooks', label: 'Webhooks', icon: Webhook },
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ] as const

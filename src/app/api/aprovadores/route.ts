@@ -1,5 +1,4 @@
-import { createRouteHandlerClient } from '@supabase/auth-helpers-nextjs'
-import { cookies } from 'next/headers'
+import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
 
 // GET /api/aprovadores?empresa_slug=nechio&tipo=interno&nivel=1
@@ -11,7 +10,7 @@ export async function GET(request: NextRequest) {
   const nivel = searchParams.get('nivel')
   const ativo = searchParams.get('ativo') !== 'false' // default true
 
-  const supabase = createRouteHandlerClient({ cookies })
+  const supabase = createServiceClient()
 
   let query = supabase
     .from('aprovadores')
@@ -70,7 +69,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    const supabase = createRouteHandlerClient({ cookies })
+    const supabase = createServiceClient()
 
     // Formatar WhatsApp
     const whatsappFormatado = whatsapp.replace(/\D/g, '')
@@ -83,6 +82,7 @@ export async function POST(request: NextRequest) {
         nome,
         email: email || null,
         whatsapp: whatsappFinal,
+        pais: '+55',
         tipo,
         nivel: nivel || 1,
         pode_editar_legenda: pode_editar_legenda || false,

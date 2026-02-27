@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Modal } from '@/components/ui/modal'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Mail, UserX, Trash2, Copy, RefreshCw, MoreVertical, Shield, Users, Clock, Settings2 } from 'lucide-react'
+import { Plus, Mail, UserX, Trash2, Copy, RefreshCw, Shield, Users, Clock, Settings2, Phone, MessageCircle, Bell, Pencil } from 'lucide-react'
 import type { Member, Invite, Cliente, MemberPermissions } from '@/types/database'
 import { useRoleGuard } from '@/hooks/use-role-guard'
 import { PermissionsModal } from '@/components/permissions-modal'
@@ -34,6 +34,18 @@ export default function EquipePage() {
   })
   const [permissionsModal, setPermissionsModal] = useState<{ open: boolean; member: Member | null }>({
     open: false, member: null
+  })
+  
+  // Novo: Modal de edição de membro
+  const [editMemberModal, setEditMemberModal] = useState<{ open: boolean; member: Member | null }>({
+    open: false, member: null
+  })
+  const [editForm, setEditForm] = useState({
+    display_name: '',
+    whatsapp: '',
+    pais: '+55',
+    notificar_email: true,
+    notificar_whatsapp: true,
   })
 
   useEffect(() => {
@@ -70,6 +82,43 @@ export default function EquipePage() {
     )
   }
 
+  // Novo: Abrir modal de edição
+  function openEditMember(member: Member) {
+    setEditMemberModal({ open: true, member })
+    setEditForm({
+      display_name: member.display_name || '',
+      whatsapp: (member as any).whatsapp || '',
+      pais: (member as any).pais || '+55',
+      notificar_email: (member as any).notificar_email ?? true,
+      notificar_whatsapp: (member as any).notificar_whatsapp ?? true,
+    })
+  }
+
+  // Novo: Salvar edição do membro
+  async function handleSaveEditMember(e: React.FormEvent) {
+    e.preventDefault()
+    if (!editMemberModal.member) return
+
+    const payload = {
+      display_name: editForm.display_name || null,
+      whatsapp: editForm.whatsapp ? editForm.whatsapp.replace(/\D/g, '') : null,
+      pais: editForm.pais,
+      notificar_email: editForm.notificar_email,
+      notificar_whatsapp: editForm.notificar_whatsapp,
+    }
+
+    const { error } = await db.update('members', payload, { id: editMemberModal.member.id })
+    
+    if (error) {
+      toast('Erro ao salvar', 'error')
+      return
+    }
+
+    toast('✅ Membro atualizado!', 'success')
+    setEditMemberModal({ open: false, member: null })
+    loadData()
+  }
+
   async function handleInvite(e: React.FormEvent) {
     e.preventDefault()
 
@@ -78,7 +127,6 @@ export default function EquipePage() {
       return
     }
 
-    // Check for duplicate pending invite
     const existingInvite = invites.find(inv => inv.email.toLowerCase() === inviteEmail.toLowerCase())
     if (existingInvite) {
       toast('Já existe um convite pendente para este email. Reenvie ou apague o existente.', 'error')
@@ -150,42 +198,12 @@ export default function EquipePage() {
         setActionLoading(inviteId)
         setConfirmModal(prev => ({ ...prev, open: false }))
         try {
-          // Also clean up any member_clients associated with this invite
           await db.delete('member_clients', { member_id: inviteId })
           await db.delete('invites', { id: inviteId })
           toast('Convite apagado!', 'success')
           loadData()
         } catch {
           toast('Erro ao apagar convite', 'error')
-        } finally {
-          setActionLoading(null)
-        }
-      }
-    })
-  }
-
-  async function handleDeleteAllInvitesForEmail(email: string) {
-    const matching = invites.filter(inv => inv.email.toLowerCase() === email.toLowerCase())
-    if (matching.length <= 1) return
-
-    setConfirmModal({
-      open: true,
-      title: 'Apagar Convites Duplicados',
-      message: `Existem ${matching.length} convites para ${email}. Deseja apagar todos os duplicados e manter apenas o mais recente?`,
-      onConfirm: async () => {
-        setActionLoading(email)
-        setConfirmModal(prev => ({ ...prev, open: false }))
-        try {
-          // Keep the first one (most recent), delete the rest
-          const toDelete = matching.slice(1)
-          for (const inv of toDelete) {
-            await db.delete('member_clients', { member_id: inv.id })
-            await db.delete('invites', { id: inv.id })
-          }
-          toast(`${toDelete.length} convite(s) duplicado(s) removido(s)!`, 'success')
-          loadData()
-        } catch {
-          toast('Erro ao apagar convites', 'error')
         } finally {
           setActionLoading(null)
         }
@@ -271,7 +289,6 @@ export default function EquipePage() {
   }
 
   async function handleCleanupDuplicates() {
-    // Group invites by email and find duplicates
     const emailMap = new Map<string, Invite[]>()
     invites.forEach(inv => {
       const key = inv.email.toLowerCase()
@@ -281,7 +298,7 @@ export default function EquipePage() {
     let totalDeleted = 0
     for (const [, group] of emailMap) {
       if (group.length > 1) {
-        const toDelete = group.slice(1) // keep most recent
+        const toDelete = group.slice(1)
         for (const inv of toDelete) {
           await db.delete('member_clients', { member_id: inv.id })
           await db.delete('invites', { id: inv.id })
@@ -302,7 +319,6 @@ export default function EquipePage() {
   const isAdminOrGestor = currentMember?.role === 'admin' || currentMember?.role === 'gestor'
   const activeMembers = members.filter(m => m.status === 'active')
 
-  // Detect duplicates
   const emailCounts = new Map<string, number>()
   invites.forEach(inv => {
     const key = inv.email.toLowerCase()
@@ -354,6 +370,10 @@ export default function EquipePage() {
           <div className="divide-y divide-zinc-50">
             {activeMembers.map(m => {
               const isCurrentUser = m.user_id === currentMember?.user_id
+              const memberWhatsapp = (m as any).whatsapp
+              const memberNotifyEmail = (m as any).notificar_email
+              const memberNotifyWhatsapp = (m as any).notificar_whatsapp
+              
               return (
                 <div key={m.id} className="flex items-center gap-4 px-6 py-4 hover:bg-zinc-50/50 transition-colors">
                   <Avatar name={m.display_name || '?'} src={m.avatar_url} />
@@ -364,9 +384,28 @@ export default function EquipePage() {
                         <span className="text-[10px] font-medium text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded">Você</span>
                       )}
                     </div>
-                    <div className="text-xs text-zinc-400 truncate">
-                      {(m as any).email || m.user_id?.slice(0, 8)}
-                      {m.created_at && ` · Desde ${new Date(m.created_at).toLocaleDateString('pt-BR')}`}
+                    <div className="flex items-center gap-3 text-xs text-zinc-400">
+                      <span className="truncate">
+                        {(m as any).email || m.user_id?.slice(0, 8)}
+                      </span>
+                      {/* Mostrar WhatsApp se existir */}
+                      {memberWhatsapp && (
+                        <span className="flex items-center gap-1">
+                          <Phone className="w-3 h-3" />
+                          {memberWhatsapp}
+                        </span>
+                      )}
+                      {/* Indicadores de notificação */}
+                      {memberNotifyWhatsapp && (
+                        <span title="Notificações WhatsApp ativas">
+                          <MessageCircle className="w-3 h-3 text-green-500" />
+                        </span>
+                      )}
+                      {memberNotifyEmail && (
+                        <span title="Notificações Email ativas">
+                          <Bell className="w-3 h-3 text-blue-500" />
+                        </span>
+                      )}
                     </div>
                   </div>
 
@@ -388,13 +427,26 @@ export default function EquipePage() {
                     </Badge>
                   )}
 
+                  {/* Edit button - NOVO */}
+                  {isAdminOrGestor && (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => openEditMember(m)}
+                      className="text-zinc-400 hover:text-blue-500 hover:bg-blue-50"
+                      title="Editar membro"
+                    >
+                      <Pencil className="w-4 h-4" />
+                    </Button>
+                  )}
+
                   {/* Permissions button */}
                   {isAdmin && !isCurrentUser && (
                     <Button
                       size="sm"
                       variant="ghost"
                       onClick={() => openPermissionsModal(m)}
-                      className="text-zinc-400 hover:text-blue-500 hover:bg-blue-50"
+                      className="text-zinc-400 hover:text-purple-500 hover:bg-purple-50"
                       title="Configurar permissões"
                     >
                       <Settings2 className="w-4 h-4" />
@@ -489,7 +541,6 @@ export default function EquipePage() {
                       {ROLE_LABELS[inv.role] || inv.role}
                     </Badge>
 
-                    {/* Action buttons */}
                     {isAdminOrGestor && (
                       <div className="flex items-center gap-1">
                         <Button
@@ -593,6 +644,89 @@ export default function EquipePage() {
         </form>
       </Modal>
 
+      {/* NOVO: Edit member modal */}
+      <Modal 
+        open={editMemberModal.open} 
+        onClose={() => setEditMemberModal({ open: false, member: null })} 
+        title="✏️ Editar Membro" 
+        size="sm"
+      >
+        <form onSubmit={handleSaveEditMember} className="space-y-4">
+          <div>
+            <Label>Nome</Label>
+            <Input 
+              value={editForm.display_name} 
+              onChange={e => setEditForm({ ...editForm, display_name: e.target.value })} 
+              placeholder="Nome do membro" 
+            />
+          </div>
+          
+          <div>
+            <Label>WhatsApp</Label>
+            <div className="flex gap-2">
+              <span className="flex items-center px-3 bg-zinc-100 text-zinc-500 text-sm rounded-lg border border-zinc-200">
+                {editForm.pais}
+              </span>
+              <Input 
+                value={editForm.whatsapp} 
+                onChange={e => setEditForm({ ...editForm, whatsapp: e.target.value })} 
+                placeholder="31999999999" 
+                className="flex-1"
+              />
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">Usado para notificações de aprovação</p>
+          </div>
+
+          {/* Notificações */}
+          <div className="space-y-3 pt-2 border-t">
+            <Label className="text-sm font-medium text-zinc-700">🔔 Notificações</Label>
+            
+            {/* WhatsApp */}
+            <div className="flex items-center justify-between py-2 px-3 bg-zinc-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <MessageCircle className="w-4 h-4 text-green-500" />
+                <span className="text-sm">WhatsApp</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditForm({ ...editForm, notificar_whatsapp: !editForm.notificar_whatsapp })}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  editForm.notificar_whatsapp ? 'bg-green-500' : 'bg-zinc-300'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  editForm.notificar_whatsapp ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+
+            {/* Email */}
+            <div className="flex items-center justify-between py-2 px-3 bg-zinc-50 rounded-lg">
+              <div className="flex items-center gap-2">
+                <Mail className="w-4 h-4 text-blue-500" />
+                <span className="text-sm">E-mail</span>
+              </div>
+              <button
+                type="button"
+                onClick={() => setEditForm({ ...editForm, notificar_email: !editForm.notificar_email })}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  editForm.notificar_email ? 'bg-blue-500' : 'bg-zinc-300'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  editForm.notificar_email ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="ghost" onClick={() => setEditMemberModal({ open: false, member: null })}>Cancelar</Button>
+            <Button type="submit" variant="primary">💾 Salvar</Button>
+          </div>
+        </form>
+      </Modal>
+
       {/* Confirmation modal */}
       <Modal open={confirmModal.open} onClose={() => setConfirmModal(prev => ({ ...prev, open: false }))} title={confirmModal.title} size="sm">
         <div className="space-y-4">
@@ -604,7 +738,7 @@ export default function EquipePage() {
         </div>
       </Modal>
 
-      {/* Permissions modal (estilo mLabs) */}
+      {/* Permissions modal */}
       {permissionsModal.member && (
         <PermissionsModal
           open={permissionsModal.open}

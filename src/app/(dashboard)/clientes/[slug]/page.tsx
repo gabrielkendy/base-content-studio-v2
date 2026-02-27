@@ -13,12 +13,27 @@ import { MESES, STATUS_CONFIG } from '@/lib/utils'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, BarChart3, Palette, FolderOpen, Share2, Target, FileText } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, BarChart3, Palette, FolderOpen, Share2, Target, FileText, CheckCircle2, Plus, Phone, X, GripVertical, Bell, BellOff, Edit2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Member, MemberClient } from '@/types/database'
 import { normalizeStatus } from '@/lib/utils'
 
-type ViewTab = 'anual' | 'acessos' | 'analytics' | 'brand' | 'repositorio'
+type ViewTab = 'anual' | 'acessos' | 'aprovadores' | 'analytics' | 'brand' | 'repositorio'
+
+interface Aprovador {
+  id: string
+  empresa_id: string
+  nome: string
+  email: string | null
+  whatsapp: string
+  pais: string
+  tipo: 'interno' | 'cliente' | 'designer'
+  nivel: number
+  pode_editar_legenda: boolean
+  recebe_notificacao: boolean
+  ativo: boolean
+  created_at: string
+}
 
 export default function ClienteDetailPage() {
   const params = useParams()
@@ -37,6 +52,22 @@ export default function ClienteDetailPage() {
   const [inviteEmail, setInviteEmail] = useState('')
   const [loadingAccess, setLoadingAccess] = useState(false)
 
+  // Aprovadores state
+  const [aprovadores, setAprovadores] = useState<Aprovador[]>([])
+  const [loadingAprovadores, setLoadingAprovadores] = useState(false)
+  const [aprovadorModalOpen, setAprovadorModalOpen] = useState(false)
+  const [editingAprovador, setEditingAprovador] = useState<Aprovador | null>(null)
+  const [aprovadorForm, setAprovadorForm] = useState({
+    nome: '',
+    email: '',
+    whatsapp: '',
+    pais: '+55',
+    tipo: 'cliente' as 'interno' | 'cliente' | 'designer',
+    nivel: 1,
+    pode_editar_legenda: false,
+    recebe_notificacao: true
+  })
+
   useEffect(() => { if (org) loadData() }, [org, ano])
 
   async function loadData() {
@@ -48,7 +79,103 @@ export default function ClienteDetailPage() {
     setConteudos(normalized)
     setLoading(false)
     loadAccessData(c.id)
+    loadAprovadores(c.id)
   }
+
+  async function loadAprovadores(clienteId: string) {
+    setLoadingAprovadores(true)
+    const { data } = await db.select('aprovadores', { 
+      filters: [{ op: 'eq', col: 'empresa_id', val: clienteId }],
+      order: [{ col: 'nivel', asc: true }, { col: 'nome', asc: true }]
+    })
+    setAprovadores(data || [])
+    setLoadingAprovadores(false)
+  }
+
+  function openNewAprovador(nivel: number = 1) {
+    setEditingAprovador(null)
+    setAprovadorForm({
+      nome: '',
+      email: '',
+      whatsapp: '',
+      pais: '+55',
+      tipo: 'cliente',
+      nivel,
+      pode_editar_legenda: false,
+      recebe_notificacao: true
+    })
+    setAprovadorModalOpen(true)
+  }
+
+  function openEditAprovador(apr: Aprovador) {
+    setEditingAprovador(apr)
+    setAprovadorForm({
+      nome: apr.nome,
+      email: apr.email || '',
+      whatsapp: apr.whatsapp.replace(/^55/, ''),
+      pais: '+55',
+      tipo: apr.tipo,
+      nivel: apr.nivel,
+      pode_editar_legenda: apr.pode_editar_legenda,
+      recebe_notificacao: apr.recebe_notificacao
+    })
+    setAprovadorModalOpen(true)
+  }
+
+  async function handleSaveAprovador(e: React.FormEvent) {
+    e.preventDefault()
+    if (!cliente) return
+    
+    const whatsappFormatado = aprovadorForm.whatsapp.replace(/\D/g, '')
+    const payload = {
+      empresa_id: cliente.id,
+      nome: aprovadorForm.nome,
+      email: aprovadorForm.email || null,
+      whatsapp: whatsappFormatado.startsWith('55') ? whatsappFormatado : `55${whatsappFormatado}`,
+      pais: aprovadorForm.pais,
+      tipo: aprovadorForm.tipo,
+      nivel: aprovadorForm.nivel,
+      pode_editar_legenda: aprovadorForm.pode_editar_legenda,
+      recebe_notificacao: aprovadorForm.recebe_notificacao,
+      ativo: true
+    }
+
+    if (editingAprovador) {
+      const { error } = await db.update('aprovadores', payload, { id: editingAprovador.id })
+      if (error) { toast('Erro ao salvar', 'error'); return }
+      toast('Aprovador atualizado!', 'success')
+    } else {
+      const { error } = await db.insert('aprovadores', payload)
+      if (error) { toast('Erro ao criar', 'error'); return }
+      toast('Aprovador adicionado!', 'success')
+    }
+    
+    setAprovadorModalOpen(false)
+    loadAprovadores(cliente.id)
+  }
+
+  async function handleDeleteAprovador(id: string) {
+    if (!confirm('Remover este aprovador?')) return
+    const { error } = await db.delete('aprovadores', { id })
+    if (error) { toast('Erro ao remover', 'error'); return }
+    toast('Aprovador removido!', 'success')
+    if (cliente) loadAprovadores(cliente.id)
+  }
+
+  async function toggleAprovadorAtivo(apr: Aprovador) {
+    const { error } = await db.update('aprovadores', { ativo: !apr.ativo }, { id: apr.id })
+    if (error) { toast('Erro', 'error'); return }
+    if (cliente) loadAprovadores(cliente.id)
+  }
+
+  // Agrupar aprovadores por nível
+  const aprovadoresPorNivel = aprovadores.reduce((acc, apr) => {
+    if (!acc[apr.nivel]) acc[apr.nivel] = []
+    acc[apr.nivel].push(apr)
+    return acc
+  }, {} as Record<number, Aprovador[]>)
+
+  const maxNivel = Math.max(...Object.keys(aprovadoresPorNivel).map(Number), 0)
 
   async function loadAccessData(clienteId: string) {
     setLoadingAccess(true)
@@ -91,6 +218,7 @@ export default function ClienteDetailPage() {
   const TABS: { id: ViewTab; label: string; icon: any; href?: string }[] = [
     { id: 'anual', label: 'Visão Anual', icon: Calendar },
     { id: 'acessos', label: 'Acessos', icon: Users },
+    { id: 'aprovadores', label: 'Aprovadores', icon: CheckCircle2 },
     { id: 'planejamento' as ViewTab, label: 'Planejamento', icon: Target, href: `/clientes/${slug}/planejamento` },
     { id: 'analytics', label: 'Analytics', icon: BarChart3, href: `/clientes/${slug}/analytics` },
     { id: 'campanhas' as ViewTab, label: 'Campanhas', icon: Target, href: `/clientes/${slug}/campanhas` },
@@ -332,6 +460,200 @@ export default function ClienteDetailPage() {
         </div>
       )}
 
+      {/* View Aprovadores - Estilo Aprova Aí */}
+      {view === 'aprovadores' && (
+        <div className="space-y-6">
+          {/* Header */}
+          <div className="flex items-center justify-between">
+            <div>
+              <h3 className="font-bold text-lg text-zinc-900">Fluxo de Aprovação</h3>
+              <p className="text-sm text-zinc-500">Configure quem aprova os conteúdos e em qual ordem</p>
+            </div>
+            <Button onClick={() => openNewAprovador(maxNivel + 1)}>
+              <Plus className="w-4 h-4 mr-1" /> Novo Nível
+            </Button>
+          </div>
+
+          {loadingAprovadores ? (
+            <div className="space-y-4">
+              {[1, 2].map(i => <Skeleton key={i} className="h-40 rounded-2xl" />)}
+            </div>
+          ) : Object.keys(aprovadoresPorNivel).length === 0 ? (
+            <Card className="border-dashed border-2">
+              <CardContent className="py-12 text-center">
+                <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+                  <CheckCircle2 className="w-8 h-8 text-blue-500" />
+                </div>
+                <h3 className="font-semibold text-zinc-900 mb-2">Nenhum aprovador configurado</h3>
+                <p className="text-sm text-zinc-500 mb-4">
+                  Configure o fluxo de aprovação para este cliente.<br />
+                  Os conteúdos passarão por cada nível antes de serem publicados.
+                </p>
+                <Button onClick={() => openNewAprovador(1)}>
+                  <Plus className="w-4 h-4 mr-1" /> Adicionar Primeiro Aprovador
+                </Button>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-4">
+              {/* Níveis de Aprovação */}
+              {Object.entries(aprovadoresPorNivel)
+                .sort(([a], [b]) => Number(a) - Number(b))
+                .map(([nivel, lista], index) => (
+                  <Card key={nivel} className="overflow-hidden shadow-lg border-0">
+                    {/* Header do Nível */}
+                    <div 
+                      className="px-5 py-3 flex items-center justify-between"
+                      style={{ 
+                        background: `linear-gradient(135deg, ${primaria}${index === 0 ? '' : '90'} 0%, ${primaria}60 100%)`
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-white/20 flex items-center justify-center text-white font-bold">
+                          {nivel}
+                        </div>
+                        <div>
+                          <h4 className="font-semibold text-white">
+                            Nível {nivel} {index === 0 ? '(Primeira Aprovação)' : index === Object.keys(aprovadoresPorNivel).length - 1 ? '(Aprovação Final)' : ''}
+                          </h4>
+                          <p className="text-white/70 text-xs">
+                            {lista.length} aprovador{lista.length > 1 ? 'es' : ''}
+                          </p>
+                        </div>
+                      </div>
+                      <Button 
+                        size="sm" 
+                        variant="ghost" 
+                        className="text-white hover:bg-white/20"
+                        onClick={() => openNewAprovador(Number(nivel))}
+                      >
+                        <Plus className="w-4 h-4 mr-1" /> Adicionar
+                      </Button>
+                    </div>
+
+                    {/* Lista de Aprovadores do Nível */}
+                    <CardContent className="p-4">
+                      <div className="space-y-3">
+                        {lista.map((apr, aprIndex) => (
+                          <div 
+                            key={apr.id}
+                            className={`flex items-center gap-4 p-4 rounded-xl border transition-all hover:shadow-md ${
+                              !apr.ativo ? 'opacity-50 bg-zinc-50' : 'bg-white'
+                            }`}
+                          >
+                            {/* Drag handle */}
+                            <div className="text-zinc-300 cursor-grab">
+                              <GripVertical className="w-5 h-5" />
+                            </div>
+
+                            {/* Avatar */}
+                            <div 
+                              className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                              style={{ backgroundColor: primaria }}
+                            >
+                              {apr.nome.charAt(0).toUpperCase()}
+                            </div>
+
+                            {/* Info */}
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-semibold text-zinc-900">{apr.nome}</span>
+                                <Badge 
+                                  variant={apr.tipo === 'interno' ? 'info' : apr.tipo === 'cliente' ? 'success' : 'default'}
+                                  className="text-[10px]"
+                                >
+                                  {apr.tipo === 'interno' ? 'Equipe' : apr.tipo === 'cliente' ? 'Cliente' : 'Designer'}
+                                </Badge>
+                                {!apr.ativo && <Badge variant="warning" className="text-[10px]">Inativo</Badge>}
+                              </div>
+                              <div className="flex items-center gap-4 mt-1 text-sm text-zinc-500">
+                                <span className="flex items-center gap-1">
+                                  <Phone className="w-3 h-3" />
+                                  +{apr.pais.replace('+', '')} {apr.whatsapp.replace(/^55/, '')}
+                                </span>
+                                {apr.email && (
+                                  <span className="flex items-center gap-1 truncate">
+                                    <Mail className="w-3 h-3" />
+                                    {apr.email}
+                                  </span>
+                                )}
+                              </div>
+                              
+                              {/* Tags de config */}
+                              <div className="flex items-center gap-2 mt-2">
+                                {apr.recebe_notificacao ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                                    <Bell className="w-3 h-3" /> Notificações
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">
+                                    <BellOff className="w-3 h-3" /> Sem notificações
+                                  </span>
+                                )}
+                                {apr.pode_editar_legenda && (
+                                  <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                                    <Edit2 className="w-3 h-3" /> Pode editar legenda
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+
+                            {/* Actions */}
+                            <div className="flex items-center gap-1">
+                              <Button 
+                                size="sm" 
+                                variant="ghost" 
+                                onClick={() => toggleAprovadorAtivo(apr)}
+                                className={apr.ativo ? 'text-green-500' : 'text-zinc-400'}
+                              >
+                                {apr.ativo ? '✓' : '○'}
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => openEditAprovador(apr)}>
+                                <Edit2 className="w-4 h-4 text-zinc-400" />
+                              </Button>
+                              <Button size="sm" variant="ghost" onClick={() => handleDeleteAprovador(apr.id)}>
+                                <Trash2 className="w-4 h-4 text-red-400" />
+                              </Button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+              {/* Botão para adicionar novo nível */}
+              <button
+                onClick={() => openNewAprovador(maxNivel + 1)}
+                className="w-full py-6 border-2 border-dashed border-zinc-200 rounded-2xl text-zinc-400 hover:text-zinc-600 hover:border-zinc-300 transition-all flex items-center justify-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Adicionar Nível {maxNivel + 1}
+              </button>
+
+              {/* Explicação do fluxo */}
+              <Card className="bg-blue-50/50 border-blue-100">
+                <CardContent className="py-4 px-5">
+                  <div className="flex items-start gap-3">
+                    <div className="w-8 h-8 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0 mt-0.5">
+                      <MessageCircle className="w-4 h-4 text-blue-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-medium text-blue-900 mb-1">Como funciona o fluxo</h4>
+                      <p className="text-sm text-blue-700">
+                        Os conteúdos passam por cada nível em ordem. Quando o <strong>Nível 1</strong> aprova, 
+                        vai para o <strong>Nível 2</strong>, e assim por diante. Notificações são enviadas 
+                        automaticamente via WhatsApp e Email para os aprovadores configurados.
+                      </p>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Invite Modal */}
       <Modal open={inviteModalOpen} onClose={() => setInviteModalOpen(false)} title={`✉️ Convidar para ${cliente?.nome}`} size="sm">
         <form onSubmit={handleInviteForClient} className="space-y-4">
@@ -343,6 +665,150 @@ export default function ClienteDetailPage() {
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="ghost" onClick={() => setInviteModalOpen(false)}>Cancelar</Button>
             <Button type="submit">📨 Enviar</Button>
+          </div>
+        </form>
+      </Modal>
+
+      {/* Modal Aprovador */}
+      <Modal 
+        open={aprovadorModalOpen} 
+        onClose={() => setAprovadorModalOpen(false)} 
+        title={editingAprovador ? '✏️ Editar Aprovador' : '➕ Novo Aprovador'} 
+        size="md"
+      >
+        <form onSubmit={handleSaveAprovador} className="space-y-5">
+          {/* Info básica */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Nome *</Label>
+              <Input 
+                value={aprovadorForm.nome} 
+                onChange={e => setAprovadorForm({...aprovadorForm, nome: e.target.value})}
+                placeholder="Nome do aprovador"
+                required
+              />
+            </div>
+            <div>
+              <Label>Tipo</Label>
+              <div className="flex gap-1 p-1 bg-zinc-100 rounded-lg">
+                {(['cliente', 'interno', 'designer'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setAprovadorForm({...aprovadorForm, tipo: t})}
+                    className={`flex-1 px-3 py-1.5 rounded-md text-sm font-medium transition-all ${
+                      aprovadorForm.tipo === t 
+                        ? 'bg-white text-zinc-900 shadow-sm' 
+                        : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    {t === 'cliente' ? '👤 Cliente' : t === 'interno' ? '🏢 Equipe' : '🎨 Designer'}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Contato */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>WhatsApp *</Label>
+              <div className="flex gap-2">
+                <span className="flex items-center px-3 bg-zinc-100 text-zinc-500 text-sm rounded-lg border border-zinc-200">
+                  {aprovadorForm.pais}
+                </span>
+                <Input 
+                  value={aprovadorForm.whatsapp} 
+                  onChange={e => setAprovadorForm({...aprovadorForm, whatsapp: e.target.value})}
+                  placeholder="31999999999"
+                  required
+                  className="flex-1"
+                />
+              </div>
+            </div>
+            <div>
+              <Label>E-mail</Label>
+              <Input 
+                type="email"
+                value={aprovadorForm.email} 
+                onChange={e => setAprovadorForm({...aprovadorForm, email: e.target.value})}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+          </div>
+
+          {/* Nível */}
+          <div>
+            <Label>Nível de Aprovação</Label>
+            <div className="flex gap-2 mt-1">
+              {[1, 2, 3, 4, 5].map(n => (
+                <button
+                  key={n}
+                  type="button"
+                  onClick={() => setAprovadorForm({...aprovadorForm, nivel: n})}
+                  className={`w-10 h-10 rounded-lg font-bold text-lg transition-all ${
+                    aprovadorForm.nivel === n 
+                      ? 'text-white shadow-lg' 
+                      : 'bg-zinc-100 text-zinc-400 hover:bg-zinc-200'
+                  }`}
+                  style={aprovadorForm.nivel === n ? { backgroundColor: primaria } : {}}
+                >
+                  {n}
+                </button>
+              ))}
+            </div>
+            <p className="text-xs text-zinc-400 mt-1">
+              Nível {aprovadorForm.nivel}: {aprovadorForm.nivel === 1 ? 'Primeira aprovação' : `Aprovação após nível ${aprovadorForm.nivel - 1}`}
+            </p>
+          </div>
+
+          {/* Configurações */}
+          <div className="space-y-3 pt-2 border-t">
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label className="mb-0">Receber notificações</Label>
+                <p className="text-xs text-zinc-400">WhatsApp e email quando tiver conteúdo pra aprovar</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAprovadorForm({...aprovadorForm, recebe_notificacao: !aprovadorForm.recebe_notificacao})}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  aprovadorForm.recebe_notificacao ? 'bg-green-500' : 'bg-zinc-300'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  aprovadorForm.recebe_notificacao ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+            
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <Label className="mb-0">Pode editar legenda</Label>
+                <p className="text-xs text-zinc-400">Permitir alterar texto ao aprovar</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setAprovadorForm({...aprovadorForm, pode_editar_legenda: !aprovadorForm.pode_editar_legenda})}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  aprovadorForm.pode_editar_legenda ? 'bg-blue-500' : 'bg-zinc-300'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  aprovadorForm.pode_editar_legenda ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="ghost" onClick={() => setAprovadorModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button type="submit">
+              💾 {editingAprovador ? 'Salvar' : 'Adicionar'}
+            </Button>
           </div>
         </form>
       </Modal>

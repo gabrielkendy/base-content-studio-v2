@@ -1,17 +1,16 @@
 'use client'
 
 import { useState, useEffect } from 'react'
-import { createClientComponentClient } from '@supabase/auth-helpers-nextjs'
+import { db } from '@/lib/api'
+import { useAuth } from '@/hooks/use-auth'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Label } from '@/components/ui/label'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+import { Card, CardContent } from '@/components/ui/card'
+import { Input, Label } from '@/components/ui/input'
+import { Modal } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
-import { Switch } from '@/components/ui/switch'
-import { Plus, Pencil, Trash2, Phone, Mail, Building2, Users } from 'lucide-react'
-import { toast } from 'sonner'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/components/ui/toast'
+import { Plus, Pencil, Trash2, Phone, Mail, Building2, Users, Bell, BellOff, Edit2, CheckCircle2 } from 'lucide-react'
 
 interface Aprovador {
   id: string
@@ -39,6 +38,7 @@ interface Empresa {
 }
 
 export default function AprovadoresPage() {
+  const { org, loading: authLoading } = useAuth()
   const [aprovadores, setAprovadores] = useState<Aprovador[]>([])
   const [empresas, setEmpresas] = useState<Empresa[]>([])
   const [loading, setLoading] = useState(true)
@@ -46,6 +46,7 @@ export default function AprovadoresPage() {
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>('todas')
   const [filtroTipo, setFiltroTipo] = useState<string>('todos')
+  const { toast } = useToast()
   
   const [form, setForm] = useState({
     empresa_id: '',
@@ -59,34 +60,34 @@ export default function AprovadoresPage() {
     ativo: true
   })
 
-  const supabase = createClientComponentClient()
-
   useEffect(() => {
-    loadData()
-  }, [])
+    if (org) loadData()
+  }, [org])
 
   async function loadData() {
     setLoading(true)
     
     // Carregar empresas
-    const { data: empresasData } = await supabase
-      .from('empresas')
-      .select('id, nome, slug')
-      .order('nome')
-    
+    const { data: empresasData } = await db.select('empresas', {
+      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      order: [{ col: 'nome', asc: true }]
+    })
     if (empresasData) setEmpresas(empresasData)
     
-    // Carregar aprovadores
-    const { data: aprovadoresData } = await supabase
-      .from('aprovadores')
-      .select(`
-        *,
-        empresas (nome, slug)
-      `)
-      .order('nivel')
-      .order('nome')
+    // Carregar aprovadores - join manual
+    const { data: aprovadoresData } = await db.select('aprovadores', {
+      order: [{ col: 'nivel', asc: true }, { col: 'nome', asc: true }]
+    })
     
-    if (aprovadoresData) setAprovadores(aprovadoresData)
+    if (aprovadoresData && empresasData) {
+      // Fazer join manual
+      const empresaMap = new Map(empresasData.map((e: Empresa) => [e.id, e]))
+      const aprovadoresComEmpresa = aprovadoresData.map((a: Aprovador) => ({
+        ...a,
+        empresas: empresaMap.get(a.empresa_id)
+      })).filter((a: Aprovador) => a.empresas) // Só mostrar aprovadores de empresas da org
+      setAprovadores(aprovadoresComEmpresa)
+    }
     
     setLoading(false)
   }
@@ -95,43 +96,40 @@ export default function AprovadoresPage() {
     e.preventDefault()
     
     if (!form.empresa_id || !form.nome || !form.whatsapp) {
-      toast.error('Preencha os campos obrigatórios')
+      toast('Preencha os campos obrigatórios', 'error')
       return
     }
 
-    // Formatar WhatsApp (remover caracteres especiais)
+    // Formatar WhatsApp
     const whatsappFormatado = form.whatsapp.replace(/\D/g, '')
     
     const payload = {
-      ...form,
-      whatsapp: whatsappFormatado.startsWith('55') ? whatsappFormatado : `55${whatsappFormatado}`
+      empresa_id: form.empresa_id,
+      nome: form.nome,
+      email: form.email || null,
+      whatsapp: whatsappFormatado.startsWith('55') ? whatsappFormatado : `55${whatsappFormatado}`,
+      pais: '+55',
+      tipo: form.tipo,
+      nivel: form.nivel,
+      pode_editar_legenda: form.pode_editar_legenda,
+      recebe_notificacao: form.recebe_notificacao,
+      ativo: form.ativo
     }
 
     if (editingId) {
-      // Atualizar
-      const { error } = await supabase
-        .from('aprovadores')
-        .update(payload)
-        .eq('id', editingId)
-      
+      const { error } = await db.update('aprovadores', payload, { id: editingId })
       if (error) {
-        toast.error('Erro ao atualizar aprovador')
-        console.error(error)
+        toast('Erro ao atualizar aprovador', 'error')
         return
       }
-      toast.success('Aprovador atualizado!')
+      toast('Aprovador atualizado!', 'success')
     } else {
-      // Criar
-      const { error } = await supabase
-        .from('aprovadores')
-        .insert(payload)
-      
+      const { error } = await db.insert('aprovadores', payload)
       if (error) {
-        toast.error('Erro ao criar aprovador')
-        console.error(error)
+        toast('Erro ao criar aprovador', 'error')
         return
       }
-      toast.success('Aprovador criado!')
+      toast('Aprovador criado!', 'success')
     }
 
     setDialogOpen(false)
@@ -142,31 +140,22 @@ export default function AprovadoresPage() {
   async function handleDelete(id: string) {
     if (!confirm('Tem certeza que deseja excluir este aprovador?')) return
     
-    const { error } = await supabase
-      .from('aprovadores')
-      .delete()
-      .eq('id', id)
-    
+    const { error } = await db.delete('aprovadores', { id })
     if (error) {
-      toast.error('Erro ao excluir aprovador')
+      toast('Erro ao excluir aprovador', 'error')
       return
     }
     
-    toast.success('Aprovador excluído!')
+    toast('Aprovador excluído!', 'success')
     loadData()
   }
 
   async function toggleAtivo(id: string, ativo: boolean) {
-    const { error } = await supabase
-      .from('aprovadores')
-      .update({ ativo: !ativo })
-      .eq('id', id)
-    
+    const { error } = await db.update('aprovadores', { ativo: !ativo }, { id })
     if (error) {
-      toast.error('Erro ao atualizar status')
+      toast('Erro ao atualizar status', 'error')
       return
     }
-    
     loadData()
   }
 
@@ -176,7 +165,7 @@ export default function AprovadoresPage() {
       empresa_id: aprovador.empresa_id,
       nome: aprovador.nome,
       email: aprovador.email || '',
-      whatsapp: aprovador.whatsapp,
+      whatsapp: aprovador.whatsapp.replace(/^55/, ''),
       tipo: aprovador.tipo,
       nivel: aprovador.nivel,
       pode_editar_legenda: aprovador.pode_editar_legenda,
@@ -202,9 +191,9 @@ export default function AprovadoresPage() {
   }
 
   const tipoLabels = {
-    interno: { label: 'Interno', color: 'bg-blue-500' },
-    cliente: { label: 'Cliente', color: 'bg-green-500' },
-    designer: { label: 'Designer', color: 'bg-purple-500' }
+    interno: { label: 'Equipe', color: 'bg-blue-500', emoji: '🏢' },
+    cliente: { label: 'Cliente', color: 'bg-green-500', emoji: '👤' },
+    designer: { label: 'Designer', color: 'bg-purple-500', emoji: '🎨' }
   }
 
   const aprovadoresFiltrados = aprovadores.filter(a => {
@@ -221,223 +210,116 @@ export default function AprovadoresPage() {
     return acc
   }, {} as Record<string, Aprovador[]>)
 
-  if (loading) {
+  if (authLoading || loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary"></div>
+      <div className="space-y-6">
+        <div className="flex items-center justify-between">
+          <Skeleton className="h-8 w-48" />
+          <Skeleton className="h-10 w-36 rounded-lg" />
+        </div>
+        <div className="space-y-4">
+          {[1, 2].map(i => <Skeleton key={i} className="h-40 rounded-xl" />)}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="space-y-6 animate-fade-in">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between max-sm:flex-col max-sm:items-start max-sm:gap-3">
         <div>
-          <h1 className="text-2xl font-bold">Aprovadores</h1>
-          <p className="text-muted-foreground">Gerencie o fluxo de aprovação de conteúdos</p>
+          <h1 className="text-2xl font-bold text-zinc-900 max-sm:text-xl">Aprovadores</h1>
+          <p className="text-sm text-zinc-500">Gerencie o fluxo de aprovação de conteúdos</p>
         </div>
         
-        <Dialog open={dialogOpen} onOpenChange={(open) => {
-          setDialogOpen(open)
-          if (!open) resetForm()
-        }}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="w-4 h-4 mr-2" />
-              Novo Aprovador
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-md">
-            <DialogHeader>
-              <DialogTitle>
-                {editingId ? 'Editar Aprovador' : 'Novo Aprovador'}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <form onSubmit={handleSubmit} className="space-y-4">
-              <div className="space-y-2">
-                <Label>Cliente *</Label>
-                <Select value={form.empresa_id} onValueChange={(v) => setForm({...form, empresa_id: v})}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione o cliente" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {empresas.map(e => (
-                      <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Nome *</Label>
-                  <Input 
-                    value={form.nome} 
-                    onChange={(e) => setForm({...form, nome: e.target.value})}
-                    placeholder="Nome do aprovador"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Tipo *</Label>
-                  <Select value={form.tipo} onValueChange={(v: any) => setForm({...form, tipo: v})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="interno">Interno (Equipe)</SelectItem>
-                      <SelectItem value="cliente">Cliente</SelectItem>
-                      <SelectItem value="designer">Designer</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>WhatsApp *</Label>
-                  <Input 
-                    value={form.whatsapp} 
-                    onChange={(e) => setForm({...form, whatsapp: e.target.value})}
-                    placeholder="31999999999"
-                  />
-                </div>
-                
-                <div className="space-y-2">
-                  <Label>Nível</Label>
-                  <Select value={String(form.nivel)} onValueChange={(v) => setForm({...form, nivel: Number(v)})}>
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="1">Nível 1 (Primeiro)</SelectItem>
-                      <SelectItem value="2">Nível 2</SelectItem>
-                      <SelectItem value="3">Nível 3</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>E-mail</Label>
-                <Input 
-                  type="email"
-                  value={form.email} 
-                  onChange={(e) => setForm({...form, email: e.target.value})}
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-2">
-                <div className="space-y-0.5">
-                  <Label>Receber notificações</Label>
-                  <p className="text-xs text-muted-foreground">Receber mensagens de aprovação</p>
-                </div>
-                <Switch 
-                  checked={form.recebe_notificacao}
-                  onCheckedChange={(v) => setForm({...form, recebe_notificacao: v})}
-                />
-              </div>
-
-              <div className="flex items-center justify-between py-2">
-                <div className="space-y-0.5">
-                  <Label>Pode editar legenda</Label>
-                  <p className="text-xs text-muted-foreground">Permitir edição da legenda</p>
-                </div>
-                <Switch 
-                  checked={form.pode_editar_legenda}
-                  onCheckedChange={(v) => setForm({...form, pode_editar_legenda: v})}
-                />
-              </div>
-
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setDialogOpen(false)}>
-                  Cancelar
-                </Button>
-                <Button type="submit">
-                  {editingId ? 'Salvar' : 'Criar'}
-                </Button>
-              </div>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <Button variant="primary" onClick={() => { resetForm(); setDialogOpen(true) }}>
+          <Plus className="w-4 h-4 mr-1" /> Novo Aprovador
+        </Button>
       </div>
 
       {/* Filtros */}
-      <div className="flex gap-4">
-        <Select value={filtroEmpresa} onValueChange={setFiltroEmpresa}>
-          <SelectTrigger className="w-[200px]">
-            <Building2 className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Filtrar por cliente" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todas">Todos os clientes</SelectItem>
+      <div className="flex gap-3 flex-wrap">
+        <div className="flex items-center gap-2 bg-zinc-100 rounded-lg p-1">
+          <Building2 className="w-4 h-4 ml-2 text-zinc-400" />
+          <select 
+            value={filtroEmpresa} 
+            onChange={(e) => setFiltroEmpresa(e.target.value)}
+            className="bg-transparent text-sm py-1.5 pr-8 border-0 focus:ring-0 cursor-pointer"
+          >
+            <option value="todas">Todos os clientes</option>
             {empresas.map(e => (
-              <SelectItem key={e.id} value={e.id}>{e.nome}</SelectItem>
+              <option key={e.id} value={e.id}>{e.nome}</option>
             ))}
-          </SelectContent>
-        </Select>
+          </select>
+        </div>
 
-        <Select value={filtroTipo} onValueChange={setFiltroTipo}>
-          <SelectTrigger className="w-[200px]">
-            <Users className="w-4 h-4 mr-2" />
-            <SelectValue placeholder="Filtrar por tipo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos os tipos</SelectItem>
-            <SelectItem value="interno">Interno</SelectItem>
-            <SelectItem value="cliente">Cliente</SelectItem>
-            <SelectItem value="designer">Designer</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-2 bg-zinc-100 rounded-lg p-1">
+          <Users className="w-4 h-4 ml-2 text-zinc-400" />
+          <select 
+            value={filtroTipo} 
+            onChange={(e) => setFiltroTipo(e.target.value)}
+            className="bg-transparent text-sm py-1.5 pr-8 border-0 focus:ring-0 cursor-pointer"
+          >
+            <option value="todos">Todos os tipos</option>
+            <option value="interno">🏢 Equipe</option>
+            <option value="cliente">👤 Cliente</option>
+            <option value="designer">🎨 Designer</option>
+          </select>
+        </div>
       </div>
 
       {/* Lista agrupada por empresa */}
       {Object.entries(aprovadoresPorEmpresa).length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
-            <Users className="w-12 h-12 mx-auto mb-4 text-muted-foreground" />
-            <h3 className="text-lg font-medium">Nenhum aprovador cadastrado</h3>
-            <p className="text-muted-foreground mb-4">Comece adicionando aprovadores para gerenciar o fluxo de aprovação</p>
-            <Button onClick={() => setDialogOpen(true)}>
-              <Plus className="w-4 h-4 mr-2" />
-              Adicionar Aprovador
+            <div className="w-16 h-16 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="w-8 h-8 text-blue-500" />
+            </div>
+            <h3 className="text-lg font-semibold text-zinc-900 mb-2">Nenhum aprovador cadastrado</h3>
+            <p className="text-sm text-zinc-500 mb-4">Comece adicionando aprovadores para gerenciar o fluxo de aprovação</p>
+            <Button variant="primary" onClick={() => { resetForm(); setDialogOpen(true) }}>
+              <Plus className="w-4 h-4 mr-1" /> Adicionar Aprovador
             </Button>
           </CardContent>
         </Card>
       ) : (
         Object.entries(aprovadoresPorEmpresa).map(([empresaNome, lista]) => (
-          <Card key={empresaNome}>
-            <CardHeader className="pb-3">
-              <CardTitle className="text-lg flex items-center gap-2">
-                <Building2 className="w-5 h-5" />
-                {empresaNome}
-                <Badge variant="secondary" className="ml-2">{lista.length}</Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+          <Card key={empresaNome} className="overflow-hidden shadow-md border-0">
+            <div className="px-5 py-3 bg-gradient-to-r from-zinc-800 to-zinc-700 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <Building2 className="w-5 h-5 text-white/70" />
+                <span className="font-semibold text-white">{empresaNome}</span>
+                <Badge className="bg-white/20 text-white">{lista.length}</Badge>
+              </div>
+            </div>
+            <CardContent className="p-4">
               <div className="space-y-3">
                 {lista.map(apr => (
                   <div 
                     key={apr.id} 
-                    className={`flex items-center justify-between p-3 rounded-lg border ${!apr.ativo ? 'opacity-50 bg-muted' : 'bg-card'}`}
+                    className={`flex items-center justify-between p-4 rounded-xl border transition-all hover:shadow-md ${!apr.ativo ? 'opacity-50 bg-zinc-50' : 'bg-white'}`}
                   >
                     <div className="flex items-center gap-4">
-                      <div className="flex flex-col">
-                        <div className="flex items-center gap-2">
-                          <span className="font-medium">{apr.nome}</span>
-                          <Badge className={tipoLabels[apr.tipo].color}>
-                            {tipoLabels[apr.tipo].label}
+                      <div 
+                        className="w-12 h-12 rounded-full flex items-center justify-center text-white font-bold text-lg flex-shrink-0"
+                        style={{ backgroundColor: apr.tipo === 'interno' ? '#3B82F6' : apr.tipo === 'cliente' ? '#22C55E' : '#A855F7' }}
+                      >
+                        {apr.nome.charAt(0).toUpperCase()}
+                      </div>
+                      <div>
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-semibold text-zinc-900">{apr.nome}</span>
+                          <Badge variant={apr.tipo === 'interno' ? 'info' : apr.tipo === 'cliente' ? 'success' : 'default'}>
+                            {tipoLabels[apr.tipo].emoji} {tipoLabels[apr.tipo].label}
                           </Badge>
-                          <Badge variant="outline">Nível {apr.nivel}</Badge>
-                          {!apr.ativo && <Badge variant="destructive">Inativo</Badge>}
+                          <Badge>Nível {apr.nivel}</Badge>
+                          {!apr.ativo && <Badge variant="warning">Inativo</Badge>}
                         </div>
-                        <div className="flex items-center gap-4 text-sm text-muted-foreground mt-1">
+                        <div className="flex items-center gap-4 text-sm text-zinc-500 mt-1">
                           <span className="flex items-center gap-1">
                             <Phone className="w-3 h-3" />
-                            {apr.whatsapp}
+                            +55 {apr.whatsapp.replace(/^55/, '')}
                           </span>
                           {apr.email && (
                             <span className="flex items-center gap-1">
@@ -446,19 +328,37 @@ export default function AprovadoresPage() {
                             </span>
                           )}
                         </div>
+                        <div className="flex items-center gap-2 mt-2">
+                          {apr.recebe_notificacao ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
+                              <Bell className="w-3 h-3" /> Notificações
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">
+                              <BellOff className="w-3 h-3" /> Sem notificações
+                            </span>
+                          )}
+                          {apr.pode_editar_legenda && (
+                            <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                              <Edit2 className="w-3 h-3" /> Pode editar
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                     
-                    <div className="flex items-center gap-2">
-                      <Switch 
-                        checked={apr.ativo}
-                        onCheckedChange={() => toggleAtivo(apr.id, apr.ativo)}
-                      />
-                      <Button variant="ghost" size="icon" onClick={() => openEdit(apr)}>
-                        <Pencil className="w-4 h-4" />
+                    <div className="flex items-center gap-1">
+                      <button 
+                        onClick={() => toggleAtivo(apr.id, apr.ativo)}
+                        className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${apr.ativo ? 'bg-green-100 text-green-600' : 'bg-zinc-100 text-zinc-400'}`}
+                      >
+                        {apr.ativo ? '✓' : '○'}
+                      </button>
+                      <Button size="sm" variant="ghost" onClick={() => openEdit(apr)}>
+                        <Pencil className="w-4 h-4 text-zinc-400" />
                       </Button>
-                      <Button variant="ghost" size="icon" onClick={() => handleDelete(apr.id)}>
-                        <Trash2 className="w-4 h-4 text-destructive" />
+                      <Button size="sm" variant="ghost" onClick={() => handleDelete(apr.id)}>
+                        <Trash2 className="w-4 h-4 text-red-400" />
                       </Button>
                     </div>
                   </div>
@@ -468,6 +368,158 @@ export default function AprovadoresPage() {
           </Card>
         ))
       )}
+
+      {/* Modal Criar/Editar */}
+      <Modal 
+        open={dialogOpen} 
+        onClose={() => { setDialogOpen(false); resetForm() }} 
+        title={editingId ? '✏️ Editar Aprovador' : '➕ Novo Aprovador'}
+        size="md"
+      >
+        <form onSubmit={handleSubmit} className="space-y-5">
+          {/* Cliente */}
+          <div>
+            <Label>Cliente *</Label>
+            <select 
+              value={form.empresa_id} 
+              onChange={(e) => setForm({...form, empresa_id: e.target.value})}
+              className="w-full px-4 py-2.5 rounded-lg border border-zinc-200 bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              required
+            >
+              <option value="">Selecione o cliente</option>
+              {empresas.map(e => (
+                <option key={e.id} value={e.id}>{e.nome}</option>
+              ))}
+            </select>
+          </div>
+
+          {/* Nome e Tipo */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Nome *</Label>
+              <Input 
+                value={form.nome} 
+                onChange={(e) => setForm({...form, nome: e.target.value})}
+                placeholder="Nome do aprovador"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label>Tipo</Label>
+              <div className="flex gap-1 p-1 bg-zinc-100 rounded-lg">
+                {(['interno', 'cliente', 'designer'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    onClick={() => setForm({...form, tipo: t})}
+                    className={`flex-1 px-2 py-1.5 rounded-md text-xs font-medium transition-all ${
+                      form.tipo === t 
+                        ? 'bg-white text-zinc-900 shadow-sm' 
+                        : 'text-zinc-500 hover:text-zinc-700'
+                    }`}
+                  >
+                    {tipoLabels[t].emoji} {tipoLabels[t].label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* WhatsApp e Nível */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>WhatsApp *</Label>
+              <Input 
+                value={form.whatsapp} 
+                onChange={(e) => setForm({...form, whatsapp: e.target.value})}
+                placeholder="31999999999"
+                required
+              />
+            </div>
+            
+            <div>
+              <Label>Nível de Aprovação</Label>
+              <div className="flex gap-1">
+                {[1, 2, 3].map(n => (
+                  <button
+                    key={n}
+                    type="button"
+                    onClick={() => setForm({...form, nivel: n})}
+                    className={`flex-1 h-10 rounded-lg font-bold transition-all ${
+                      form.nivel === n 
+                        ? 'bg-blue-500 text-white' 
+                        : 'bg-zinc-100 text-zinc-400 hover:bg-zinc-200'
+                    }`}
+                  >
+                    {n}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          {/* Email */}
+          <div>
+            <Label>E-mail</Label>
+            <Input 
+              type="email"
+              value={form.email} 
+              onChange={(e) => setForm({...form, email: e.target.value})}
+              placeholder="email@exemplo.com"
+            />
+          </div>
+
+          {/* Configurações */}
+          <div className="space-y-3 pt-3 border-t">
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <span className="text-sm font-medium text-zinc-900">Receber notificações</span>
+                <p className="text-xs text-zinc-400">Receber mensagens de aprovação</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm({...form, recebe_notificacao: !form.recebe_notificacao})}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  form.recebe_notificacao ? 'bg-green-500' : 'bg-zinc-300'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  form.recebe_notificacao ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+
+            <div className="flex items-center justify-between py-2">
+              <div>
+                <span className="text-sm font-medium text-zinc-900">Pode editar legenda</span>
+                <p className="text-xs text-zinc-400">Permitir edição da legenda</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setForm({...form, pode_editar_legenda: !form.pode_editar_legenda})}
+                className={`relative w-12 h-6 rounded-full transition-all ${
+                  form.pode_editar_legenda ? 'bg-blue-500' : 'bg-zinc-300'
+                }`}
+              >
+                <span className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${
+                  form.pode_editar_legenda ? 'left-7' : 'left-1'
+                }`} />
+              </button>
+            </div>
+          </div>
+
+          {/* Footer */}
+          <div className="flex justify-end gap-2 pt-4 border-t">
+            <Button type="button" variant="ghost" onClick={() => { setDialogOpen(false); resetForm() }}>
+              Cancelar
+            </Button>
+            <Button type="submit" variant="primary">
+              💾 {editingId ? 'Salvar' : 'Criar'}
+            </Button>
+          </div>
+        </form>
+      </Modal>
     </div>
   )
 }

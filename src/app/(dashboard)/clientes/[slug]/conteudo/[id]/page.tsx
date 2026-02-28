@@ -368,28 +368,24 @@ export default function ConteudoDetailPage() {
     setEditingField(field)
     
     if (field === 'data_publicacao') {
-      console.log('🔵 Abrindo edição de data. Valor atual:', conteudo.data_publicacao)
+      console.log('🔵 Abrindo edição de data. Valor atual:', conteudo.data_publicacao, 'hora:', (conteudo as any).hora_publicacao)
       
       if (conteudo.data_publicacao) {
-        const parsed = new Date(conteudo.data_publicacao)
-        if (!isNaN(parsed.getTime())) {
-          // Formato YYYY-MM-DD para input date
-          const year = parsed.getFullYear()
-          const month = (parsed.getMonth() + 1).toString().padStart(2, '0')
-          const day = parsed.getDate().toString().padStart(2, '0')
-          setEditValue(`${year}-${month}-${day}`)
-          
-          // Hora no formato HH:mm
-          const hours = parsed.getHours().toString().padStart(2, '0')
-          const minutes = parsed.getMinutes().toString().padStart(2, '0')
-          setEditTimeValue(`${hours}:${minutes}`)
-          
-          console.log('🔵 Data parseada:', { year, month, day, hours, minutes })
+        // Data já está no formato YYYY-MM-DD (campo DATE do banco)
+        // Usar diretamente sem parse que causa problemas de timezone
+        const dataStr = conteudo.data_publicacao.toString().split('T')[0]
+        setEditValue(dataStr)
+        
+        // Hora está em campo separado (formato HH:mm ou HH:mm:ss)
+        const horaStr = (conteudo as any).hora_publicacao
+        if (horaStr) {
+          // Pegar só HH:mm
+          setEditTimeValue(horaStr.substring(0, 5))
         } else {
-          // Data inválida - limpar campos
-          setEditValue('')
           setEditTimeValue('12:00')
         }
+        
+        console.log('🔵 Data carregada:', dataStr, 'hora:', horaStr)
       } else {
         // Sem data - campos vazios (NÃO usar data atual)
         setEditValue('')
@@ -416,8 +412,10 @@ export default function ConteudoDetailPage() {
     try {
       let valueToSave: string | null = editValue.trim() || null
 
-      // Se for data_publicacao, combinar data + hora
+      // Se for data_publicacao, salvar data E hora separadamente
       if (editingField === 'data_publicacao') {
+        const pad = (n: number) => n.toString().padStart(2, '0')
+        
         if (editValue) {
           // Validar formato da data (YYYY-MM-DD)
           const dateParts = editValue.split('-')
@@ -433,25 +431,48 @@ export default function ConteudoDetailPage() {
           const hours = parseInt(timeParts[0]) || 12
           const minutes = parseInt(timeParts[1]) || 0
           
-          // FIX: Salvar como string formatada em vez de ISO
-          // Isso evita confusão de timezone entre cliente/servidor
-          // Formato: "2026-03-15T10:30:00-03:00" (com offset do Brasil)
-          const pad = (n: number) => n.toString().padStart(2, '0')
+          // Salvar data no formato YYYY-MM-DD (campo DATE)
+          const dataStr = `${year}-${pad(month)}-${pad(day)}`
+          // Salvar hora no formato HH:mm (campo TEXT)
+          const horaStr = `${pad(hours)}:${pad(minutes)}`
           
-          // Obter offset do timezone local em formato ±HH:MM
-          const now = new Date()
-          const offsetMinutes = now.getTimezoneOffset()
-          const offsetHours = Math.floor(Math.abs(offsetMinutes) / 60)
-          const offsetMins = Math.abs(offsetMinutes) % 60
-          const offsetSign = offsetMinutes <= 0 ? '+' : '-'
-          const offsetStr = `${offsetSign}${pad(offsetHours)}:${pad(offsetMins)}`
+          console.log('📅 Salvando data:', dataStr, 'hora:', horaStr)
           
-          // Criar string ISO com timezone local explícito
-          valueToSave = `${year}-${pad(month)}-${pad(day)}T${pad(hours)}:${pad(minutes)}:00${offsetStr}`
+          // Salvar ambos os campos
+          const { error } = await db.update('conteudos', {
+            data_publicacao: dataStr,
+            hora_publicacao: horaStr,
+            updated_at: new Date().toISOString(),
+          }, { id: conteudo.id })
           
-          console.log('📅 Salvando data com timezone:', valueToSave)
+          if (error) {
+            console.error('❌ Erro no update:', error)
+            throw new Error(error)
+          }
+          
+          // Recarregar e finalizar
+          await loadData()
+          setEditingField(null)
+          setEditValue('')
+          setEditTimeValue('')
+          setSaving(false)
+          return
         } else {
-          valueToSave = null
+          // Limpar ambos os campos
+          const { error } = await db.update('conteudos', {
+            data_publicacao: null,
+            hora_publicacao: null,
+            updated_at: new Date().toISOString(),
+          }, { id: conteudo.id })
+          
+          if (error) throw new Error(error)
+          
+          await loadData()
+          setEditingField(null)
+          setEditValue('')
+          setEditTimeValue('')
+          setSaving(false)
+          return
         }
       }
 

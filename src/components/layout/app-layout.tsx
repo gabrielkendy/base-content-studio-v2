@@ -5,11 +5,22 @@ import { Topbar } from './topbar'
 import { ToastProvider } from '@/components/ui/toast'
 import { useAuth } from '@/hooks/use-auth'
 import { useRouter } from 'next/navigation'
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 
 export function AppLayout({ children }: { children: React.ReactNode }) {
   const { org, member, loading } = useAuth()
   const router = useRouter()
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+
+  // Sync with sidebar collapsed state via custom event + localStorage init
+  useEffect(() => {
+    setSidebarCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
+    function onToggle(e: Event) {
+      setSidebarCollapsed((e as CustomEvent<boolean>).detail)
+    }
+    window.addEventListener('sidebar-toggle', onToggle)
+    return () => window.removeEventListener('sidebar-toggle', onToggle)
+  }, [])
 
   // Redirect clients to portal
   useEffect(() => {
@@ -44,7 +55,7 @@ export function AppLayout({ children }: { children: React.ReactNode }) {
     <ToastProvider>
       <div className="min-h-screen bg-zinc-50">
         <Sidebar />
-        <div className="md:ml-60">
+        <div className={`transition-all duration-300 ${sidebarCollapsed ? 'md:ml-16' : 'md:ml-60'}`}>
           <Topbar />
           <main className="p-4 md:p-6">
             {children}

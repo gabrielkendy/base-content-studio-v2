@@ -10,7 +10,6 @@ import {
   Calendar,
   CalendarPlus,
   Kanban,
-  MessageSquare,
   Settings,
   Bell,
   Webhook,
@@ -19,25 +18,20 @@ import {
   FileText,
   LogOut,
   User,
-  BarChart3,
-  Rocket,
   ExternalLink,
-  Share2,
   ListTodo,
   FolderOpen,
   UserCheck,
 } from 'lucide-react'
 import { useState } from 'react'
 
-const NAV_ITEMS = [
+const NAV_ITEMS_TEAM = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/clientes', label: 'Clientes', icon: Users },
   { href: '/acervos', label: 'Acervo Digital', icon: FolderOpen },
-  { href: '/solicitacoes', label: 'Solicitações', icon: FileText },
   { href: '/agendar', label: 'Agendar Post', icon: CalendarPlus },
   { href: '/calendario', label: 'Calendário', icon: Calendar },
   { href: '/workflow', label: 'Workflow', icon: Kanban },
-  { href: '/chat', label: 'Chat', icon: MessageSquare },
   { href: '/notificacoes', label: 'Notificações', icon: Bell },
   { divider: true },
   { href: '/tarefas', label: 'Max Tasks', icon: ListTodo },
@@ -48,13 +42,32 @@ const NAV_ITEMS = [
   { href: '/configuracoes', label: 'Configurações', icon: Settings },
 ] as const
 
+const NAV_ITEMS_CLIENTE = [
+  { href: '/solicitacoes', label: 'Solicitações', icon: FileText },
+  { href: '/notificacoes', label: 'Notificações', icon: Bell },
+] as const
+
 export function Sidebar() {
   const pathname = usePathname()
   const { org, member, signOut } = useAuth()
-  const [collapsed, setCollapsed] = useState(false)
+  const [collapsed, setCollapsed] = useState(() => {
+    if (typeof window === 'undefined') return false
+    return localStorage.getItem('sidebar-collapsed') === 'true'
+  })
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const brandColor = org?.brand_color || '#6366F1'
+
+  function toggleCollapsed() {
+    setCollapsed(prev => {
+      const next = !prev
+      localStorage.setItem('sidebar-collapsed', String(next))
+      window.dispatchEvent(new CustomEvent('sidebar-toggle', { detail: next }))
+      return next
+    })
+  }
+  const isCliente = member?.role === 'cliente'
+  const navItems = isCliente ? NAV_ITEMS_CLIENTE : NAV_ITEMS_TEAM
 
   return (
     <>
@@ -107,7 +120,7 @@ export function Sidebar() {
             </div>
           )}
           <button
-            onClick={() => setCollapsed(!collapsed)}
+            onClick={toggleCollapsed}
             className="ml-auto p-1 rounded hover:bg-zinc-100 hidden md:flex"
           >
             <ChevronLeft className={cn('w-4 h-4 text-zinc-400 transition-transform', collapsed && 'rotate-180')} />
@@ -116,7 +129,7 @@ export function Sidebar() {
 
         {/* Nav */}
         <nav className="flex-1 py-3 px-2 space-y-0.5 overflow-y-auto">
-          {NAV_ITEMS.map((item, i) => {
+          {navItems.map((item, i) => {
             if ('divider' in item) {
               return <div key={i} className="my-3 border-t border-zinc-100" />
             }

@@ -13,12 +13,12 @@ import { MESES, STATUS_CONFIG } from '@/lib/utils'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
 import { useToast } from '@/components/ui/toast'
-import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, BarChart3, Palette, FolderOpen, Share2, Target, FileText, CheckCircle2, Plus, Phone, X, GripVertical, Bell, BellOff, Edit2, MessageCircle } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, Palette, FolderOpen, Share2, Target, FileText, CheckCircle2, Plus, Phone, GripVertical, Bell, BellOff, Edit2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Member, MemberClient } from '@/types/database'
 import { normalizeStatus } from '@/lib/utils'
 
-type ViewTab = 'anual' | 'acessos' | 'aprovadores' | 'analytics' | 'brand' | 'repositorio'
+type ViewTab = 'anual' | 'acessos' | 'aprovadores' | 'brand' | 'repositorio'
 
 interface Aprovador {
   id: string
@@ -219,8 +219,6 @@ export default function ClienteDetailPage() {
     { id: 'anual', label: 'Visão Anual', icon: Calendar },
     { id: 'acessos', label: 'Acessos', icon: Users },
     { id: 'aprovadores', label: 'Aprovadores', icon: CheckCircle2 },
-    { id: 'planejamento' as ViewTab, label: 'Planejamento', icon: Target, href: `/clientes/${slug}/planejamento` },
-    { id: 'analytics', label: 'Analytics', icon: BarChart3, href: `/clientes/${slug}/analytics` },
     { id: 'campanhas' as ViewTab, label: 'Campanhas', icon: Target, href: `/clientes/${slug}/campanhas` },
     { id: 'brand', label: 'Brand Book', icon: Palette, href: `/clientes/${slug}/brand` },
     { id: 'repositorio', label: 'Repositório', icon: FolderOpen, href: `/clientes/${slug}/repositorio` },

@@ -190,9 +190,9 @@ export async function notifyChatMessage(
       senderName: sender.name,
       message: message.substring(0, 200) + (message.length > 200 ? '...' : ''),
       timestamp: new Date().toLocaleString('pt-BR'),
-      chatUrl: contentId 
-        ? `${APP_URL}/workflow?content=${contentId}&chat=true`
-        : `${APP_URL}/chat`,
+      chatUrl: contentId
+        ? `${APP_URL}/workflow?content=${contentId}`
+        : `${APP_URL}/notificacoes`,
       orgName: org?.name,
     },
   })

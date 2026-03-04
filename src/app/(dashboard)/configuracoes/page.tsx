@@ -7,11 +7,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import { Save, Upload, Building2, Palette, User, Bell, Camera, Share2 } from 'lucide-react'
+import { Save, Upload, Building2, Palette, User, Bell, Camera, Share2, Lock, Plug, CheckCircle, XCircle } from 'lucide-react'
+import { createClient } from '@/lib/supabase/client'
 import { useRoleGuard } from '@/hooks/use-role-guard'
 import type { NotificationPreferences } from '@/types/database'
 
-type TabId = 'org' | 'appearance' | 'profile' | 'notifications' | 'social'
+type TabId = 'org' | 'appearance' | 'profile' | 'notifications' | 'social' | 'integrations'
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'org', label: 'Organização', icon: Building2 },
@@ -19,6 +20,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'profile', label: 'Perfil', icon: User },
   { id: 'notifications', label: 'Notificações', icon: Bell },
   { id: 'social', label: 'Redes Sociais', icon: Share2 },
+  { id: 'integrations', label: 'Integrações', icon: Plug },
 ]
 
 const DEFAULT_NOTIF: NotificationPreferences = {
@@ -55,6 +57,15 @@ export default function ConfiguracoesPage() {
 
   // Notification state
   const [notifPrefs, setNotifPrefs] = useState<NotificationPreferences>(DEFAULT_NOTIF)
+
+  // Password state
+  const [newPassword, setNewPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
+  const [savingPassword, setSavingPassword] = useState(false)
+
+  // Integrations state
+  const [integrations, setIntegrations] = useState<{ resend: boolean; n8n: boolean; uploadPost: boolean; stripe: boolean } | null>(null)
+  const [loadingIntegrations, setLoadingIntegrations] = useState(false)
 
   // Social accounts state
   const [connectUrl, setConnectUrl] = useState<string | null>(null)
@@ -194,6 +205,40 @@ export default function ConfiguracoesPage() {
   function toggleNotif(key: keyof NotificationPreferences) {
     setNotifPrefs(prev => ({ ...prev, [key]: !prev[key] }))
   }
+
+  async function handleSavePassword(e: React.FormEvent) {
+    e.preventDefault()
+    if (newPassword.length < 8) {
+      toast('A senha deve ter pelo menos 8 caracteres', 'error')
+      return
+    }
+    if (newPassword !== confirmPassword) {
+      toast('As senhas não coincidem', 'error')
+      return
+    }
+    setSavingPassword(true)
+    const supabase = createClient()
+    const { error } = await supabase.auth.updateUser({ password: newPassword })
+    if (error) toast(error.message || 'Erro ao trocar senha', 'error')
+    else {
+      toast('Senha atualizada com sucesso!', 'success')
+      setNewPassword('')
+      setConfirmPassword('')
+    }
+    setSavingPassword(false)
+  }
+
+  // Load integrations status when tab is active
+  useEffect(() => {
+    if (activeTab === 'integrations' && !integrations && !loadingIntegrations) {
+      setLoadingIntegrations(true)
+      fetch('/api/integrations/status')
+        .then(res => res.json())
+        .then(data => setIntegrations(data))
+        .catch(() => toast('Erro ao carregar integrações', 'error'))
+        .finally(() => setLoadingIntegrations(false))
+    }
+  }, [activeTab, integrations, loadingIntegrations, toast])
 
   // Load clientes when social tab is active
   useEffect(() => {
@@ -500,6 +545,48 @@ export default function ConfiguracoesPage() {
         </Card>
       )}
 
+      {/* Security section (under Profile tab) */}
+      {activeTab === 'profile' && (
+        <Card>
+          <div className="px-6 py-4 border-b border-zinc-100">
+            <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+              <Lock className="w-5 h-5" /> Segurança
+            </h3>
+          </div>
+          <CardContent>
+            <form onSubmit={handleSavePassword} className="space-y-4">
+              <div>
+                <Label>Nova Senha</Label>
+                <Input
+                  type="password"
+                  value={newPassword}
+                  onChange={e => setNewPassword(e.target.value)}
+                  placeholder="Mínimo 8 caracteres"
+                  minLength={8}
+                  required
+                />
+              </div>
+              <div>
+                <Label>Confirmar Nova Senha</Label>
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Repita a senha"
+                  required
+                />
+                {confirmPassword && newPassword !== confirmPassword && (
+                  <p className="text-xs text-red-500 mt-1">As senhas não coincidem</p>
+                )}
+              </div>
+              <Button type="submit" variant="primary" disabled={savingPassword || newPassword.length < 8 || newPassword !== confirmPassword}>
+                <Lock className="w-4 h-4" /> Salvar Senha
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tab: Notificações */}
       {activeTab === 'notifications' && (
         <Card>
@@ -543,6 +630,56 @@ export default function ConfiguracoesPage() {
                 </Button>
               </div>
             </form>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Tab: Integrações */}
+      {activeTab === 'integrations' && (
+        <Card>
+          <div className="px-6 py-4 border-b border-zinc-100">
+            <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+              <Plug className="w-5 h-5" /> Integrações
+            </h3>
+            <p className="text-sm text-zinc-500 mt-1">Status das integrações configuradas no ambiente</p>
+          </div>
+          <CardContent>
+            {loadingIntegrations ? (
+              <div className="space-y-3">
+                {[1,2,3,4].map(i => (
+                  <div key={i} className="animate-pulse h-16 bg-zinc-100 rounded-xl" />
+                ))}
+              </div>
+            ) : integrations ? (
+              <div className="space-y-3">
+                {([
+                  { key: 'resend' as const, name: 'Email', provider: 'Resend', desc: 'Envio de notificações por email' },
+                  { key: 'n8n' as const, name: 'WhatsApp', provider: 'n8n Webhook', desc: 'Notificações via WhatsApp' },
+                  { key: 'uploadPost' as const, name: 'Agendamento Social', provider: 'Upload-Post', desc: 'Publicação agendada em redes sociais' },
+                  { key: 'stripe' as const, name: 'Pagamentos', provider: 'Stripe', desc: 'Cobranças e assinaturas' },
+                ] as const).map(item => (
+                  <div key={item.key} className="flex items-center gap-4 p-4 rounded-xl border border-zinc-100 bg-zinc-50/50">
+                    <div className={`w-10 h-10 rounded-lg flex items-center justify-center ${integrations[item.key] ? 'bg-green-100' : 'bg-red-100'}`}>
+                      <Plug className={`w-5 h-5 ${integrations[item.key] ? 'text-green-600' : 'text-red-500'}`} />
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="font-medium text-zinc-900 text-sm">{item.name}</div>
+                      <div className="text-xs text-zinc-500">{item.provider} · {item.desc}</div>
+                    </div>
+                    <div className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium ${
+                      integrations[item.key] ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'
+                    }`}>
+                      {integrations[item.key]
+                        ? <><CheckCircle className="w-3.5 h-3.5" /> Ativo</>
+                        : <><XCircle className="w-3.5 h-3.5" /> Não configurado</>
+                      }
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="text-sm text-zinc-500">Erro ao carregar status das integrações</p>
+            )}
           </CardContent>
         </Card>
       )}

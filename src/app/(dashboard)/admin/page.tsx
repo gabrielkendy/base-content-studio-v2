@@ -1,21 +1,22 @@
 'use client'
 
-import { useState, useEffect } from 'react'
-import { 
-  Shield, 
-  Users, 
-  Building2, 
-  CreditCard, 
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
+import { useAuth } from '@/hooks/use-auth'
+import {
+  Shield,
+  Users,
+  Building2,
+  CreditCard,
   TrendingUp,
   DollarSign,
   Activity,
-  Calendar,
   ChevronRight,
+  ChevronLeft,
   Search,
   Filter,
   MoreHorizontal,
   ExternalLink,
-  Crown,
   AlertTriangle,
   Loader2
 } from 'lucide-react'
@@ -26,18 +27,14 @@ interface AdminStats {
   activeSubscriptions: number
   trialUsers: number
   mrr: number
-  mrrGrowth: number
-  churnRate: number
   newSignupsThisMonth: number
-  conversionRate: number
 }
 
 interface Organization {
   id: string
   name: string
   slug: string
-  plan_id: string | null
-  subscription_status: string | null
+  plan: string | null
   created_at: string
   members_count: number
   clients_count: number
@@ -45,129 +42,92 @@ interface Organization {
   owner_email: string
 }
 
+const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+
 export default function AdminPage() {
+  const { user, loading: authLoading } = useAuth()
+  const router = useRouter()
   const [stats, setStats] = useState<AdminStats | null>(null)
   const [organizations, setOrganizations] = useState<Organization[]>([])
+  const [total, setTotal] = useState(0)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
+  const [page, setPage] = useState(0)
 
-  useEffect(() => {
-    fetchData()
-  }, [])
+  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())
 
-  const fetchData = async () => {
+  const fetchData = useCallback(async (p: number) => {
+    setLoading(true)
+    setError(null)
     try {
-      // In production, this would fetch from your admin API
-      // For now, using mock data
-      setStats({
-        totalOrganizations: 156,
-        activeSubscriptions: 89,
-        trialUsers: 34,
-        mrr: 15780,
-        mrrGrowth: 12.5,
-        churnRate: 2.3,
-        newSignupsThisMonth: 23,
-        conversionRate: 45,
-      })
-
-      setOrganizations([
-        {
-          id: '1',
-          name: 'Agência Digital XYZ',
-          slug: 'agencia-xyz',
-          plan_id: 'pro',
-          subscription_status: 'active',
-          created_at: '2026-01-15',
-          members_count: 4,
-          clients_count: 8,
-          contents_count: 156,
-          owner_email: 'contato@agenciaxyz.com',
-        },
-        {
-          id: '2',
-          name: 'Studio Criativo',
-          slug: 'studio-criativo',
-          plan_id: 'starter',
-          subscription_status: 'trialing',
-          created_at: '2026-02-01',
-          members_count: 1,
-          clients_count: 2,
-          contents_count: 12,
-          owner_email: 'maria@studiocriativo.com',
-        },
-        {
-          id: '3',
-          name: 'Marketing Pro',
-          slug: 'marketing-pro',
-          plan_id: 'agency',
-          subscription_status: 'active',
-          created_at: '2025-11-20',
-          members_count: 12,
-          clients_count: 25,
-          contents_count: 890,
-          owner_email: 'admin@marketingpro.com',
-        },
-        {
-          id: '4',
-          name: 'Freelancer João',
-          slug: 'freelancer-joao',
-          plan_id: null,
-          subscription_status: 'canceled',
-          created_at: '2026-01-28',
-          members_count: 1,
-          clients_count: 1,
-          contents_count: 5,
-          owner_email: 'joao@email.com',
-        },
-      ])
-    } catch (err) {
-      console.error('Error fetching admin data:', err)
+      const res = await fetch(`/api/admin/stats?page=${p}`)
+      if (res.status === 403) {
+        router.replace('/')
+        return
+      }
+      if (!res.ok) throw new Error('Falha ao carregar dados')
+      const json = await res.json()
+      setStats(json.stats)
+      setOrganizations(json.organizations)
+      setTotal(json.total)
+      setPage(json.page)
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Erro desconhecido')
     } finally {
       setLoading(false)
     }
-  }
+  }, [router])
+
+  useEffect(() => {
+    if (authLoading) return
+    if (!user) { router.replace('/'); return }
+    if (!isAdmin) { router.replace('/'); return }
+    fetchData(0)
+  }, [authLoading, user, isAdmin, router, fetchData])
 
   const filteredOrgs = organizations.filter(org => {
     const matchesSearch = org.name.toLowerCase().includes(search.toLowerCase()) ||
-                         org.owner_email.toLowerCase().includes(search.toLowerCase())
-    const matchesStatus = statusFilter === 'all' || org.subscription_status === statusFilter
+      org.owner_email.toLowerCase().includes(search.toLowerCase())
+    const matchesStatus = statusFilter === 'all' ||
+      (statusFilter === 'active' && org.plan && org.plan !== 'free') ||
+      (statusFilter === 'free' && (!org.plan || org.plan === 'free'))
     return matchesSearch && matchesStatus
   })
 
-  const getStatusBadge = (status: string | null) => {
-    const configs: Record<string, { bg: string; text: string; label: string }> = {
-      active: { bg: 'bg-green-500/20', text: 'text-green-500', label: 'Ativo' },
-      trialing: { bg: 'bg-amber-500/20', text: 'text-amber-500', label: 'Trial' },
-      past_due: { bg: 'bg-red-500/20', text: 'text-red-500', label: 'Atrasado' },
-      canceled: { bg: 'bg-zinc-500/20', text: 'text-zinc-500', label: 'Cancelado' },
-    }
-    const config = configs[status || 'canceled'] || configs.canceled
-    return (
-      <span className={`px-2 py-1 ${config.bg} ${config.text} text-xs font-medium rounded-full`}>
-        {config.label}
-      </span>
-    )
-  }
+  const totalPages = Math.ceil(total / 20)
 
-  const getPlanBadge = (planId: string | null) => {
+  const getPlanBadge = (plan: string | null) => {
     const plans: Record<string, { icon: string; label: string; color: string }> = {
-      starter: { icon: '⭐', label: 'Starter', color: 'text-zinc-400' },
-      pro: { icon: '🚀', label: 'Pro', color: 'text-purple-400' },
-      agency: { icon: '👑', label: 'Agency', color: 'text-amber-400' },
+      starter: { icon: '⭐', label: 'Starter', color: 'text-zinc-500' },
+      pro: { icon: '🚀', label: 'Pro', color: 'text-purple-500' },
+      agency: { icon: '👑', label: 'Agency', color: 'text-amber-500' },
     }
-    const plan = plans[planId || ''] || { icon: '—', label: 'Free', color: 'text-zinc-500' }
+    const p = plans[plan || ''] || { icon: '—', label: 'Free', color: 'text-zinc-400' }
     return (
-      <span className={`flex items-center gap-1 ${plan.color} text-sm font-medium`}>
-        {plan.icon} {plan.label}
+      <span className={`flex items-center gap-1 ${p.color} text-sm font-medium`}>
+        {p.icon} {p.label}
       </span>
     )
   }
 
-  if (loading) {
+  if (authLoading || (loading && !stats)) {
     return (
       <div className="flex items-center justify-center h-96">
         <Loader2 className="w-8 h-8 animate-spin text-purple-500" />
+      </div>
+    )
+  }
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center h-96 gap-4 text-zinc-500">
+        <AlertTriangle className="w-8 h-8 text-amber-500" />
+        <p>{error}</p>
+        <button onClick={() => fetchData(page)} className="text-sm text-purple-600 hover:underline">
+          Tentar novamente
+        </button>
       </div>
     )
   }
@@ -181,13 +141,11 @@ export default function AdminPage() {
             <Shield className="w-7 h-7 text-purple-500" />
             Admin Dashboard
           </h1>
-          <p className="text-muted-foreground mt-1">
-            Visão geral do SaaS
-          </p>
+          <p className="text-zinc-500 mt-1 text-sm">Visão geral do SaaS</p>
         </div>
-        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+        <div className="flex items-center gap-2 text-sm text-zinc-400">
           <Activity className="w-4 h-4" />
-          Atualizado agora
+          Dados reais
         </div>
       </div>
 
@@ -203,101 +161,86 @@ export default function AdminPage() {
           />
           <StatCard
             icon={CreditCard}
-            label="Assinaturas Ativas"
+            label="Assinaturas Pagas"
             value={stats.activeSubscriptions}
-            change={`${stats.trialUsers} em trial`}
+            change={`${stats.trialUsers} novos sem plano`}
           />
           <StatCard
             icon={DollarSign}
             label="MRR"
-            value={`R$${stats.mrr.toLocaleString()}`}
-            change={`+${stats.mrrGrowth}%`}
+            value={`R$${stats.mrr.toLocaleString('pt-BR')}`}
+            change="Calculado por plano"
             positive
           />
           <StatCard
             icon={TrendingUp}
-            label="Taxa de Conversão"
-            value={`${stats.conversionRate}%`}
-            change={`Churn: ${stats.churnRate}%`}
+            label="Novos este mês"
+            value={stats.newSignupsThisMonth}
+            change={`de ${stats.totalOrganizations} total`}
+            positive={stats.newSignupsThisMonth > 0}
           />
         </div>
       )}
 
       {/* Organizations Table */}
-      <div className="bg-card border rounded-2xl overflow-hidden">
-        <div className="p-4 border-b flex flex-col sm:flex-row gap-4">
+      <div className="bg-white border border-zinc-200 rounded-2xl overflow-hidden">
+        <div className="p-4 border-b border-zinc-100 flex flex-col sm:flex-row gap-4">
           <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" />
             <input
               type="text"
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               placeholder="Buscar por nome ou email..."
-              className="w-full pl-10 pr-4 py-2 bg-muted border-0 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
+              className="w-full pl-10 pr-4 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm focus:ring-2 focus:ring-purple-500 outline-none"
             />
           </div>
           <div className="flex items-center gap-2">
-            <Filter className="w-4 h-4 text-muted-foreground" />
+            <Filter className="w-4 h-4 text-zinc-400" />
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="px-3 py-2 bg-muted rounded-lg text-sm outline-none"
+              className="px-3 py-2 bg-zinc-50 border border-zinc-200 rounded-lg text-sm outline-none"
             >
-              <option value="all">Todos status</option>
-              <option value="active">Ativos</option>
-              <option value="trialing">Em trial</option>
-              <option value="past_due">Atrasados</option>
-              <option value="canceled">Cancelados</option>
+              <option value="all">Todos os planos</option>
+              <option value="active">Com plano pago</option>
+              <option value="free">Free / sem plano</option>
             </select>
           </div>
         </div>
 
         <div className="overflow-x-auto">
           <table className="w-full">
-            <thead className="bg-muted/50">
+            <thead className="bg-zinc-50">
               <tr>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Organização</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Plano</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Status</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Membros</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Clientes</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground">Conteúdos</th>
-                <th className="text-left py-3 px-4 text-sm font-medium text-muted-foreground">Criado em</th>
-                <th className="text-center py-3 px-4 text-sm font-medium text-muted-foreground"></th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500">Organização</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500">Plano</th>
+                <th className="text-center py-3 px-4 text-xs font-medium text-zinc-500">Membros</th>
+                <th className="text-center py-3 px-4 text-xs font-medium text-zinc-500">Clientes</th>
+                <th className="text-center py-3 px-4 text-xs font-medium text-zinc-500">Conteúdos</th>
+                <th className="text-left py-3 px-4 text-xs font-medium text-zinc-500">Criado em</th>
+                <th className="py-3 px-4" />
               </tr>
             </thead>
-            <tbody className="divide-y divide-border">
+            <tbody className="divide-y divide-zinc-100">
               {filteredOrgs.map(org => (
-                <tr key={org.id} className="hover:bg-muted/30 transition-colors">
+                <tr key={org.id} className="hover:bg-zinc-50 transition-colors">
                   <td className="py-3 px-4">
                     <div>
-                      <div className="font-medium">{org.name}</div>
-                      <div className="text-sm text-muted-foreground">{org.owner_email}</div>
+                      <div className="font-medium text-zinc-900 text-sm">{org.name}</div>
+                      <div className="text-xs text-zinc-400">{org.owner_email}</div>
                     </div>
                   </td>
-                  <td className="py-3 px-4">
-                    {getPlanBadge(org.plan_id)}
-                  </td>
-                  <td className="py-3 px-4">
-                    {getStatusBadge(org.subscription_status)}
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="text-sm">{org.members_count}</span>
+                  <td className="py-3 px-4">{getPlanBadge(org.plan)}</td>
+                  <td className="py-3 px-4 text-center text-sm text-zinc-700">{org.members_count}</td>
+                  <td className="py-3 px-4 text-center text-sm text-zinc-700">{org.clients_count}</td>
+                  <td className="py-3 px-4 text-center text-sm text-zinc-700">{org.contents_count}</td>
+                  <td className="py-3 px-4 text-sm text-zinc-500">
+                    {new Date(org.created_at).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <span className="text-sm">{org.clients_count}</span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <span className="text-sm">{org.contents_count}</span>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className="text-sm text-muted-foreground">
-                      {new Date(org.created_at).toLocaleDateString('pt-BR')}
-                    </span>
-                  </td>
-                  <td className="py-3 px-4 text-center">
-                    <button className="p-2 hover:bg-muted rounded-lg transition-colors">
-                      <MoreHorizontal className="w-4 h-4 text-muted-foreground" />
+                    <button className="p-2 hover:bg-zinc-100 rounded-lg transition-colors">
+                      <MoreHorizontal className="w-4 h-4 text-zinc-400" />
                     </button>
                   </td>
                 </tr>
@@ -307,84 +250,93 @@ export default function AdminPage() {
         </div>
 
         {filteredOrgs.length === 0 && (
-          <div className="py-12 text-center text-muted-foreground">
+          <div className="py-12 text-center text-zinc-400 text-sm">
             Nenhuma organização encontrada
+          </div>
+        )}
+
+        {/* Pagination */}
+        {totalPages > 1 && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-100">
+            <span className="text-sm text-zinc-500">
+              Página {page + 1} de {totalPages} · {total} organizações
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => fetchData(page - 1)}
+                disabled={page === 0 || loading}
+                className="p-2 rounded-lg hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                onClick={() => fetchData(page + 1)}
+                disabled={page >= totalPages - 1 || loading}
+                className="p-2 rounded-lg hover:bg-zinc-100 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
           </div>
         )}
       </div>
 
       {/* Quick Actions */}
-      <div className="grid sm:grid-cols-3 gap-4">
+      <div className="grid sm:grid-cols-2 gap-4">
         <Link
           href="https://dashboard.stripe.com"
           target="_blank"
-          className="p-4 bg-card border rounded-xl hover:border-purple-500/30 transition-colors flex items-center gap-4"
+          className="p-4 bg-white border border-zinc-200 rounded-xl hover:border-purple-300 transition-colors flex items-center gap-4"
         >
-          <div className="w-10 h-10 bg-purple-500/20 rounded-lg flex items-center justify-center">
-            <CreditCard className="w-5 h-5 text-purple-500" />
+          <div className="w-10 h-10 bg-purple-100 rounded-lg flex items-center justify-center">
+            <CreditCard className="w-5 h-5 text-purple-600" />
           </div>
           <div className="flex-1">
-            <div className="font-medium">Stripe Dashboard</div>
-            <div className="text-sm text-muted-foreground">Gerenciar pagamentos</div>
+            <div className="font-medium text-sm text-zinc-900">Stripe Dashboard</div>
+            <div className="text-xs text-zinc-500">Gerenciar pagamentos</div>
           </div>
-          <ExternalLink className="w-4 h-4 text-muted-foreground" />
+          <ExternalLink className="w-4 h-4 text-zinc-400" />
         </Link>
 
         <Link
-          href="/admin/invoices"
-          className="p-4 bg-card border rounded-xl hover:border-purple-500/30 transition-colors flex items-center gap-4"
+          href="/configuracoes?tab=integrations"
+          className="p-4 bg-white border border-zinc-200 rounded-xl hover:border-purple-300 transition-colors flex items-center gap-4"
         >
-          <div className="w-10 h-10 bg-blue-500/20 rounded-lg flex items-center justify-center">
-            <DollarSign className="w-5 h-5 text-blue-500" />
+          <div className="w-10 h-10 bg-amber-100 rounded-lg flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5 text-amber-600" />
           </div>
           <div className="flex-1">
-            <div className="font-medium">Faturas</div>
-            <div className="text-sm text-muted-foreground">Histórico de cobranças</div>
+            <div className="font-medium text-sm text-zinc-900">Integrações</div>
+            <div className="text-xs text-zinc-500">Ver status de serviços</div>
           </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
-        </Link>
-
-        <Link
-          href="/admin/support"
-          className="p-4 bg-card border rounded-xl hover:border-purple-500/30 transition-colors flex items-center gap-4"
-        >
-          <div className="w-10 h-10 bg-amber-500/20 rounded-lg flex items-center justify-center">
-            <AlertTriangle className="w-5 h-5 text-amber-500" />
-          </div>
-          <div className="flex-1">
-            <div className="font-medium">Suporte</div>
-            <div className="text-sm text-muted-foreground">3 tickets abertos</div>
-          </div>
-          <ChevronRight className="w-4 h-4 text-muted-foreground" />
+          <ChevronRight className="w-4 h-4 text-zinc-400" />
         </Link>
       </div>
     </div>
   )
 }
 
-function StatCard({ 
-  icon: Icon, 
-  label, 
-  value, 
-  change, 
-  positive 
-}: { 
-  icon: any
+function StatCard({
+  icon: Icon,
+  label,
+  value,
+  change,
+  positive
+}: {
+  icon: React.ElementType
   label: string
   value: string | number
   change: string
   positive?: boolean
 }) {
   return (
-    <div className="p-4 bg-card border rounded-xl">
+    <div className="p-4 bg-white border border-zinc-200 rounded-xl">
       <div className="flex items-center gap-2 mb-3">
-        <Icon className="w-4 h-4 text-muted-foreground" />
-        <span className="text-sm text-muted-foreground">{label}</span>
+        <Icon className="w-4 h-4 text-zinc-400" />
+        <span className="text-xs text-zinc-500">{label}</span>
       </div>
-      <div className="text-2xl font-bold mb-1">{value}</div>
-      <div className={`text-sm ${positive ? 'text-green-500' : 'text-muted-foreground'}`}>
-        {change}
-      </div>
+      <div className="text-2xl font-bold text-zinc-900 mb-1">{value}</div>
+      <div className={`text-xs ${positive ? 'text-green-600' : 'text-zinc-400'}`}>{change}</div>
     </div>
   )
 }

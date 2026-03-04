@@ -22,6 +22,7 @@ import {
   ListTodo,
   FolderOpen,
   UserCheck,
+  Shield,
 } from 'lucide-react'
 import { useState } from 'react'
 
@@ -49,7 +50,7 @@ const NAV_ITEMS_CLIENTE = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const { org, member, signOut } = useAuth()
+  const { org, member, user, signOut } = useAuth()
   const [collapsed, setCollapsed] = useState(() => {
     if (typeof window === 'undefined') return false
     return localStorage.getItem('sidebar-collapsed') === 'true'
@@ -68,6 +69,9 @@ export function Sidebar() {
   }
   const isCliente = member?.role === 'cliente'
   const navItems = isCliente ? NAV_ITEMS_CLIENTE : NAV_ITEMS_TEAM
+
+  const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
+  const isSystemAdmin = !isCliente && user?.email && adminEmails.includes(user.email.toLowerCase())
 
   return (
     <>
@@ -207,6 +211,26 @@ export function Sidebar() {
               </Link>
             )
           })}
+
+          {/* System Admin link */}
+          {isSystemAdmin && (
+            <>
+              <div className="my-3 border-t border-zinc-100" />
+              <Link
+                href="/admin"
+                onClick={() => setMobileOpen(false)}
+                className={cn(
+                  'flex items-center gap-3 px-3 py-2 rounded-lg text-sm transition-all',
+                  pathname === '/admin'
+                    ? 'bg-purple-100 text-purple-700 font-medium'
+                    : 'text-purple-600 hover:bg-purple-50 hover:text-purple-700 font-medium'
+                )}
+              >
+                <Shield className="w-5 h-5 shrink-0" />
+                {!collapsed && <span>Admin</span>}
+              </Link>
+            </>
+          )}
         </nav>
 
         {/* Footer with member info */}

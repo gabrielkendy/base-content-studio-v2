@@ -381,9 +381,8 @@ export async function POST(request: NextRequest) {
       // Dispatch webhook (server-side, using internal fetch)
       if (conteudo.org_id) {
         try {
-          const baseUrl = process.env.NEXT_PUBLIC_APP_URL || process.env.VERCEL_URL
-            ? `https://${process.env.VERCEL_URL}`
-            : 'http://localhost:3000'
+          const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
+            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
           
           await fetch(`${baseUrl}/api/webhooks/dispatch`, {
             method: 'POST',

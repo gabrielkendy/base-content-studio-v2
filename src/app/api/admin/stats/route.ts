@@ -40,7 +40,7 @@ export async function GET(request: NextRequest) {
 
     // Pagination
     const { searchParams } = new URL(request.url)
-    const page = Math.max(0, parseInt(searchParams.get('page') || '0'))
+    const page = Math.max(0, parseInt(searchParams.get('page') || '0') || 0)
     const pageSize = 20
     const from = page * pageSize
     const to = from + pageSize - 1

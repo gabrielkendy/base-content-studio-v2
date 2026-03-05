@@ -189,7 +189,7 @@ const templates: Record<EmailType, { subject: (d: any) => string; html: (d: any)
         </div>
         <p style="color: #475569; margin: 0; font-size: 15px; line-height: 1.6;">${d.message || ''}</p>
       </div>
-      ${ctaButton('Responder', d.chatUrl || `${APP_URL}/chat`, '#06b6d4')}
+      ${ctaButton('Responder', d.chatUrl || `${APP_URL}/notificacoes`, '#06b6d4')}
     `, d),
   },
 

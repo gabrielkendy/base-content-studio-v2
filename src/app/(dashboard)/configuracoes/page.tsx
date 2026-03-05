@@ -73,6 +73,7 @@ export default function ConfiguracoesPage() {
   const [clientes, setClientes] = useState<Array<{ id: string; nome: string; slug: string }>>([])
   const [selectedCliente, setSelectedCliente] = useState<string | null>(null)
   const [loadingClientes, setLoadingClientes] = useState(false)
+  const [socialRetry, setSocialRetry] = useState(0)
 
   useEffect(() => {
     if (org) {
@@ -275,7 +276,7 @@ export default function ConfiguracoesPage() {
         .catch(() => toast('Erro ao carregar conexão', 'error'))
         .finally(() => setLoadingSocial(false))
     }
-  }, [activeTab, selectedCliente, toast])
+  }, [activeTab, selectedCliente, socialRetry, toast])
 
   if (roleLoading || !allowed) {
     return (
@@ -741,7 +742,7 @@ export default function ConfiguracoesPage() {
                 ) : (
                   <Button 
                     variant="outline" 
-                    onClick={() => setSelectedCliente(selectedCliente)}
+                    onClick={() => setSocialRetry(c => c + 1)}
                   >
                     Tentar novamente
                   </Button>

@@ -2,6 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { normalizeStatus } from '@/lib/utils'
 import { NextRequest, NextResponse } from 'next/server'
 import { notifyApprovalResponse } from '@/lib/notifications'
+import { dispararNotificacao, getAppUrl } from '@/lib/approval-notifications'
 
 export async function GET(request: NextRequest) {
   try {
@@ -305,6 +306,76 @@ export async function POST(request: NextRequest) {
           console.error('Error creating adjustment task:', taskErr)
           // Continue - não é crítico
         }
+      }
+
+      // 🔔 WhatsApp via n8n
+      try {
+        const { data: empresa } = await supabase
+          .from('clientes')
+          .select('id, nome, slug')
+          .eq('id', conteudo.empresa_id)
+          .single()
+
+        if (empresa) {
+          const APP_URL = getAppUrl()
+          const empresaInfo = { id: empresa.id, nome: empresa.nome, slug: empresa.slug }
+
+          if (status === 'aprovado') {
+            // Notify internal approvers about scheduling
+            const { data: aprovadores } = await supabase
+              .from('aprovadores')
+              .select('nome, whatsapp, email, tipo, pode_editar_legenda')
+              .eq('empresa_id', conteudo.empresa_id)
+              .eq('tipo', 'interno')
+              .eq('ativo', true)
+              .eq('recebe_notificacao', true)
+
+            if (aprovadores && aprovadores.length > 0) {
+              await dispararNotificacao({
+                tipo: 'cliente_aprovado',
+                conteudo: {
+                  id: conteudo.id,
+                  titulo: conteudo.titulo || 'Sem título',
+                  legenda: '',
+                  status: 'aguardando_agendamento',
+                  link_aprovacao: `${APP_URL}/workflow?content=${conteudo.id}`,
+                },
+                empresa: empresaInfo,
+                aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+                nivel: 0,
+                timestamp: new Date().toISOString(),
+              })
+            }
+          } else if (status === 'ajuste') {
+            // Notify designers about client adjustment request
+            const { data: aprovadores } = await supabase
+              .from('aprovadores')
+              .select('nome, whatsapp, email, tipo, pode_editar_legenda')
+              .eq('empresa_id', conteudo.empresa_id)
+              .eq('tipo', 'designer')
+              .eq('ativo', true)
+              .eq('recebe_notificacao', true)
+
+            if (aprovadores && aprovadores.length > 0) {
+              await dispararNotificacao({
+                tipo: 'ajuste_solicitado',
+                conteudo: {
+                  id: conteudo.id,
+                  titulo: conteudo.titulo || 'Sem título',
+                  legenda: comentario || '',
+                  status: 'ajuste',
+                  link_aprovacao: `${APP_URL}/workflow?content=${conteudo.id}`,
+                },
+                empresa: empresaInfo,
+                aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+                nivel: 0,
+                timestamp: new Date().toISOString(),
+              })
+            }
+          }
+        }
+      } catch (whatsappErr) {
+        console.error('WhatsApp notification error (non-critical):', whatsappErr)
       }
 
       // Dispatch webhook (server-side, using internal fetch)

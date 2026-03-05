@@ -4,11 +4,12 @@
 const N8N_WEBHOOK_URL = process.env.N8N_NOTIFICACAO_WEBHOOK || 
   'https://agenciabase.app.n8n.cloud/webhook/base-content/notificacao'
 
-export type TipoNotificacao = 
+export type TipoNotificacao =
   | 'novo_conteudo'      // Conteúdo criado, ir pro nível 1
   | 'nivel_aprovado'     // Aprovado, ir pro próximo nível
   | 'ajuste_solicitado'  // Pedir ajuste
   | 'aprovado_final'     // Todos níveis aprovaram
+  | 'cliente_aprovado'   // Cliente aprovou, perguntar sobre agendamento
 
 interface Aprovador {
   nome: string
@@ -49,11 +50,16 @@ export async function dispararNotificacao(payload: NotificacaoPayload): Promise<
   error?: string
 }> {
   try {
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), 10000)
+
     const response = await fetch(N8N_WEBHOOK_URL, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(payload),
+      signal: controller.signal,
     })
+    clearTimeout(timeout)
 
     if (!response.ok) {
       const errorText = await response.text()
@@ -63,6 +69,10 @@ export async function dispararNotificacao(payload: NotificacaoPayload): Promise<
 
     return { success: true }
   } catch (error: any) {
+    if (error.name === 'AbortError') {
+      console.error('n8n webhook timeout após 10s')
+      return { success: false, error: 'Timeout ao disparar notificação' }
+    }
     console.error('Erro ao disparar notificação:', error)
     return { success: false, error: error.message }
   }
@@ -72,8 +82,12 @@ export async function dispararNotificacao(payload: NotificacaoPayload): Promise<
  * Gera link de aprovação para um conteúdo
  */
 export function gerarLinkAprovacao(conteudoId: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://base-content-studio-v2.vercel.app'
+  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://studio.agenciabase.tech'
   return `${baseUrl}/aprovacao/${conteudoId}`
+}
+
+export function getAppUrl(): string {
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://studio.agenciabase.tech'
 }
 
 /**
@@ -112,7 +126,16 @@ Foi solicitado um ajuste neste conteúdo.
 📌 *${c.titulo || 'Sem título'}*
 🏢 Cliente: ${e.nome}
 
-O conteúdo foi aprovado por todos os níveis e está pronto para publicação!`
+O conteúdo foi aprovado por todos os níveis e está pronto para publicação!`,
+
+  cliente_aprovado: (c, e) => `✅ *Cliente aprovou o conteúdo!*
+
+📌 *${c.titulo || 'Sem título'}*
+🏢 Cliente: ${e.nome}
+
+Deseja agendar a publicação agora?
+
+👉 Agendar: ${c.link_aprovacao}`
 }
 
 /**
@@ -122,7 +145,8 @@ export const assuntosEmail: Record<TipoNotificacao, (conteudo: ConteudoInfo, emp
   novo_conteudo: (c, e) => `🆕 Novo conteúdo: ${c.titulo} - ${e.nome}`,
   nivel_aprovado: (c, e) => `✅ Aprovar: ${c.titulo} - ${e.nome}`,
   ajuste_solicitado: (c, e) => `🔄 Ajuste: ${c.titulo} - ${e.nome}`,
-  aprovado_final: (c, e) => `🎉 Aprovado: ${c.titulo} - ${e.nome}`
+  aprovado_final: (c, e) => `🎉 Aprovado: ${c.titulo} - ${e.nome}`,
+  cliente_aprovado: (c, e) => `✅ Cliente aprovou: ${c.titulo} - ${e.nome}`
 }
 
 /**
@@ -137,7 +161,8 @@ export function gerarEmailHtml(
     novo_conteudo: '📋 Novo Conteúdo',
     nivel_aprovado: '✅ Aprovar Conteúdo',
     ajuste_solicitado: '🔄 Ajuste Necessário',
-    aprovado_final: '🎉 Conteúdo Aprovado!'
+    aprovado_final: '🎉 Conteúdo Aprovado!',
+    cliente_aprovado: '✅ Cliente Aprovou!'
   }
 
   return `

@@ -1,4 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
+import { dispararNotificacao, getAppUrl } from '@/lib/approval-notifications'
 import { NextRequest, NextResponse } from 'next/server'
 
 // POST: Enviar para aprovação interna
@@ -117,6 +118,115 @@ export async function POST(request: NextRequest) {
         console.error('Content update error:', updateError)
         return NextResponse.json({ error: updateError.message }, { status: 500 })
       }
+    }
+
+    // 🔔 WhatsApp notifications via n8n
+    try {
+      const { data: empresa } = await supabase
+        .from('clientes')
+        .select('id, nome, slug')
+        .eq('id', conteudo.empresa_id)
+        .single()
+
+      if (empresa) {
+        const APP_URL = getAppUrl()
+        const workflowLink = `${APP_URL}/workflow?content=${conteudo_id}`
+        const empresaInfo = { id: empresa.id, nome: empresa.nome, slug: empresa.slug }
+
+        if (action === 'submit') {
+          const { data: aprovadores } = await supabase
+            .from('aprovadores')
+            .select('nome, whatsapp, email, tipo, pode_editar_legenda')
+            .eq('empresa_id', conteudo.empresa_id)
+            .eq('tipo', 'interno')
+            .eq('ativo', true)
+            .eq('recebe_notificacao', true)
+
+          if (aprovadores && aprovadores.length > 0) {
+            await dispararNotificacao({
+              tipo: 'novo_conteudo',
+              conteudo: {
+                id: conteudo_id,
+                titulo: conteudo.titulo || 'Sem título',
+                legenda: conteudo.legenda?.substring(0, 200) || '',
+                status: 'producao',
+                link_aprovacao: workflowLink,
+              },
+              empresa: empresaInfo,
+              aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+              nivel: 1,
+              timestamp: new Date().toISOString(),
+            })
+          }
+        } else if (action === 'approve') {
+          // Generate client approval token
+          const token = Array.from({ length: 32 }, () =>
+            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
+          ).join('')
+
+          await supabase.from('aprovacoes_links').insert({
+            conteudo_id,
+            empresa_id: conteudo.empresa_id,
+            token,
+            status: 'pendente',
+            expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+          })
+
+          const clientLink = `${APP_URL}/aprovacao?token=${token}`
+
+          const { data: aprovadores } = await supabase
+            .from('aprovadores')
+            .select('nome, whatsapp, email, tipo, pode_editar_legenda')
+            .eq('empresa_id', conteudo.empresa_id)
+            .eq('tipo', 'cliente')
+            .eq('ativo', true)
+            .eq('recebe_notificacao', true)
+
+          if (aprovadores && aprovadores.length > 0) {
+            await dispararNotificacao({
+              tipo: 'nivel_aprovado',
+              conteudo: {
+                id: conteudo_id,
+                titulo: conteudo.titulo || 'Sem título',
+                legenda: conteudo.legenda?.substring(0, 200) || '',
+                status: 'aprovacao',
+                link_aprovacao: clientLink,
+              },
+              empresa: empresaInfo,
+              aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+              nivel: 1,
+              timestamp: new Date().toISOString(),
+            })
+          }
+        } else if (action === 'reject') {
+          const { data: aprovadores } = await supabase
+            .from('aprovadores')
+            .select('nome, whatsapp, email, tipo, pode_editar_legenda')
+            .eq('empresa_id', conteudo.empresa_id)
+            .eq('tipo', 'designer')
+            .eq('ativo', true)
+            .eq('recebe_notificacao', true)
+
+          if (aprovadores && aprovadores.length > 0) {
+            await dispararNotificacao({
+              tipo: 'ajuste_solicitado',
+              conteudo: {
+                id: conteudo_id,
+                titulo: conteudo.titulo || 'Sem título',
+                legenda: comment || '',
+                status: 'producao',
+                link_aprovacao: workflowLink,
+              },
+              empresa: empresaInfo,
+              aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+              nivel: 1,
+              timestamp: new Date().toISOString(),
+            })
+          }
+        }
+      }
+    } catch (whatsappErr) {
+      console.error('WhatsApp notification error (non-critical):', whatsappErr)
     }
 
     // Dispatch webhook

@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, useCallback, Suspense } from 'react'
+import { useEffect, useState, useCallback, useMemo, Suspense } from 'react'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
@@ -124,68 +124,77 @@ function WorkflowContent() {
     setLoading(false)
   }, [org])
 
-  // Build kanban items (sem solicitações - elas ficam no painel lateral)
-  const kanbanItems: KanbanItem[] = []
-
-  conteudos.forEach(c => {
-    if (filtroCliente !== 'todos' && c.empresa_id !== filtroCliente) return
-    if (filtroMes !== 'todos' && c.mes !== parseInt(filtroMes)) return
-    if (filtroResponsavel !== 'todos' && c.assigned_to !== filtroResponsavel) return
-    if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) return
-    // Busca por título OU por ID (aceita #123 ou 123)
-    if (busca) {
-      const buscaLower = busca.toLowerCase().replace('#', '')
-      const tituloMatch = (c.titulo || '').toLowerCase().includes(buscaLower)
-      const idMatch = (c as any).demanda_id?.toString() === buscaLower
-      if (!tituloMatch && !idMatch) return
+  // Index aprovacoes by conteudo_id (O(n) lookup instead of O(n*m) find)
+  const aprovacoesByConteudo = useMemo(() => {
+    const map = new Map<string, AprovacaoLink>()
+    for (const a of aprovacoes) {
+      if (a.status === 'ajuste') map.set(a.conteudo_id, a)
     }
+    return map
+  }, [aprovacoes])
 
-    // Esconder cancelados/arquivados se não estiver mostrando
-    if (!showArchived && (c.status === 'cancelado' || c.status === 'arquivado')) return
+  // Build kanban items — memoized so filters don't recompute on every render
+  const kanbanItems = useMemo(() => {
+    const items: KanbanItem[] = []
+    const buscaLower = busca.toLowerCase().replace('#', '')
 
-    const ajusteLink = c.status === 'ajuste'
-      ? aprovacoes.find(a => a.conteudo_id === c.id && a.status === 'ajuste')
-      : null
+    for (const c of conteudos) {
+      if (filtroCliente !== 'todos' && c.empresa_id !== filtroCliente) continue
+      if (filtroMes !== 'todos' && c.mes !== parseInt(filtroMes)) continue
+      if (filtroResponsavel !== 'todos' && c.assigned_to !== filtroResponsavel) continue
+      if (filtroTipo !== 'todos' && c.tipo !== filtroTipo) continue
+      if (!showArchived && (c.status === 'cancelado' || c.status === 'arquivado')) continue
+      if (buscaLower) {
+        const tituloMatch = (c.titulo || '').toLowerCase().includes(buscaLower)
+        const idMatch = (c as any).demanda_id?.toString() === buscaLower
+        if (!tituloMatch && !idMatch) continue
+      }
 
-    kanbanItems.push({
-      id: c.id,
-      demanda_id: (c as any).demanda_id,
-      titulo: c.titulo || 'Sem título',
-      tipo: c.tipo,
-      status: c.status || 'rascunho',
-      sub_status: (c as any).sub_status,
-      empresa: c.empresa,
-      assignee: c.assignee,
-      data_publicacao: c.data_publicacao,
-      ajusteComentario: ajusteLink?.comentario_cliente,
-      fromSolicitacao: !!(c as any).solicitacao_id,
-      midiaUrl: (c as any).midia_url,
-      midiaType: (c as any).midia_type,
-      canais: (c as any).canais,
+      const ajusteLink = c.status === 'ajuste' ? aprovacoesByConteudo.get(c.id) ?? null : null
+
+      items.push({
+        id: c.id,
+        demanda_id: (c as any).demanda_id,
+        titulo: c.titulo || 'Sem título',
+        tipo: c.tipo,
+        status: c.status || 'rascunho',
+        sub_status: (c as any).sub_status,
+        empresa: c.empresa,
+        assignee: c.assignee,
+        data_publicacao: c.data_publicacao,
+        ajusteComentario: ajusteLink?.comentario_cliente,
+        fromSolicitacao: !!(c as any).solicitacao_id,
+        midiaUrl: (c as any).midia_url,
+        midiaType: (c as any).midia_type,
+        canais: (c as any).canais,
+      })
+    }
+    return items
+  }, [conteudos, aprovacoesByConteudo, filtroCliente, filtroMes, filtroResponsavel, filtroTipo, busca, showArchived])
+
+  // Group by status — memoized
+  const porStatus = useMemo(() => {
+    const map: Record<string, KanbanItem[]> = {}
+    KANBAN_VISIBLE_STATUSES.forEach(s => { map[s] = [] })
+    if (showArchived) { map['cancelado'] = []; map['arquivado'] = [] }
+    for (const item of kanbanItems) {
+      const s = item.status
+      if (map[s]) map[s].push(item)
+      else if (map['rascunho']) map['rascunho'].push(item)
+    }
+    return map
+  }, [kanbanItems, showArchived])
+
+  // Solicitações pendentes — memoized
+  const solicitacoesPendentes = useMemo(() => {
+    const buscaLower = busca.toLowerCase().replace('#', '')
+    return solicitacoes.filter(s => {
+      if (!['nova', 'em_analise', 'aprovada'].includes(s.status)) return false
+      if (filtroCliente !== 'todos' && s.cliente_id !== filtroCliente) return false
+      if (buscaLower && !s.titulo.toLowerCase().includes(buscaLower)) return false
+      return true
     })
-  })
-
-  // Group by status
-  const porStatus: Record<string, KanbanItem[]> = {}
-  KANBAN_VISIBLE_STATUSES.forEach(s => { porStatus[s] = [] })
-  if (showArchived) {
-    porStatus['cancelado'] = []
-    porStatus['arquivado'] = []
-  }
-  kanbanItems.forEach(item => {
-    const s = item.status
-    if (porStatus[s]) porStatus[s].push(item)
-    else if (porStatus['rascunho']) porStatus['rascunho'].push(item)
-  })
-
-  // Solicitações pendentes
-  const pendingSolStatuses = ['nova', 'em_analise', 'aprovada']
-  const solicitacoesPendentes = solicitacoes.filter(s => {
-    if (!pendingSolStatuses.includes(s.status)) return false
-    if (filtroCliente !== 'todos' && s.cliente_id !== filtroCliente) return false
-    if (busca && !s.titulo.toLowerCase().includes(busca.toLowerCase().replace('#', ''))) return false
-    return true
-  })
+  }, [solicitacoes, filtroCliente, busca])
 
   async function handleDrop(e: React.DragEvent, newStatus: string) {
     e.preventDefault()
@@ -222,6 +231,10 @@ function WorkflowContent() {
     const currentItem = kanbanItems.find(i => i.id === rawId)
     if (currentItem && currentItem.status === newStatus) { setDragging(null); return }
 
+    // Optimistic update — instant UI, no full reload
+    setConteudos(prev => prev.map(c => c.id === rawId ? { ...c, status: newStatus } : c))
+    setDragging(null)
+
     try {
       await db.update('conteudos', {
         status: newStatus,
@@ -230,11 +243,10 @@ function WorkflowContent() {
 
       const cfg = STATUS_CONFIG[newStatus]
       toast(`${cfg?.emoji || '✅'} Movido para ${cfg?.label || newStatus}`, 'success')
-    } catch (err) {
+    } catch {
       toast('❌ Erro ao mover card', 'error')
+      await loadData() // revert on error
     }
-    setDragging(null)
-    await loadData()
   }
 
   function toggleColumn(key: string) {
@@ -385,11 +397,20 @@ function WorkflowContent() {
         </div>
       )}
 
+      {/* Mobile: solicitações count badge */}
+      {solicitacoesPendentes.length > 0 && (
+        <div className="sm:hidden flex items-center gap-2 px-3 py-2 bg-purple-50 border border-purple-100 rounded-xl text-sm text-purple-700">
+          <span className="w-6 h-6 rounded-md bg-purple-500 text-white flex items-center justify-center text-xs font-bold">{solicitacoesPendentes.length}</span>
+          <span className="font-medium">{solicitacoesPendentes.length === 1 ? 'solicitação pendente' : 'solicitações pendentes'}</span>
+          <span className="text-purple-400 text-xs ml-auto">(visível no desktop)</span>
+        </div>
+      )}
+
       {/* Main content: Solicitações Panel + Kanban */}
       <div className="flex gap-4">
-        {/* Painel de Solicitações (lateral) */}
+        {/* Painel de Solicitações (lateral) — hidden on mobile */}
         {solicitacoesPendentes.length > 0 && (
-          <div className={`flex-shrink-0 transition-all duration-300 ${showSolicitacoes ? 'w-[280px]' : 'w-[48px]'}`}>
+          <div className={`max-sm:hidden flex-shrink-0 transition-all duration-300 ${showSolicitacoes ? 'w-[280px]' : 'w-[48px]'}`}>
             <div className="bg-gradient-to-b from-purple-50 to-white rounded-xl border border-purple-100 h-full">
               {/* Header do painel */}
               <button

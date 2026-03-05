@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
 import { db } from '@/lib/api'
 import { Card } from '@/components/ui/card'
@@ -39,74 +39,95 @@ export default function CalendarioPage() {
   }, [org, mes, ano, filtroCliente])
 
   async function loadData() {
-    const { data: cls } = await db.select('clientes', {
-      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
-    })
-    setClientes(cls || [])
-
-    // Load regular conteudos
     const conteudoFilters: any[] = [
       { op: 'eq', col: 'org_id', val: org!.id },
       { op: 'eq', col: 'mes', val: mes + 1 },
       { op: 'eq', col: 'ano', val: ano },
     ]
-
     if (filtroCliente !== 'todos') {
       conteudoFilters.push({ op: 'eq', col: 'empresa_id', val: filtroCliente })
     }
 
-    const { data } = await db.select('conteudos', {
-      select: '*, empresa:clientes(id, nome, slug, cores)',
-      filters: conteudoFilters,
-      order: [{ col: 'data_publicacao', asc: true }],
-    })
-    setConteudos(((data as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
-
-    // Load scheduled posts for this month
     const startDate = `${ano}-${String(mes + 1).padStart(2, '0')}-01`
-    const endDate = `${ano}-${String(mes + 2).padStart(2, '0')}-01` // Next month start
+    const nextMes = mes + 2 > 12 ? 1 : mes + 2
+    const nextAno = mes + 2 > 12 ? ano + 1 : ano
+    const endDate = `${nextAno}-${String(nextMes).padStart(2, '0')}-01`
 
     const scheduledFilters: any[] = [
       { op: 'eq', col: 'org_id', val: org!.id },
       { op: 'gte', col: 'scheduled_at', val: startDate },
       { op: 'lt', col: 'scheduled_at', val: endDate },
     ]
-
     if (filtroCliente !== 'todos') {
       scheduledFilters.push({ op: 'eq', col: 'cliente_id', val: filtroCliente })
     }
 
-    const { data: scheduledData } = await db.select('scheduled_posts', {
-      filters: scheduledFilters,
-      order: [{ col: 'scheduled_at', asc: true }],
-    })
+    // Parallelize all three fetches
+    const [clsRes, conteudosRes, scheduledRes] = await Promise.all([
+      db.select('clientes', { filters: [{ op: 'eq', col: 'org_id', val: org!.id }] }),
+      db.select('conteudos', {
+        select: '*, empresa:clientes(id, nome, slug, cores)',
+        filters: conteudoFilters,
+        order: [{ col: 'data_publicacao', asc: true }],
+      }),
+      db.select('scheduled_posts', {
+        filters: scheduledFilters,
+        order: [{ col: 'scheduled_at', asc: true }],
+      }),
+    ])
 
-    // Process scheduled posts to include client data
-    const processedScheduled = (scheduledData || []).map((post: any) => ({
+    const cls = clsRes.data || []
+    setClientes(cls)
+    setConteudos(((conteudosRes.data as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
+    setScheduledPosts((scheduledRes.data || []).map((post: any) => ({
       ...post,
       platforms: typeof post.platforms === 'string' ? JSON.parse(post.platforms) : post.platforms,
-      cliente: (cls || []).find((c: Cliente) => c.id === post.cliente_id)
-    }))
-
-    setScheduledPosts(processedScheduled)
+      cliente: cls.find((c: Cliente) => c.id === post.cliente_id),
+    })))
     setLoading(false)
   }
 
-  // Generate calendar grid
-  const firstDay = new Date(ano, mes, 1)
-  const lastDay = new Date(ano, mes + 1, 0)
-  const startDay = firstDay.getDay() // 0=Sun
-  const totalDays = lastDay.getDate()
+  // Pre-index by date for O(1) lookup instead of O(n*31) filter
+  const conteudosByDate = useMemo(() => {
+    const map = new Map<string, typeof conteudos>()
+    for (const c of conteudos) {
+      if (!c.data_publicacao) continue
+      const key = c.data_publicacao.slice(0, 10)
+      const arr = map.get(key) || []
+      arr.push(c)
+      map.set(key, arr)
+    }
+    return map
+  }, [conteudos])
 
-  const days: { day: number; posts: typeof conteudos; scheduledPosts: ScheduledPost[] }[] = []
-  for (let d = 1; d <= totalDays; d++) {
-    const dateStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
-    days.push({
-      day: d,
-      posts: conteudos.filter(c => c.data_publicacao === dateStr),
-      scheduledPosts: scheduledPosts.filter(sp => sp.scheduled_at.startsWith(dateStr))
-    })
-  }
+  const scheduledByDate = useMemo(() => {
+    const map = new Map<string, ScheduledPost[]>()
+    for (const sp of scheduledPosts) {
+      const key = sp.scheduled_at.slice(0, 10)
+      const arr = map.get(key) || []
+      arr.push(sp)
+      map.set(key, arr)
+    }
+    return map
+  }, [scheduledPosts])
+
+  // Generate calendar grid — memoized
+  const { firstDay, startDay, days } = useMemo(() => {
+    const firstDay = new Date(ano, mes, 1)
+    const lastDay = new Date(ano, mes + 1, 0)
+    const startDay = firstDay.getDay()
+    const totalDays = lastDay.getDate()
+    const days: { day: number; posts: typeof conteudos; scheduledPosts: ScheduledPost[] }[] = []
+    for (let d = 1; d <= totalDays; d++) {
+      const dateStr = `${ano}-${String(mes + 1).padStart(2, '0')}-${String(d).padStart(2, '0')}`
+      days.push({
+        day: d,
+        posts: conteudosByDate.get(dateStr) || [],
+        scheduledPosts: scheduledByDate.get(dateStr) || [],
+      })
+    }
+    return { firstDay, startDay, days }
+  }, [ano, mes, conteudosByDate, scheduledByDate])
 
   function prevMonth() {
     if (mes === 0) { setMes(11); setAno(a => a - 1) }

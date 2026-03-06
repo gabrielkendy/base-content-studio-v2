@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { STATUS_CONFIG, TIPO_EMOJI, MESES, formatDate, normalizeStatus } from '@/lib/utils'
-import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Image, Play, ArrowLeft, CheckCircle2, AlertCircle, FileText, Instagram, Youtube, Facebook, Music2, Pencil, Trash2, MoreVertical, X, Copy, CheckCircle, Link as LinkIcon } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Plus, Calendar, Clock, Image, Play, ArrowLeft, CheckCircle2, AlertCircle, FileText, Instagram, Youtube, Facebook, Music2, Pencil, Trash2, MoreVertical, X, Copy, CheckCircle, Link as LinkIcon, Send, Loader2 } from 'lucide-react'
 import Link from 'next/link'
 import type { Cliente, Conteudo, Solicitacao, Member } from '@/types/database'
 import { Modal } from '@/components/ui/modal'
@@ -48,6 +48,8 @@ export default function ClienteMesPage() {
   const [newData, setNewData] = useState({ title: '', date: '', priority: 'medium', category: 'evento' })
   const [menuOpen, setMenuOpen] = useState<string | null>(null)
   const [linkCopied, setLinkCopied] = useState<string | null>(null) // ID do conteúdo com link copiado
+  const [sendingWA, setSendingWA] = useState<string | null>(null) // ID do conteúdo enviando WA
+  const [waSent, setWaSent] = useState<string | null>(null) // ID do conteúdo com WA enviado
 
   useEffect(() => { if (org) loadData() }, [org, ano, mes])
 
@@ -176,6 +178,27 @@ export default function ClienteMesPage() {
     } catch (err) {
       console.error('Erro ao gerar link:', err)
       toast('Erro ao gerar link de aprovação', 'error')
+    }
+  }
+
+  async function handleSendWhatsApp(conteudo: Conteudo) {
+    if (!cliente || !org) return
+    setSendingWA(conteudo.id)
+    try {
+      const res = await fetch('/api/approvals/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conteudo_id: conteudo.id, empresa_id: cliente.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar')
+      toast(`✅ WhatsApp enviado para ${data.count} aprovador(es)!`, 'success')
+      setWaSent(conteudo.id)
+      setTimeout(() => setWaSent(null), 3000)
+    } catch (err: any) {
+      toast(err.message || 'Erro ao enviar WhatsApp', 'error')
+    } finally {
+      setSendingWA(null)
     }
   }
 
@@ -356,6 +379,13 @@ export default function ClienteMesPage() {
                                 {linkCopied === cont.id ? 'Copiado!' : 'Link Aprovação'}
                               </button>
                               <button
+                                className="w-full px-4 py-2.5 text-left text-sm hover:bg-green-50 text-green-600 flex items-center gap-3 transition-colors"
+                                onClick={(e) => { e.preventDefault(); handleSendWhatsApp(cont); setMenuOpen(null) }}
+                              >
+                                {sendingWA === cont.id ? <Loader2 className="w-4 h-4 animate-spin" /> : waSent === cont.id ? <CheckCircle className="w-4 h-4" /> : <Send className="w-4 h-4" />}
+                                {waSent === cont.id ? 'WhatsApp Enviado!' : 'Enviar WhatsApp'}
+                              </button>
+                              <button
                                 className="w-full px-4 py-2.5 text-left text-sm hover:bg-red-50 text-red-600 flex items-center gap-3 transition-colors"
                                 onClick={(e) => { e.preventDefault(); setConteudoToDelete(cont); setDeleteModalOpen(true); setMenuOpen(null) }}
                               >
@@ -380,17 +410,33 @@ export default function ClienteMesPage() {
                         </span>
                         <div className="flex items-center gap-2">
                           {(cont.status === 'aprovacao' || cont.status === 'aprovacao_cliente' || cont.status === 'aprovacao_interna') && (
-                            <button
-                              onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyApprovalLink(cont) }}
-                              className="p-2 rounded-xl hover:bg-blue-100 transition-colors"
-                              title="Copiar link de aprovação"
-                            >
-                              {linkCopied === cont.id ? (
-                                <CheckCircle className="w-4 h-4 text-green-500" />
-                              ) : (
-                                <Copy className="w-4 h-4 text-blue-500" />
-                              )}
-                            </button>
+                            <>
+                              <button
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleCopyApprovalLink(cont) }}
+                                className="p-2 rounded-xl hover:bg-blue-100 transition-colors"
+                                title="Copiar link de aprovação"
+                              >
+                                {linkCopied === cont.id ? (
+                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                ) : (
+                                  <Copy className="w-4 h-4 text-blue-500" />
+                                )}
+                              </button>
+                              <button
+                                onClick={(e) => { e.preventDefault(); e.stopPropagation(); handleSendWhatsApp(cont) }}
+                                className="p-2 rounded-xl hover:bg-green-100 transition-colors"
+                                title="Enviar link por WhatsApp"
+                                disabled={sendingWA === cont.id}
+                              >
+                                {sendingWA === cont.id ? (
+                                  <Loader2 className="w-4 h-4 text-green-500 animate-spin" />
+                                ) : waSent === cont.id ? (
+                                  <CheckCircle className="w-4 h-4 text-green-500" />
+                                ) : (
+                                  <Send className="w-4 h-4 text-green-600" />
+                                )}
+                              </button>
+                            </>
                           )}
                           {canais.slice(0, 3).map((canal: string) => {
                             const Icon = CANAL_ICONS[canal]

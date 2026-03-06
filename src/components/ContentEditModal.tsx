@@ -31,6 +31,7 @@ import {
   ExternalLink,
   Download,
   Eye,
+  Send,
 } from 'lucide-react'
 import type { Conteudo, Cliente, Member } from '@/types/database'
 
@@ -66,6 +67,8 @@ export function ContentEditModal({
   const [activeTab, setActiveTab] = useState<TabId>('conteudo')
   const [saving, setSaving] = useState(false)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [sendingWA, setSendingWA] = useState(false)
+  const [waSent, setWaSent] = useState(false)
 
   // Form state
   const [formData, setFormData] = useState({
@@ -199,6 +202,27 @@ export function ContentEditModal({
       toast('🔗 Link de aprovação copiado!', 'success')
     } catch (err) {
       toast('Erro ao gerar link', 'error')
+    }
+  }
+
+  async function sendWhatsApp() {
+    if (!conteudo || !cliente) return
+    setSendingWA(true)
+    try {
+      const res = await fetch('/api/approvals/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conteudo_id: currentConteudo.id, empresa_id: cliente.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar')
+      toast(`✅ WhatsApp enviado para ${data.count} aprovador(es)!`, 'success')
+      setWaSent(true)
+      setTimeout(() => setWaSent(false), 3000)
+    } catch (err: any) {
+      toast(err.message || 'Erro ao enviar WhatsApp', 'error')
+    } finally {
+      setSendingWA(false)
     }
   }
 
@@ -441,10 +465,16 @@ export function ContentEditModal({
             {currentConteudo.internal_approved && (
               <div className="pt-4 border-t border-gray-100">
                 <h4 className="text-sm font-semibold text-gray-700 mb-3">🔗 Link para Cliente</h4>
-                <Button onClick={generateApprovalLink} variant="outline" className="w-full justify-center">
-                  {linkCopied ? <Check className="w-4 h-4 mr-2 text-green-600" /> : <Copy className="w-4 h-4 mr-2" />}
-                  {linkCopied ? 'Link Copiado!' : 'Gerar Link de Aprovação'}
-                </Button>
+                <div className="flex gap-2">
+                  <Button onClick={generateApprovalLink} variant="outline" className="flex-1 justify-center">
+                    {linkCopied ? <Check className="w-4 h-4 mr-2 text-green-600" /> : <Copy className="w-4 h-4 mr-2" />}
+                    {linkCopied ? 'Copiado!' : 'Copiar Link'}
+                  </Button>
+                  <Button onClick={sendWhatsApp} disabled={sendingWA} variant="outline" className="flex-1 justify-center border-green-300 text-green-700 hover:bg-green-50">
+                    {sendingWA ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : waSent ? <Check className="w-4 h-4 mr-2 text-green-600" /> : <Send className="w-4 h-4 mr-2" />}
+                    {waSent ? 'Enviado!' : 'WhatsApp'}
+                  </Button>
+                </div>
               </div>
             )}
           </div>

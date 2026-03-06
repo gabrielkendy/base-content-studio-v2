@@ -33,6 +33,7 @@ import {
   Type,
   FileText,
   MessageSquare,
+  Send,
 } from 'lucide-react'
 import { STATUS_CONFIG, TIPO_EMOJI, CANAIS, formatDateFull } from '@/lib/utils'
 import type { Conteudo, Cliente, Member } from '@/types/database'
@@ -232,6 +233,8 @@ export default function ConteudoDetailPage() {
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [loading, setLoading] = useState(true)
   const [linkCopied, setLinkCopied] = useState(false)
+  const [sendingWA, setSendingWA] = useState(false)
+  const [waSent, setWaSent] = useState(false)
   const [showHistory, setShowHistory] = useState(true) // Sempre mostrar histórico por padrão
   const [showScheduleModal, setShowScheduleModal] = useState(false)
 
@@ -574,6 +577,26 @@ export default function ConteudoDetailPage() {
     }
   }
 
+  const sendWhatsApp = async () => {
+    if (!conteudo || !cliente) return
+    setSendingWA(true)
+    try {
+      const res = await fetch('/api/approvals/send-whatsapp', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ conteudo_id: conteudo.id, empresa_id: cliente.id }),
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.error || 'Erro ao enviar')
+      setWaSent(true)
+      setTimeout(() => setWaSent(false), 3000)
+    } catch (err: any) {
+      alert(err.message || 'Erro ao enviar WhatsApp')
+    } finally {
+      setSendingWA(false)
+    }
+  }
+
   const isImage = (url: string) => /\.(jpg|jpeg|png|gif|webp|svg)(\?|$)/i.test(url)
   const isVideo = (url: string) => /\.(mp4|webm|mov|avi|mkv)(\?|$)/i.test(url)
 
@@ -721,6 +744,15 @@ export default function ConteudoDetailPage() {
           <Button variant="outline" onClick={generateApprovalLink} className="flex-shrink-0 text-sm">
             {linkCopied ? <CheckCircle className="w-4 h-4 sm:mr-2 text-green-600" /> : <Copy className="w-4 h-4 sm:mr-2" />}
             <span className="hidden sm:inline">{linkCopied ? 'Link Copiado!' : 'Link Aprovação'}</span>
+          </Button>
+          <Button
+            variant="outline"
+            onClick={sendWhatsApp}
+            disabled={sendingWA}
+            className="flex-shrink-0 text-sm border-green-300 text-green-700 hover:bg-green-50"
+          >
+            {sendingWA ? <Loader2 className="w-4 h-4 sm:mr-2 animate-spin" /> : waSent ? <CheckCircle className="w-4 h-4 sm:mr-2 text-green-600" /> : <Send className="w-4 h-4 sm:mr-2" />}
+            <span className="hidden sm:inline">{waSent ? 'Enviado!' : 'WhatsApp'}</span>
           </Button>
           <Button 
             variant="outline" 
@@ -1454,13 +1486,23 @@ export default function ConteudoDetailPage() {
                 <p className="text-sm font-medium text-purple-800">Pronto para enviar ao cliente</p>
                 <p className="text-xs text-purple-600">Aprovado internamente, gere o link de aprovação</p>
               </div>
-              <Button
-                onClick={generateApprovalLink}
-                className="bg-purple-600 hover:bg-purple-700 text-white"
-              >
-                {linkCopied ? <CheckCircle className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
-                {linkCopied ? 'Link Copiado!' : 'Gerar Link'}
-              </Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  onClick={generateApprovalLink}
+                  className="bg-purple-600 hover:bg-purple-700 text-white"
+                >
+                  {linkCopied ? <CheckCircle className="w-4 h-4 mr-2" /> : <Copy className="w-4 h-4 mr-2" />}
+                  {linkCopied ? 'Copiado!' : 'Gerar Link'}
+                </Button>
+                <Button
+                  onClick={sendWhatsApp}
+                  disabled={sendingWA}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  {sendingWA ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : waSent ? <CheckCircle className="w-4 h-4 mr-2" /> : <Send className="w-4 h-4 mr-2" />}
+                  {waSent ? 'Enviado!' : 'WhatsApp'}
+                </Button>
+              </div>
             </div>
           </div>
         )}

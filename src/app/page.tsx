@@ -2,20 +2,23 @@
 
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
-import { 
-  Zap, 
-  Shield, 
-  BarChart3, 
-  Users, 
-  Calendar, 
+import {
+  Zap,
+  Shield,
+  BarChart3,
+  Users,
+  Calendar,
   MessageSquare,
   Check,
   ArrowRight,
   Sparkles,
-  Globe,
   Rocket,
   Star,
-  ChevronDown
+  ChevronDown,
+  UserPlus,
+  Settings,
+  Send,
+  X,
 } from 'lucide-react'
 
 export default function LandingPage() {
@@ -195,8 +198,8 @@ export default function LandingPage() {
           
           <div className="hidden md:flex items-center gap-8">
             <a href="#features" className="text-sm text-white/60 hover:text-white transition-colors">Features</a>
+            <a href="#how-it-works" className="text-sm text-white/60 hover:text-white transition-colors">Como Funciona</a>
             <a href="#pricing" className="text-sm text-white/60 hover:text-white transition-colors">Preços</a>
-            <a href="#testimonials" className="text-sm text-white/60 hover:text-white transition-colors">Depoimentos</a>
             <a href="#faq" className="text-sm text-white/60 hover:text-white transition-colors">FAQ</a>
           </div>
 
@@ -221,9 +224,9 @@ export default function LandingPage() {
       <section className="relative z-10 pt-32 pb-20 px-6">
         <div className="max-w-5xl mx-auto text-center">
           {/* Badge */}
-          <div className="inline-flex items-center gap-2 px-4 py-2 bg-white/5 border border-white/10 rounded-full text-sm text-white/60 mb-8">
-            <span className="w-2 h-2 bg-green-500 rounded-full animate-pulse" />
-            Novo: Aprovação externa sem cadastro
+          <div className="inline-flex items-center gap-2 px-4 py-2 bg-purple-500/10 border border-purple-500/20 rounded-full text-sm text-purple-300 mb-8">
+            <span className="w-2 h-2 bg-purple-400 rounded-full animate-pulse" />
+            Novo: Portal exclusivo para clientes
           </div>
 
           {/* Title */}
@@ -236,8 +239,8 @@ export default function LandingPage() {
 
           {/* Subtitle */}
           <p className="text-lg sm:text-xl text-white/60 max-w-2xl mx-auto mb-10">
-            A plataforma completa para agências e freelancers gerenciarem 
-            conteúdos, aprovações e entregas em um só lugar.
+            Chega de aprovações por WhatsApp e conteúdos perdidos no email.
+            Sua agência merece uma operação profissional — do briefing à entrega.
           </p>
 
           {/* CTAs */}
@@ -253,8 +256,26 @@ export default function LandingPage() {
             </button>
           </div>
 
+          {/* Mini stats */}
+          <div className="mt-8 flex flex-wrap items-center justify-center gap-6 text-sm">
+            <div className="flex items-center gap-2 text-white/50">
+              <span className="text-white font-bold text-base">3h</span>
+              tempo médio de aprovação
+            </div>
+            <div className="w-px h-4 bg-white/10 hidden sm:block" />
+            <div className="flex items-center gap-2 text-white/50">
+              <span className="text-white font-bold text-base">94%</span>
+              dos clientes aprovam na 1ª versão
+            </div>
+            <div className="w-px h-4 bg-white/10 hidden sm:block" />
+            <div className="flex items-center gap-2 text-white/50">
+              <span className="text-white font-bold text-base">+500</span>
+              agências ativas
+            </div>
+          </div>
+
           {/* Social Proof */}
-          <div className="mt-12 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-white/40">
+          <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-6 text-sm text-white/40">
             <div className="flex items-center gap-2">
               <div className="flex -space-x-2">
                 {['🧑‍💼', '👩‍💻', '👨‍🎨', '👩‍🎤'].map((emoji, i) => (
@@ -338,6 +359,22 @@ export default function LandingPage() {
         </div>
       </section>
 
+      {/* Social Proof Bar */}
+      <section className="relative z-10 py-10 px-6 border-y border-white/5">
+        <div className="max-w-5xl mx-auto">
+          <p className="text-center text-xs text-white/30 uppercase tracking-widest mb-6">
+            Confiado por agências em todo o Brasil
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-8 sm:gap-12">
+            {['Agência Pulsar', 'Studio Criativo', 'Mídia Click', 'Pixel Factory', 'Boom Digital'].map((name) => (
+              <span key={name} className="text-white/25 font-semibold text-sm sm:text-base tracking-wide hover:text-white/50 transition-colors cursor-default">
+                {name}
+              </span>
+            ))}
+          </div>
+        </div>
+      </section>
+
       {/* Features */}
       <section id="features" className="relative z-10 py-24 px-6">
         <div className="max-w-6xl mx-auto">
@@ -366,6 +403,150 @@ export default function LandingPage() {
                 <p className="text-white/60 leading-relaxed">{feature.description}</p>
               </div>
             ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Como Funciona */}
+      <section id="how-it-works" className="relative z-10 py-24 px-6">
+        <div className="max-w-5xl mx-auto">
+          <div className="text-center mb-16">
+            <span className="inline-block px-4 py-1.5 bg-green-500/10 border border-green-500/20 rounded-full text-sm text-green-400 font-medium mb-4">
+              Como Funciona
+            </span>
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">
+              Em 3 passos simples
+            </h2>
+            <p className="text-lg text-white/60 max-w-xl mx-auto">
+              Configure em minutos e comece a produzir com mais organização
+            </p>
+          </div>
+
+          <div className="grid md:grid-cols-3 gap-6 relative">
+            {/* Connector line */}
+            <div className="hidden md:block absolute top-14 left-[calc(16.666%+2rem)] right-[calc(16.666%+2rem)] h-px bg-gradient-to-r from-purple-500/30 via-blue-500/30 to-cyan-500/30" />
+
+            {[
+              {
+                step: '01',
+                icon: UserPlus,
+                title: 'Cadastre sua agência',
+                description: 'Crie sua conta, convide sua equipe e defina as permissões de cada membro em minutos.',
+                color: 'from-purple-500/20 to-purple-500/5',
+                border: 'border-purple-500/20',
+                iconColor: 'text-purple-400',
+              },
+              {
+                step: '02',
+                icon: Settings,
+                title: 'Configure seus clientes',
+                description: 'Adicione clientes, personalize o workflow e configure o portal exclusivo de aprovação.',
+                color: 'from-blue-500/20 to-blue-500/5',
+                border: 'border-blue-500/20',
+                iconColor: 'text-blue-400',
+              },
+              {
+                step: '03',
+                icon: Send,
+                title: 'Produza e entregue',
+                description: 'Crie conteúdos, envie para aprovação com um clique e entregue sem caos, sem WhatsApp.',
+                color: 'from-cyan-500/20 to-cyan-500/5',
+                border: 'border-cyan-500/20',
+                iconColor: 'text-cyan-400',
+              },
+            ].map((item, i) => (
+              <div key={i} className={`relative p-8 bg-gradient-to-b ${item.color} border ${item.border} rounded-2xl`}>
+                <div className="text-6xl font-black text-white/5 absolute top-4 right-6 leading-none select-none">
+                  {item.step}
+                </div>
+                <div className={`w-14 h-14 bg-white/5 border ${item.border} rounded-2xl flex items-center justify-center mb-6`}>
+                  <item.icon className={`w-7 h-7 ${item.iconColor}`} />
+                </div>
+                <h3 className="text-xl font-semibold mb-3">{item.title}</h3>
+                <p className="text-white/60 leading-relaxed text-sm">{item.description}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* Comparison Table */}
+      <section className="relative z-10 py-24 px-6">
+        <div className="max-w-4xl mx-auto">
+          <div className="text-center mb-12">
+            <span className="inline-block px-4 py-1.5 bg-amber-500/10 border border-amber-500/20 rounded-full text-sm text-amber-400 font-medium mb-4">
+              Comparativo
+            </span>
+            <h2 className="text-4xl sm:text-5xl font-bold mb-4">
+              Por que ContentStudio?
+            </h2>
+            <p className="text-lg text-white/60">
+              Comparado com as alternativas que agências usam hoje
+            </p>
+          </div>
+
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="text-left py-4 px-4 text-sm text-white/40 font-medium w-[35%]">Recurso</th>
+                  <th className="py-4 px-4 text-center">
+                    <div className="inline-flex flex-col items-center gap-1">
+                      <div className="px-3 py-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg text-xs font-bold">
+                        ContentStudio
+                      </div>
+                    </div>
+                  </th>
+                  <th className="py-4 px-4 text-center text-sm text-white/40 font-medium">Notion</th>
+                  <th className="py-4 px-4 text-center text-sm text-white/40 font-medium">Trello</th>
+                  <th className="py-4 px-4 text-center text-sm text-white/40 font-medium">G. Sheets</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-white/5">
+                {[
+                  ['Workflow de conteúdo', true, true, true, false],
+                  ['Aprovação de clientes', true, false, false, false],
+                  ['Portal do cliente', true, false, false, false],
+                  ['Calendário visual', true, true, false, true],
+                  ['Agendamento', true, false, false, false],
+                  ['Notificação WhatsApp', true, false, false, false],
+                ].map(([feature, cs, notion, trello, sheets], i) => (
+                  <tr key={i} className="hover:bg-white/[0.02] transition-colors">
+                    <td className="py-4 px-4 text-sm text-white/70">{feature as string}</td>
+                    <td className="py-4 px-4 text-center">
+                      {cs ? (
+                        <div className="w-6 h-6 bg-green-500 rounded-full flex items-center justify-center mx-auto">
+                          <Check className="w-3.5 h-3.5 text-white" />
+                        </div>
+                      ) : (
+                        <X className="w-5 h-5 text-red-400/50 mx-auto" />
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      {notion ? (
+                        <Check className="w-5 h-5 text-white/30 mx-auto" />
+                      ) : (
+                        <X className="w-5 h-5 text-red-400/30 mx-auto" />
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      {trello ? (
+                        <Check className="w-5 h-5 text-white/30 mx-auto" />
+                      ) : (
+                        <X className="w-5 h-5 text-red-400/30 mx-auto" />
+                      )}
+                    </td>
+                    <td className="py-4 px-4 text-center">
+                      {sheets ? (
+                        <Check className="w-5 h-5 text-white/30 mx-auto" />
+                      ) : (
+                        <X className="w-5 h-5 text-red-400/30 mx-auto" />
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           </div>
         </div>
       </section>

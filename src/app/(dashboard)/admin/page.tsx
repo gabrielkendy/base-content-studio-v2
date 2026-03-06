@@ -15,7 +15,6 @@ import {
   ChevronLeft,
   Search,
   Filter,
-  MoreHorizontal,
   ExternalLink,
   AlertTriangle,
   Loader2
@@ -224,7 +223,11 @@ export default function AdminPage() {
             </thead>
             <tbody className="divide-y divide-zinc-100">
               {filteredOrgs.map(org => (
-                <tr key={org.id} className="hover:bg-zinc-50 transition-colors">
+                <tr
+                  key={org.id}
+                  className="hover:bg-zinc-50 transition-colors cursor-pointer"
+                  onClick={() => router.push(`/admin/orgs/${org.id}`)}
+                >
                   <td className="py-3 px-4">
                     <div>
                       <div className="font-medium text-zinc-900 text-sm">{org.name}</div>
@@ -239,9 +242,7 @@ export default function AdminPage() {
                     {new Date(org.created_at).toLocaleDateString('pt-BR')}
                   </td>
                   <td className="py-3 px-4 text-center">
-                    <button className="p-2 hover:bg-zinc-100 rounded-lg transition-colors">
-                      <MoreHorizontal className="w-4 h-4 text-zinc-400" />
-                    </button>
+                    <ChevronRight className="w-4 h-4 text-zinc-300 mx-auto" />
                   </td>
                 </tr>
               ))}

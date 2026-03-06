@@ -27,7 +27,7 @@ export async function updateSession(request: NextRequest) {
 
   // Public routes
   const publicPaths = ['/login', '/signup', '/forgot-password', '/auth/callback', '/auth/confirm', '/auth/invite', '/auth/social-callback', '/aprovacao', '/entrega', '/api/public', '/api/migrate', '/api/upload', '/api/invite/validate', '/api/invite/accept', '/api/debug', '/api/webhooks', '/api/billing/webhook']
-  const isPublic = publicPaths.some(p => request.nextUrl.pathname.startsWith(p))
+  const isPublic = request.nextUrl.pathname === '/' || publicPaths.some(p => request.nextUrl.pathname.startsWith(p))
 
   if (!user && !isPublic) {
     const url = request.nextUrl.clone()

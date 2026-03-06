@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { usePortalCliente } from '../portal-context'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -11,7 +12,7 @@ import {
   ArrowRight, Eye, Zap, Calendar
 } from 'lucide-react'
 import Link from 'next/link'
-import type { Conteudo, Solicitacao, Cliente, ActivityLog } from '@/types/database'
+import type { Conteudo, Solicitacao, Cliente } from '@/types/database'
 
 const STATUS_COLORS: Record<string, string> = {
   nova_solicitacao: '#8B5CF6',
@@ -22,17 +23,6 @@ const STATUS_COLORS: Record<string, string> = {
   aprovado: '#22c55e',
   agendado: '#6366F1',
   publicado: '#22c55e',
-}
-
-const STATUS_LABELS: Record<string, string> = {
-  nova_solicitacao: 'Solicitação',
-  rascunho: 'Rascunho',
-  producao: 'Produção',
-  aprovacao: 'Pendente',
-  ajuste: 'Ajuste',
-  aprovado: 'Aprovado',
-  agendado: 'Agendado',
-  publicado: 'Publicado',
 }
 
 const TIPO_EMOJI: Record<string, string> = {
@@ -55,6 +45,7 @@ function getLast6Months(): { month: number; year: number; label: string }[] {
 
 export default function PortalHomePage() {
   const { org, member } = useAuth()
+  const { clienteId } = usePortalCliente()
   const [conteudos, setConteudos] = useState<(Conteudo & { empresa?: Cliente })[]>([])
   const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [loading, setLoading] = useState(true)
@@ -62,18 +53,26 @@ export default function PortalHomePage() {
   useEffect(() => {
     if (!org) return
     loadData()
-  }, [org])
+  }, [org, clienteId])
 
   async function loadData() {
+    const contFilters: any[] = [{ op: 'eq', col: 'org_id', val: org!.id }]
+    const solFilters: any[] = [{ op: 'eq', col: 'org_id', val: org!.id }]
+
+    if (clienteId) {
+      contFilters.push({ op: 'eq', col: 'empresa_id', val: clienteId })
+      solFilters.push({ op: 'eq', col: 'cliente_id', val: clienteId })
+    }
+
     const [contRes, solRes] = await Promise.all([
       db.select('conteudos', {
         select: '*, empresa:clientes(id, nome, slug, cores)',
-        filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+        filters: contFilters,
         order: [{ col: 'updated_at', asc: false }],
       }),
       db.select('solicitacoes', {
         select: '*, cliente:clientes(id, nome, slug, cores)',
-        filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+        filters: solFilters,
         order: [{ col: 'created_at', asc: false }],
       }),
     ])
@@ -100,7 +99,6 @@ export default function PortalHomePage() {
 
   const maxTotal = useMemo(() => Math.max(...chartData.map(d => d.total), 1), [chartData])
 
-  // Current month stats
   const now = new Date()
   const currentMonthConteudos = conteudos.filter(c => {
     const d = new Date(c.created_at)
@@ -110,12 +108,10 @@ export default function PortalHomePage() {
   const totalMes = currentMonthConteudos.length
   const progressPercent = totalMes > 0 ? Math.round((prontos / totalMes) * 100) : 0
 
-  // Summary cards
   const pendentesAprovacao = conteudos.filter(c => c.status === 'aprovacao').length
   const emProducao = conteudos.filter(c => ['rascunho', 'producao'].includes(c.status)).length
   const publicadosMes = currentMonthConteudos.filter(c => ['aprovado', 'agendado', 'publicado'].includes(c.status)).length
 
-  // Timeline - combine recent conteudos and solicitacoes
   const timeline = useMemo(() => {
     const events: { id: string; type: string; title: string; desc: string; date: string; icon: string; color: string }[] = []
 
@@ -125,7 +121,7 @@ export default function PortalHomePage() {
           id: c.id + '-apr',
           type: 'aprovacao',
           title: c.titulo || 'Conteúdo',
-          desc: `${TIPO_EMOJI[c.tipo] || '📄'} Aprovado · ${c.empresa?.nome || ''}`,
+          desc: `${TIPO_EMOJI[c.tipo] || '📄'} Aprovado`,
           date: c.updated_at,
           icon: '✅',
           color: 'bg-green-100 text-green-700',
@@ -136,7 +132,7 @@ export default function PortalHomePage() {
           id: c.id + '-pend',
           type: 'pendente',
           title: c.titulo || 'Conteúdo',
-          desc: `${TIPO_EMOJI[c.tipo] || '📄'} Aguardando aprovação · ${c.empresa?.nome || ''}`,
+          desc: `${TIPO_EMOJI[c.tipo] || '📄'} Aguardando aprovação`,
           date: c.updated_at,
           icon: '⏳',
           color: 'bg-yellow-100 text-yellow-700',
@@ -149,7 +145,7 @@ export default function PortalHomePage() {
         id: s.id + '-sol',
         type: 'solicitacao',
         title: s.titulo,
-        desc: `Nova solicitação · ${(s as any).cliente?.nome || ''}`,
+        desc: `Nova solicitação`,
         date: s.created_at,
         icon: '📋',
         color: 'bg-blue-100 text-blue-700',
@@ -180,7 +176,6 @@ export default function PortalHomePage() {
           <p className="text-blue-100 mt-2 text-sm sm:text-base">
             Acompanhe seus conteúdos e gerencie aprovações
           </p>
-          {/* Monthly progress */}
           <div className="mt-6 bg-white/10 backdrop-blur-sm rounded-xl p-4">
             <div className="flex items-center justify-between mb-2">
               <span className="text-sm font-medium text-blue-100">Progresso do mês</span>
@@ -201,21 +196,19 @@ export default function PortalHomePage() {
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <Link href="/portal/aprovacoes">
-          <Card className="group hover:shadow-lg transition-all duration-300 border-0 bg-gradient-to-br from-amber-50 to-orange-50 cursor-pointer">
-            <CardContent className="py-5">
-              <div className="flex items-center justify-between">
-                <div>
-                  <div className="text-3xl font-bold text-gray-900">{pendentesAprovacao}</div>
-                  <div className="text-sm text-gray-500 mt-1">Pendentes de aprovação</div>
-                </div>
-                <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-200/50 group-hover:scale-110 transition-transform">
-                  <Clock className="w-6 h-6 text-white" />
-                </div>
+        <Card className="group hover:shadow-lg transition-all duration-300 border-0 bg-gradient-to-br from-amber-50 to-orange-50">
+          <CardContent className="py-5">
+            <div className="flex items-center justify-between">
+              <div>
+                <div className="text-3xl font-bold text-gray-900">{pendentesAprovacao}</div>
+                <div className="text-sm text-gray-500 mt-1">Pendentes de aprovação</div>
               </div>
-            </CardContent>
-          </Card>
-        </Link>
+              <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-amber-400 to-orange-500 flex items-center justify-center shadow-lg shadow-amber-200/50">
+                <Clock className="w-6 h-6 text-white" />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
 
         <Link href="/portal/conteudos">
           <Card className="group hover:shadow-lg transition-all duration-300 border-0 bg-gradient-to-br from-blue-50 to-indigo-50 cursor-pointer">
@@ -256,18 +249,9 @@ export default function PortalHomePage() {
             <h3 className="font-semibold text-gray-900">Conteúdos por mês</h3>
           </div>
           <div className="flex items-center gap-4 mt-2">
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-green-500" />
-              <span className="text-xs text-gray-500">Aprovados</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-blue-500" />
-              <span className="text-xs text-gray-500">Produção</span>
-            </div>
-            <div className="flex items-center gap-1.5">
-              <div className="w-3 h-3 rounded-full bg-yellow-500" />
-              <span className="text-xs text-gray-500">Pendentes</span>
-            </div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-green-500" /><span className="text-xs text-gray-500">Aprovados</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-blue-500" /><span className="text-xs text-gray-500">Produção</span></div>
+            <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded-full bg-yellow-500" /><span className="text-xs text-gray-500">Pendentes</span></div>
           </div>
         </div>
         <CardContent className="py-6">
@@ -280,33 +264,13 @@ export default function PortalHomePage() {
                   <div className="w-full relative flex flex-col justify-end" style={{ height: '160px' }}>
                     <div
                       className="w-full rounded-t-lg overflow-hidden transition-all duration-700 ease-out flex flex-col justify-end"
-                      style={{
-                        height: `${Math.max(barHeight, d.total > 0 ? 8 : 0)}%`,
-                        animationDelay: `${i * 100}ms`,
-                      }}
+                      style={{ height: `${Math.max(barHeight, d.total > 0 ? 8 : 0)}%` }}
                     >
-                      {d.aprovados > 0 && (
-                        <div
-                          className="w-full bg-gradient-to-t from-green-500 to-green-400 transition-all duration-500"
-                          style={{ height: `${(d.aprovados / d.total) * 100}%`, minHeight: '4px' }}
-                        />
-                      )}
-                      {d.producao > 0 && (
-                        <div
-                          className="w-full bg-gradient-to-t from-blue-500 to-blue-400 transition-all duration-500"
-                          style={{ height: `${(d.producao / d.total) * 100}%`, minHeight: '4px' }}
-                        />
-                      )}
-                      {d.pendentes > 0 && (
-                        <div
-                          className="w-full bg-gradient-to-t from-yellow-500 to-yellow-400 transition-all duration-500"
-                          style={{ height: `${(d.pendentes / d.total) * 100}%`, minHeight: '4px' }}
-                        />
-                      )}
+                      {d.aprovados > 0 && <div className="w-full bg-gradient-to-t from-green-500 to-green-400" style={{ height: `${(d.aprovados / d.total) * 100}%`, minHeight: '4px' }} />}
+                      {d.producao > 0 && <div className="w-full bg-gradient-to-t from-blue-500 to-blue-400" style={{ height: `${(d.producao / d.total) * 100}%`, minHeight: '4px' }} />}
+                      {d.pendentes > 0 && <div className="w-full bg-gradient-to-t from-yellow-500 to-yellow-400" style={{ height: `${(d.pendentes / d.total) * 100}%`, minHeight: '4px' }} />}
                     </div>
-                    {d.total === 0 && (
-                      <div className="w-full h-1 bg-gray-100 rounded-full" />
-                    )}
+                    {d.total === 0 && <div className="w-full h-1 bg-gray-100 rounded-full" />}
                   </div>
                   <span className="text-xs text-gray-400 capitalize">{d.label}</span>
                 </div>
@@ -318,7 +282,6 @@ export default function PortalHomePage() {
 
       {/* Quick Actions + Timeline */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Quick Actions */}
         <div className="space-y-4">
           <h3 className="font-semibold text-gray-900">⚡ Ações Rápidas</h3>
           <div className="grid grid-cols-2 gap-3">
@@ -331,27 +294,7 @@ export default function PortalHomePage() {
                 <div className="text-xs text-gray-500 mt-0.5">Pedir conteúdo</div>
               </div>
             </Link>
-            <Link href="/portal/aprovacoes">
-              <div className="group p-5 rounded-xl border-2 border-dashed border-amber-200 hover:border-amber-400 bg-gradient-to-br from-amber-50/50 to-orange-50/50 cursor-pointer transition-all hover:shadow-md">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md">
-                  <CheckCircle className="w-5 h-5 text-white" />
-                </div>
-                <div className="text-sm font-semibold text-gray-900">Aprovações</div>
-                <div className="text-xs text-gray-500 mt-0.5">
-                  {pendentesAprovacao > 0 ? `${pendentesAprovacao} pendente(s)` : 'Nenhuma'}
-                </div>
-              </div>
-            </Link>
-            <Link href="/portal/conteudos">
-              <div className="group p-5 rounded-xl border-2 border-dashed border-green-200 hover:border-green-400 bg-gradient-to-br from-green-50/50 to-emerald-50/50 cursor-pointer transition-all hover:shadow-md">
-                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md">
-                  <Eye className="w-5 h-5 text-white" />
-                </div>
-                <div className="text-sm font-semibold text-gray-900">Meus Conteúdos</div>
-                <div className="text-xs text-gray-500 mt-0.5">{conteudos.length} total</div>
-              </div>
-            </Link>
-            <Link href="/portal/conteudos">
+            <Link href="/portal/calendario">
               <div className="group p-5 rounded-xl border-2 border-dashed border-purple-200 hover:border-purple-400 bg-gradient-to-br from-purple-50/50 to-violet-50/50 cursor-pointer transition-all hover:shadow-md">
                 <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-purple-500 to-violet-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md">
                   <Calendar className="w-5 h-5 text-white" />
@@ -360,10 +303,27 @@ export default function PortalHomePage() {
                 <div className="text-xs text-gray-500 mt-0.5">Ver agenda</div>
               </div>
             </Link>
+            <Link href="/portal/conteudos">
+              <div className="group p-5 rounded-xl border-2 border-dashed border-green-200 hover:border-green-400 bg-gradient-to-br from-green-50/50 to-emerald-50/50 cursor-pointer transition-all hover:shadow-md">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md">
+                  <Eye className="w-5 h-5 text-white" />
+                </div>
+                <div className="text-sm font-semibold text-gray-900">Acervo</div>
+                <div className="text-xs text-gray-500 mt-0.5">{conteudos.length} conteúdo(s)</div>
+              </div>
+            </Link>
+            <Link href="/portal/redes">
+              <div className="group p-5 rounded-xl border-2 border-dashed border-amber-200 hover:border-amber-400 bg-gradient-to-br from-amber-50/50 to-orange-50/50 cursor-pointer transition-all hover:shadow-md">
+                <div className="w-10 h-10 rounded-lg bg-gradient-to-br from-amber-500 to-orange-600 flex items-center justify-center mb-3 group-hover:scale-110 transition-transform shadow-md">
+                  <Zap className="w-5 h-5 text-white" />
+                </div>
+                <div className="text-sm font-semibold text-gray-900">Agendamento</div>
+                <div className="text-xs text-gray-500 mt-0.5">Redes sociais</div>
+              </div>
+            </Link>
           </div>
         </div>
 
-        {/* Timeline */}
         <div>
           <h3 className="font-semibold text-gray-900 mb-4">🕐 Atividades Recentes</h3>
           {timeline.length === 0 ? (
@@ -379,7 +339,6 @@ export default function PortalHomePage() {
                 <div
                   key={event.id}
                   className="flex items-start gap-3 p-3 rounded-lg hover:bg-gray-50 transition-colors"
-                  style={{ animationDelay: `${i * 50}ms` }}
                 >
                   <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-sm shrink-0 ${event.color}`}>
                     {event.icon}

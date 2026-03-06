@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { usePortalCliente } from '../../portal-context'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -27,18 +28,24 @@ const PRIORIDADE_EMOJI: Record<string, string> = {
 
 export default function MinhasSolicitacoesPage() {
   const { org } = useAuth()
-  const [solicitacoes, setSolicitacoes] = useState<(Solicitacao & { cliente?: any })[]>([])
+  const { clienteId } = usePortalCliente()
+  const [solicitacoes, setSolicitacoes] = useState<Solicitacao[]>([])
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
     if (!org) return
     loadData()
-  }, [org])
+  }, [org, clienteId])
 
   async function loadData() {
+    const filters: any[] = [{ op: 'eq', col: 'org_id', val: org!.id }]
+    if (clienteId) {
+      filters.push({ op: 'eq', col: 'cliente_id', val: clienteId })
+    }
+
     const { data } = await db.select('solicitacoes', {
       select: '*, cliente:clientes(id, nome, slug)',
-      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      filters,
       order: [{ col: 'created_at', asc: false }],
     })
     setSolicitacoes((data as any) || [])
@@ -104,7 +111,6 @@ export default function MinhasSolicitacoesPage() {
                       </div>
                       <div className="flex items-center gap-4 mt-3 text-xs text-gray-400">
                         <span>{PRIORIDADE_EMOJI[sol.prioridade] || '🔵'} {sol.prioridade}</span>
-                        {sol.cliente?.nome && <span>📁 {sol.cliente.nome}</span>}
                         <span>📅 {new Date(sol.created_at).toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}</span>
                         {sol.prazo_desejado && (
                           <span>⏰ Prazo: {new Date(sol.prazo_desejado + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}</span>

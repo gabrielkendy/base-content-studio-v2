@@ -2,12 +2,13 @@
 
 import { useEffect, useState, useMemo } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { usePortalCliente } from '../../portal-context'
 import { db } from '@/lib/api'
 import { Card, CardContent } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/input'
 import { normalizeStatus } from '@/lib/utils'
-import { ArrowRight, Search, Filter } from 'lucide-react'
+import { Search, Filter } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente } from '@/types/database'
 
@@ -47,8 +48,9 @@ function getMonthOptions(): { value: string; label: string }[] {
   return options
 }
 
-export default function ConteudosPage() {
+export default function AcervoPage() {
   const { org } = useAuth()
+  const { clienteId } = usePortalCliente()
   const [conteudos, setConteudos] = useState<(Conteudo & { empresa?: Cliente })[]>([])
   const [loading, setLoading] = useState(true)
   const [filterStatus, setFilterStatus] = useState('')
@@ -58,12 +60,17 @@ export default function ConteudosPage() {
   useEffect(() => {
     if (!org) return
     loadData()
-  }, [org])
+  }, [org, clienteId])
 
   async function loadData() {
+    const filters: any[] = [{ op: 'eq', col: 'org_id', val: org!.id }]
+    if (clienteId) {
+      filters.push({ op: 'eq', col: 'empresa_id', val: clienteId })
+    }
+
     const { data } = await db.select('conteudos', {
       select: '*, empresa:clientes(id, nome, slug, cores)',
-      filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
+      filters,
       order: [{ col: 'created_at', asc: false }],
     })
     setConteudos(((data as any) || []).map((c: any) => ({ ...c, status: normalizeStatus(c.status) })))
@@ -100,9 +107,8 @@ export default function ConteudosPage() {
 
   return (
     <div className="space-y-6 animate-fade-in">
-      {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-gray-900">Meus Conteúdos</h1>
+        <h1 className="text-2xl font-bold text-gray-900">Acervo de Conteúdos</h1>
         <p className="text-gray-500 mt-1">{conteudos.length} conteúdo(s) no total</p>
       </div>
 
@@ -164,41 +170,29 @@ export default function ConteudosPage() {
             return (
               <Link key={c.id} href={`/portal/conteudos/${c.id}`}>
                 <Card className="group hover:shadow-xl transition-all duration-300 cursor-pointer overflow-hidden h-full border-0 shadow-md">
-                  {/* Thumbnail */}
                   <div className="relative h-44 overflow-hidden">
                     {isImage ? (
-                      <img
-                        src={firstMedia!}
-                        alt={c.titulo || ''}
-                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-                      />
+                      <img src={firstMedia!} alt={c.titulo || ''} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500" />
                     ) : (
                       <div className={`w-full h-full bg-gradient-to-br ${placeholderColor} flex items-center justify-center`}>
                         <span className="text-5xl opacity-70">{TIPO_EMOJI[c.tipo] || '📄'}</span>
                       </div>
                     )}
-                    {/* Status badge overlay */}
                     <div className="absolute top-3 right-3">
-                      <Badge variant={st?.variant || 'default'} className="shadow-sm">
-                        {st?.label || c.status}
-                      </Badge>
+                      <Badge variant={st?.variant || 'default'} className="shadow-sm">{st?.label || c.status}</Badge>
                     </div>
-                    {/* Type badge */}
                     <div className="absolute bottom-3 left-3">
                       <span className="bg-black/50 backdrop-blur-sm text-white text-xs px-2 py-1 rounded-md">
                         {TIPO_EMOJI[c.tipo] || '📄'} {c.tipo}
                       </span>
                     </div>
                   </div>
-
                   <CardContent className="py-4">
                     <h3 className="text-sm font-semibold text-gray-900 truncate group-hover:text-blue-600 transition-colors">
                       {c.titulo || 'Sem título'}
                     </h3>
                     <div className="flex items-center justify-between mt-2">
-                      <span className="text-xs text-gray-400">
-                        {c.empresa?.nome || ''}
-                      </span>
+                      <span className="text-xs text-gray-400">{c.empresa?.nome || ''}</span>
                       {c.data_publicacao && (
                         <span className="text-xs text-gray-400">
                           📅 {new Date(c.data_publicacao + 'T00:00:00').toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })}

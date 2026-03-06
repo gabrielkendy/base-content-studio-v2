@@ -1,0 +1,21 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx tsc:*)",
+      "Bash(npx vercel:*)",
+      "Bash(ls:*)",
+      "Bash(gh auth:*)",
+      "Bash(vercel:*)",
+      "Bash(curl:*)",
+      "Bash(nslookup:*)",
+      "Bash(vercel env:*)",
+      "Bash(echo:*)",
+      "Bash(./venv/Scripts/python.exe:*)",
+      "Bash(node:*)",
+      "Bash(Test-Path:*)",
+      "Bash(wc:*)",
+      "Bash(grep:*)",
+      "Bash(cat:*)"
+    ]
+  }
+}

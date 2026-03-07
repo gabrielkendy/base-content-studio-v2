@@ -5,7 +5,7 @@
 -- Tabela de aprovadores (internos e clientes)
 CREATE TABLE IF NOT EXISTS aprovadores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id UUID NOT NULL REFERENCES empresas(id) ON DELETE CASCADE,
+  empresa_id UUID NOT NULL REFERENCES clientes(id) ON DELETE CASCADE,
   
   -- Dados do aprovador
   nome VARCHAR(255) NOT NULL,

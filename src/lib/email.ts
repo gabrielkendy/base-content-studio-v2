@@ -52,7 +52,7 @@ const templates: Record<EmailType, { subject: (d: any) => string; html: (d: any)
           <li>Envie para aprovação</li>
         </ul>
       </div>
-      ${ctaButton('Acessar Dashboard', `${APP_URL}/dashboard`)}
+      ${ctaButton('Acessar Dashboard', `${APP_URL}/clientes`)}
     `, d),
   },
 

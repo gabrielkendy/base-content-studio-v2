@@ -70,7 +70,7 @@ async function sendViaResend(
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: process.env.EMAIL_FROM || 'BASE Content Studio <noreply@basecontentstudio.com>',
+        from: process.env.EMAIL_FROM || 'BASE Content Studio <noreply@agenciabase.tech>',
         to,
         subject,
         html,

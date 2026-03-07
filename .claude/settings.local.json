@@ -22,7 +22,8 @@
       "Bash(grep -n \"isAdmin\\\\|ADMIN_EMAILS\\\\|router.replace\" /c/Users/Gabriel/base-content-studio-v2/src/app/\\\\\\(dashboard\\\\\\)/admin/acessos/page.tsx 2>/dev/null | head -20\ngrep -n \"isAdmin\\\\|ADMIN_EMAILS\\\\|router.replace\" /c/Users/Gabriel/base-content-studio-v2/src/app/\\\\\\(dashboard\\\\\\)/admin/financeiro/page.tsx 2>/dev/null | head -20)",
       "Bash(do:*)",
       "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app:*)",
-      "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app\\\\\\(public\\):*)"
+      "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app\\\\\\(public\\):*)",
+      "Bash(find:*)"
     ]
   }
 }

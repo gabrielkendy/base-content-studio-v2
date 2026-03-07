@@ -1,8 +1,19 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-export async function updateSession(request: NextRequest) {
+export interface SessionResult {
+  supabaseResponse: NextResponse
+  cookiesToSet: Array<{ name: string; value: string; options: Record<string, unknown> }>
+  user: { id: string; email?: string } | null
+}
+
+export async function updateSession(request: NextRequest): Promise<SessionResult> {
   let supabaseResponse = NextResponse.next({ request })
+  const cookiesToSet: SessionResult['cookiesToSet'] = []
+  const domain =
+    process.env.NODE_ENV === 'production' && process.env.NEXT_PUBLIC_BASE_DOMAIN
+      ? `.${process.env.NEXT_PUBLIC_BASE_DOMAIN}`
+      : undefined
 
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -12,34 +23,33 @@ export async function updateSession(request: NextRequest) {
         getAll() {
           return request.cookies.getAll()
         },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
+        setAll(incoming) {
+          incoming.forEach(({ name, value }) => request.cookies.set(name, value))
           supabaseResponse = NextResponse.next({ request })
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          )
+          incoming.forEach(({ name, value, options }) => {
+            const opts = domain ? { ...options, domain } : options
+            supabaseResponse.cookies.set(name, value, opts)
+            cookiesToSet.push({ name, value, options: opts as Record<string, unknown> })
+          })
         },
       },
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const {
+    data: { user },
+  } = await supabase.auth.getUser()
 
-  // Public routes
-  const publicPaths = ['/login', '/signup', '/forgot-password', '/auth/callback', '/auth/confirm', '/auth/invite', '/auth/social-callback', '/aprovacao', '/entrega', '/api/public', '/api/migrate', '/api/upload', '/api/invite/validate', '/api/invite/accept', '/api/debug', '/api/webhooks', '/api/billing/webhook']
-  const isPublic = request.nextUrl.pathname === '/' || publicPaths.some(p => request.nextUrl.pathname.startsWith(p))
+  return { supabaseResponse, cookiesToSet, user }
+}
 
-  if (!user && !isPublic) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/login'
-    return NextResponse.redirect(url)
-  }
-
-  if (user && (request.nextUrl.pathname === '/login' || request.nextUrl.pathname === '/signup')) {
-    const url = request.nextUrl.clone()
-    url.pathname = '/'
-    return NextResponse.redirect(url)
-  }
-
-  return supabaseResponse
+export function applySessionCookies(
+  response: NextResponse,
+  cookies: SessionResult['cookiesToSet']
+): NextResponse {
+  cookies.forEach(({ name, value, options }) => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    response.cookies.set(name, value, options as any)
+  })
+  return response
 }

@@ -2,8 +2,9 @@
 // Centraliza envio de emails com Resend
 
 const RESEND_API_KEY = process.env.RESEND_API_KEY
-const EMAIL_FROM = process.env.EMAIL_FROM || 'ContentStudio <noreply@contentstudio.com>'
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.contentstudio.com'
+const EMAIL_FROM = process.env.EMAIL_FROM || 'BASE Content Studio <noreply@agenciabase.tech>'
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || (BASE_DOMAIN ? `https://app.${BASE_DOMAIN}` : 'https://app.agenciabase.tech')
 
 type EmailType = 
   | 'new_content'
@@ -29,11 +30,11 @@ interface SendEmailParams {
 // Templates
 const templates: Record<EmailType, { subject: (d: any) => string; html: (d: any) => string }> = {
   welcome: {
-    subject: () => '🎉 Bem-vindo ao ContentStudio!',
+    subject: () => '🎉 Bem-vindo ao BASE Content Studio!',
     html: (d) => baseTemplate(`
       <div style="text-align: center; margin-bottom: 30px;">
         <div style="font-size: 48px; margin-bottom: 20px;">🎉</div>
-        <h1 style="color: #1e293b; margin: 0; font-size: 28px;">Bem-vindo ao ContentStudio!</h1>
+        <h1 style="color: #1e293b; margin: 0; font-size: 28px;">Bem-vindo ao BASE Content Studio!</h1>
       </div>
       <p style="color: #475569; font-size: 16px; line-height: 1.6;">
         Olá${d.name ? ` ${d.name}` : ''}!
@@ -56,7 +57,7 @@ const templates: Record<EmailType, { subject: (d: any) => string; html: (d: any)
   },
 
   team_invite: {
-    subject: (d) => `🎉 Você foi convidado para ${d.orgName || 'ContentStudio'}`,
+    subject: (d) => `🎉 Você foi convidado para ${d.orgName || 'BASE Content Studio'}`,
     html: (d) => baseTemplate(`
       <div style="text-align: center; margin-bottom: 30px;">
         <div style="font-size: 48px; margin-bottom: 20px;">🎉</div>
@@ -300,7 +301,7 @@ function baseTemplate(content: string, data: any) {
         </div>
         <div style="text-align: center; margin-top: 30px;">
           <p style="color: #94a3b8; font-size: 12px; margin: 0;">
-            ContentStudio • ${data.orgName || 'Gestão de Conteúdos'}
+            BASE Content Studio • ${data.orgName || 'Gestão de Conteúdos'}
           </p>
           <p style="color: #94a3b8; font-size: 11px; margin: 10px 0 0 0;">
             <a href="${APP_URL}/configuracoes" style="color: #94a3b8;">Gerenciar notificações</a>

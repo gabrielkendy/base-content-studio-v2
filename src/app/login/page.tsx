@@ -3,9 +3,9 @@
 import { useState, useEffect, Suspense } from 'react'
 import { createClient } from '@/lib/supabase/client'
 import Link from 'next/link'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useSearchParams } from 'next/navigation'
 import Script from 'next/script'
-import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2, Sparkles, Check } from 'lucide-react'
+import { Eye, EyeOff, Mail, Lock, ArrowRight, Loader2, Sparkles } from 'lucide-react'
 
 declare global {
   interface Window {
@@ -24,7 +24,6 @@ function LoginForm() {
   const [error, setError] = useState('')
   const [magicLinkSent, setMagicLinkSent] = useState(false)
   const [recaptchaLoaded, setRecaptchaLoaded] = useState(false)
-  const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createClient()
   
@@ -39,37 +38,33 @@ function LoginForm() {
 
   async function handleLogin(e: React.FormEvent) {
     e.preventDefault()
-    
-    // reCAPTCHA temporarily disabled
-    // if (recaptchaLoaded && window.grecaptcha) {
-    //   const token = window.grecaptcha.getResponse()
-    //   if (!token) {
-    //     setError('Por favor, complete o reCAPTCHA')
-    //     return
-    //   }
-    // }
-    
     setLoading(true)
     setError('')
 
     try {
-      const { error: authError } = await supabase.auth.signInWithPassword({ email, password })
-      
-      if (authError) {
-        if (authError.message.includes('Invalid login')) {
+      // Server-side login sets auth cookies with shared domain atomically
+      const res = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ email, password }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        if (data.error?.includes('Invalid login')) {
           setError('Email ou senha incorretos')
-        } else if (authError.message.includes('Email not confirmed')) {
+        } else if (data.error?.includes('Email not confirmed')) {
           setError('Confirme seu email antes de fazer login')
         } else {
-          setError(authError.message)
+          setError(data.error || 'Erro ao fazer login')
         }
         setLoading(false)
-        if (window.grecaptcha) window.grecaptcha.reset()
         return
       }
 
-      router.push(redirectTo)
-      router.refresh()
+      // Cookies already set with shared domain — navigate directly
+      window.location.href = data.dest
     } catch (err) {
       setError('Erro ao fazer login. Tente novamente.')
       setLoading(false)
@@ -162,7 +157,7 @@ function LoginForm() {
               <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
                 <Sparkles className="w-5 h-5 text-white" />
               </div>
-              <span className="text-xl font-bold text-white">ContentStudio</span>
+              <span className="text-xl font-bold text-white">BASE Content Studio</span>
             </Link>
 
             <h1 className="text-3xl font-bold text-white mb-2">
@@ -295,7 +290,7 @@ function LoginForm() {
             <div className="w-20 h-20 bg-gradient-to-br from-purple-500 to-blue-500 rounded-3xl flex items-center justify-center mx-auto mb-8">
               <Sparkles className="w-10 h-10 text-white" />
             </div>
-            <h2 className="text-3xl font-bold text-white mb-4">ContentStudio</h2>
+            <h2 className="text-3xl font-bold text-white mb-4">BASE Content Studio</h2>
             <p className="text-zinc-400 mb-8">
               Gerencie todo o conteúdo dos seus clientes em um só lugar
             </p>

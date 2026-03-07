@@ -1,31 +1,24 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient as createClient } from '@/lib/supabase/server'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getAuthUser, getUserOrgId } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
-
+    const user = await getAuthUser(request)
     if (!user) {
       return NextResponse.json({ error: 'Não autenticado' }, { status: 401 })
     }
 
-    // Get user's organization
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single()
-
-    if (!member?.organization_id) {
+    const orgId = await getUserOrgId(user.id)
+    if (!orgId) {
       return NextResponse.json({ error: 'Organização não encontrada' }, { status: 404 })
     }
 
-    // Get invoices
-    const { data: invoices, error } = await supabase
+    const admin = createServiceClient()
+    const { data: invoices, error } = await admin
       .from('invoices')
       .select('*')
-      .eq('organization_id', member.organization_id)
+      .eq('organization_id', orgId)
       .order('created_at', { ascending: false })
 
     if (error) {

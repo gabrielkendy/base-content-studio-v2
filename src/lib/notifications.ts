@@ -3,7 +3,8 @@
 
 import { sendEmail } from './email'
 
-const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://app.contentstudio.com'
+const BASE_DOMAIN = process.env.NEXT_PUBLIC_BASE_DOMAIN
+const APP_URL = process.env.NEXT_PUBLIC_APP_URL || (BASE_DOMAIN ? `https://app.${BASE_DOMAIN}` : 'https://app.agenciabase.tech')
 
 interface UserInfo {
   id: string

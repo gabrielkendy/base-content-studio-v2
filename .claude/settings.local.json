@@ -15,7 +15,14 @@
       "Bash(Test-Path:*)",
       "Bash(wc:*)",
       "Bash(grep:*)",
-      "Bash(cat:*)"
+      "Bash(cat:*)",
+      "Bash(rm:*)",
+      "Bash(npx supabase:*)",
+      "Bash(grep -n \"ADMIN_EMAILS\\\\|NEXT_PUBLIC_ADMIN\" /c/Users/Gabriel/base-content-studio-v2/src/app/\\\\\\(dashboard\\\\\\)/admin/page.tsx 2>/dev/null | head -20\ngrep -n \"ADMIN_EMAILS\\\\|NEXT_PUBLIC_ADMIN\" /c/Users/Gabriel/base-content-studio-v2/src/middleware.ts 2>/dev/null)",
+      "Bash(grep -n \"isAdmin\\\\|ADMIN_EMAILS\\\\|router.replace\" /c/Users/Gabriel/base-content-studio-v2/src/app/\\\\\\(dashboard\\\\\\)/admin/acessos/page.tsx 2>/dev/null | head -20\ngrep -n \"isAdmin\\\\|ADMIN_EMAILS\\\\|router.replace\" /c/Users/Gabriel/base-content-studio-v2/src/app/\\\\\\(dashboard\\\\\\)/admin/financeiro/page.tsx 2>/dev/null | head -20)",
+      "Bash(do:*)",
+      "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app:*)",
+      "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app\\\\\\(public\\):*)"
     ]
   }
 }

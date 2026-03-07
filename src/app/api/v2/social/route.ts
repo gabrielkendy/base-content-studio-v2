@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import * as UP from '@/lib/upload-post-v2'
+import { getInternalAppUrl } from '@/lib/approval-notifications'
 
 // Auth helper
 async function getAuth() {
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
 
       const result = await UP.gerarLinkConexao({
         username: clienteSlug,
-        redirectUrl: `${process.env.NEXT_PUBLIC_APP_URL || 'https://base-content-studio-v2.vercel.app'}/clientes/${clienteSlug}/redes?connected=true`,
+        redirectUrl: `${getInternalAppUrl()}/clientes/${clienteSlug}/redes?connected=true`,
         logoUrl: org?.logo_url || undefined,
         titulo: `Conectar Redes - ${org?.name || 'BASE'}`,
         descricao: `Conecte as redes sociais de ${clienteNome || clienteSlug}`,

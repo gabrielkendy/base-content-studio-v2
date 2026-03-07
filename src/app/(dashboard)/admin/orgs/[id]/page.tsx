@@ -42,8 +42,6 @@ interface OrgData {
   usage: { clients: number; contents: number }
 }
 
-const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-
 const PLANS = ['starter', 'pro', 'agency'] as const
 const PLAN_LABELS: Record<string, { label: string; color: string; bg: string }> = {
   starter: { label: 'Starter', color: 'text-zinc-600', bg: 'bg-zinc-100' },
@@ -64,8 +62,6 @@ export default function AdminOrgDetailPage() {
   const [togglingMember, setTogglingMember] = useState<string | null>(null)
   const [planSuccess, setPlanSuccess] = useState(false)
 
-  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())
-
   const fetchData = useCallback(async () => {
     setLoading(true)
     setError(null)
@@ -85,9 +81,8 @@ export default function AdminOrgDetailPage() {
   useEffect(() => {
     if (authLoading) return
     if (!user) { router.replace('/'); return }
-    if (!isAdmin) { router.replace('/'); return }
     fetchData()
-  }, [authLoading, user, isAdmin, router, fetchData])
+  }, [authLoading, user, router, fetchData])
 
   const handleSetPlan = async (plan: string | null) => {
     if (!data) return

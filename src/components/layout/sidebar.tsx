@@ -24,7 +24,7 @@ import {
   UserCheck,
   Shield,
 } from 'lucide-react'
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 
 const NAV_ITEMS_TEAM = [
   { href: '/', label: 'Dashboard', icon: LayoutDashboard },
@@ -51,10 +51,10 @@ const NAV_ITEMS_CLIENTE = [
 export function Sidebar() {
   const pathname = usePathname()
   const { org, member, user, signOut } = useAuth()
-  const [collapsed, setCollapsed] = useState(() => {
-    if (typeof window === 'undefined') return false
-    return localStorage.getItem('sidebar-collapsed') === 'true'
-  })
+  const [collapsed, setCollapsed] = useState(false)
+  useEffect(() => {
+    setCollapsed(localStorage.getItem('sidebar-collapsed') === 'true')
+  }, [])
   const [mobileOpen, setMobileOpen] = useState(false)
 
   const brandColor = org?.brand_color || '#6366F1'
@@ -70,8 +70,12 @@ export function Sidebar() {
   const isCliente = member?.role === 'cliente'
   const navItems = isCliente ? NAV_ITEMS_CLIENTE : NAV_ITEMS_TEAM
 
-  const adminEmails = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-  const isSystemAdmin = !isCliente && user?.email && adminEmails.includes(user.email.toLowerCase())
+  const [isSystemAdmin, setIsSystemAdmin] = useState(false)
+  useEffect(() => {
+    if (!isCliente && user?.email) {
+      fetch('/api/auth/me-role').then(r => r.json()).then(d => setIsSystemAdmin(!!d.isSystemAdmin)).catch(() => {})
+    }
+  }, [isCliente, user?.email])
 
   return (
     <>

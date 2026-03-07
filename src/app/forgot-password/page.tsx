@@ -18,7 +18,7 @@ export default function ForgotPasswordPage() {
     setError('')
 
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
+      redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
     })
 
     if (error) {
@@ -45,7 +45,7 @@ export default function ForgotPasswordPage() {
           <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
             <Sparkles className="w-5 h-5 text-white" />
           </div>
-          <span className="text-xl font-bold text-white">ContentStudio</span>
+          <span className="text-xl font-bold text-white">BASE Content Studio</span>
         </Link>
 
         {sent ? (
@@ -154,8 +154,8 @@ export default function ForgotPasswordPage() {
               <h3 className="font-semibold text-zinc-300 text-sm mb-2">Precisa de ajuda?</h3>
               <p className="text-xs text-zinc-500">
                 Se você não conseguir acessar sua conta, entre em contato pelo email{' '}
-                <a href="mailto:suporte@contentstudio.com" className="text-purple-400 hover:underline">
-                  suporte@contentstudio.com
+                <a href="mailto:suporte@agenciabase.tech" className="text-purple-400 hover:underline">
+                  suporte@agenciabase.tech
                 </a>
               </p>
             </div>

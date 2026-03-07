@@ -19,16 +19,34 @@ import {
   Settings,
   Send,
   X,
+  LayoutDashboard,
 } from 'lucide-react'
+import { getAppUrl } from '@/lib/get-app-url'
 
 export default function LandingPage() {
   const [isAnnual, setIsAnnual] = useState(true)
   const [scrolled, setScrolled] = useState(false)
+  const [appUrl, setAppUrl] = useState<string | null>(null)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 50)
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Check if user is already logged in
+  useEffect(() => {
+    fetch('/api/auth/me-role')
+      .then((res) => {
+        if (res.ok) return res.json()
+        return null
+      })
+      .then((data) => {
+        if (data?.role) {
+          setAppUrl(getAppUrl(data.role, data.isSystemAdmin))
+        }
+      })
+      .catch(() => {})
   }, [])
 
   const plans = [
@@ -193,7 +211,7 @@ export default function LandingPage() {
             <div className="w-10 h-10 bg-gradient-to-br from-purple-500 to-blue-500 rounded-xl flex items-center justify-center">
               <Sparkles className="w-5 h-5" />
             </div>
-            <span className="text-xl font-bold tracking-tight">ContentStudio</span>
+            <span className="text-xl font-bold tracking-tight">BASE Content Studio</span>
           </div>
           
           <div className="hidden md:flex items-center gap-8">
@@ -203,19 +221,31 @@ export default function LandingPage() {
             <a href="#faq" className="text-sm text-white/60 hover:text-white transition-colors">FAQ</a>
           </div>
 
-          <div className="flex items-center gap-4">
-            <Link 
-              href="/login"
-              className="text-sm text-white/60 hover:text-white transition-colors hidden sm:block"
-            >
-              Entrar
-            </Link>
-            <Link
-              href="/login?signup=true"
-              className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
-            >
-              Começar Grátis
-            </Link>
+          <div className="flex items-center gap-3">
+            {appUrl ? (
+              <a
+                href={`/api/auth/session-transfer?dest=${encodeURIComponent(appUrl)}`}
+                className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+              >
+                <LayoutDashboard className="w-4 h-4" />
+                Ir para o App
+              </a>
+            ) : (
+              <>
+                <Link
+                  href="/login"
+                  className="hidden sm:flex items-center px-4 py-2.5 text-sm font-medium text-white/80 hover:text-white border border-white/20 rounded-lg hover:border-white/40 transition-all"
+                >
+                  Login
+                </Link>
+                <Link
+                  href="/login?signup=true"
+                  className="px-5 py-2.5 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg text-sm font-semibold hover:opacity-90 transition-opacity"
+                >
+                  Registre-se
+                </Link>
+              </>
+            )}
           </div>
         </div>
       </nav>
@@ -478,7 +508,7 @@ export default function LandingPage() {
               Comparativo
             </span>
             <h2 className="text-4xl sm:text-5xl font-bold mb-4">
-              Por que ContentStudio?
+              Por que BASE Content Studio?
             </h2>
             <p className="text-lg text-white/60">
               Comparado com as alternativas que agências usam hoje
@@ -493,7 +523,7 @@ export default function LandingPage() {
                   <th className="py-4 px-4 text-center">
                     <div className="inline-flex flex-col items-center gap-1">
                       <div className="px-3 py-1 bg-gradient-to-r from-purple-500 to-blue-500 rounded-lg text-xs font-bold">
-                        ContentStudio
+                        BASE Content Studio
                       </div>
                     </div>
                   </th>
@@ -737,7 +767,7 @@ export default function LandingPage() {
             </h2>
             <p className="text-lg text-white/60 mb-8 max-w-xl mx-auto">
               Junte-se a centenas de agências que já economizam horas por semana 
-              com o ContentStudio.
+              com o BASE Content Studio.
             </p>
             <Link
               href="/login?signup=true"
@@ -759,7 +789,7 @@ export default function LandingPage() {
             <div className="w-8 h-8 bg-gradient-to-br from-purple-500 to-blue-500 rounded-lg flex items-center justify-center">
               <Sparkles className="w-4 h-4" />
             </div>
-            <span className="font-semibold">ContentStudio</span>
+            <span className="font-semibold">BASE Content Studio</span>
           </div>
           
           <div className="flex items-center gap-8 text-sm text-white/40">
@@ -769,7 +799,7 @@ export default function LandingPage() {
           </div>
 
           <div className="text-sm text-white/40">
-            © 2026 ContentStudio. Todos os direitos reservados.
+            © 2026 BASE Content Studio. Todos os direitos reservados.
           </div>
         </div>
       </footer>

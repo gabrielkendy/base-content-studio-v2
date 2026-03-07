@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { normalizeStatus } from '@/lib/utils'
 import { NextRequest, NextResponse } from 'next/server'
 import { notifyApprovalResponse } from '@/lib/notifications'
-import { dispararNotificacao, getAppUrl } from '@/lib/approval-notifications'
+import { dispararNotificacao, getInternalAppUrl } from '@/lib/approval-notifications'
 
 export async function GET(request: NextRequest) {
   try {
@@ -317,7 +317,7 @@ export async function POST(request: NextRequest) {
           .single()
 
         if (empresa) {
-          const APP_URL = getAppUrl()
+          const APP_URL = getInternalAppUrl()
           const empresaInfo = { id: empresa.id, nome: empresa.nome, slug: empresa.slug }
 
           if (status === 'aprovado') {
@@ -381,8 +381,11 @@ export async function POST(request: NextRequest) {
       // Dispatch webhook (server-side, using internal fetch)
       if (conteudo.org_id) {
         try {
-          const baseUrl = process.env.NEXT_PUBLIC_APP_URL ||
-            (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
+          const baseDomain = process.env.NEXT_PUBLIC_BASE_DOMAIN
+          const baseUrl = baseDomain
+            ? `https://studio.${baseDomain}`
+            : process.env.NEXT_PUBLIC_APP_URL ||
+              (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
           
           await fetch(`${baseUrl}/api/webhooks/dispatch`, {
             method: 'POST',

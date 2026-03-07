@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
 import crypto from 'crypto'
+import { getPublicBaseUrl } from '@/lib/approval-notifications'
 
 /**
  * POST /api/webhooks/nova-demanda
@@ -147,7 +148,7 @@ export async function POST(req: NextRequest) {
           })
       }
 
-      const linkAprovacao = `https://base-content-studio-v2.vercel.app/aprovacao?token=${token}`
+      const linkAprovacao = `${getPublicBaseUrl()}/aprovacao?token=${token}`
 
       return NextResponse.json({
         success: true,
@@ -241,9 +242,7 @@ export async function POST(req: NextRequest) {
       console.error('Erro ao criar link:', aprovacaoError)
     }
 
-    const linkAprovacao = aprovacao 
-      ? `https://base-content-studio-v2.vercel.app/aprovacao?token=${token}`
-      : null
+    const linkAprovacao = aprovacao ? `${getPublicBaseUrl()}/aprovacao?token=${token}` : null
 
     return NextResponse.json({
       success: true,

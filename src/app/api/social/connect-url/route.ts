@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { ensureProfile, generateJwtUrl, buildUsername } from '@/lib/upload-post'
+import { getInternalAppUrl } from '@/lib/approval-notifications'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -87,7 +88,7 @@ export async function POST(request: NextRequest) {
     // Generate JWT link with white-label branding
     const jwtResult = await generateJwtUrl({
       username,
-      redirect_url: `${process.env.NEXT_PUBLIC_APP_URL || 'https://base-content-studio-v2.vercel.app'}/auth/social-callback?connected=true&cliente=${cliente.slug}`,
+      redirect_url: `${getInternalAppUrl()}/auth/social-callback?connected=true&cliente=${cliente.slug}`,
       logo_image: logoUrl,
       connect_title: `Conectar Redes - ${orgName}`,
       connect_description: `Conecte suas redes sociais para ${cliente.nome} receber suas publicações automaticamente.`,

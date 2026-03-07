@@ -1,36 +1,52 @@
 import { createServiceClient } from '@/lib/supabase/server'
 import { NextRequest, NextResponse } from 'next/server'
-import { cookies } from 'next/headers'
+import { authenticate } from '@/lib/api-auth'
 
 // GET: Listar aprovações de um conteúdo
 export async function GET(request: NextRequest) {
   try {
-    const conteudoId = request.nextUrl.searchParams.get('conteudo_id')
-    const orgId = request.nextUrl.searchParams.get('org_id')
+    const auth = await authenticate(request)
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { orgId } = auth
 
-    if (!conteudoId && !orgId) {
+    const conteudoId = request.nextUrl.searchParams.get('conteudo_id')
+
+    if (!conteudoId) {
       return NextResponse.json(
-        { error: 'conteudo_id ou org_id é obrigatório' },
+        { error: 'conteudo_id é obrigatório' },
         { status: 400 }
       )
     }
 
     const supabase = createServiceClient()
 
-    let query = supabase
+    // Verify conteudo belongs to user's org
+    const { data: conteudo } = await supabase
+      .from('conteudos')
+      .select('empresa_id')
+      .eq('id', conteudoId)
+      .single()
+
+    if (!conteudo) {
+      return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
+    }
+
+    const { data: empresa } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('id', conteudo.empresa_id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (!empresa) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
+    const { data, error } = await supabase
       .from('approvals')
       .select('*, reviewer:members!approvals_reviewer_id_fkey(display_name, avatar_url)')
+      .eq('conteudo_id', conteudoId)
       .order('created_at', { ascending: false })
-
-    if (conteudoId) {
-      query = query.eq('conteudo_id', conteudoId)
-    }
-
-    if (orgId) {
-      query = query.eq('org_id', orgId)
-    }
-
-    const { data, error } = await query
 
     if (error) {
       console.error('Approvals GET error:', error)
@@ -38,21 +54,25 @@ export async function GET(request: NextRequest) {
     }
 
     return NextResponse.json({ data })
-  } catch (err: any) {
-    console.error('Approvals GET error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error'
+    console.error('Approvals GET error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }
 
 // POST: Criar nova aprovação (interna ou registro de externa)
 export async function POST(request: NextRequest) {
   try {
+    const auth = await authenticate(request)
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { orgId } = auth
+
     const body = await request.json()
     const {
-      org_id,
       conteudo_id,
-      type, // 'internal' | 'external'
-      status, // 'pending' | 'approved' | 'rejected' | 'adjustment'
+      type,
+      status,
       reviewer_id,
       reviewer_name,
       comment,
@@ -61,20 +81,41 @@ export async function POST(request: NextRequest) {
       link_token,
     } = body
 
-    if (!org_id || !conteudo_id || !type || !status) {
+    if (!conteudo_id || !type || !status) {
       return NextResponse.json(
-        { error: 'org_id, conteudo_id, type e status são obrigatórios' },
+        { error: 'conteudo_id, type e status são obrigatórios' },
         { status: 400 }
       )
     }
 
     const supabase = createServiceClient()
 
-    // Criar registro de aprovação
+    // Verify conteudo belongs to user's org
+    const { data: conteudo } = await supabase
+      .from('conteudos')
+      .select('empresa_id')
+      .eq('id', conteudo_id)
+      .single()
+
+    if (!conteudo) {
+      return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
+    }
+
+    const { data: empresa } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('id', conteudo.empresa_id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (!empresa) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const { data: approval, error: approvalError } = await supabase
       .from('approvals')
       .insert({
-        org_id,
+        org_id: orgId,
         conteudo_id,
         type,
         status,
@@ -97,8 +138,9 @@ export async function POST(request: NextRequest) {
     }
 
     return NextResponse.json({ data: approval })
-  } catch (err: any) {
-    console.error('Approvals POST error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error'
+    console.error('Approvals POST error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

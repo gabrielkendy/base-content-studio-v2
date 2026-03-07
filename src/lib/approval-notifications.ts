@@ -79,15 +79,30 @@ export async function dispararNotificacao(payload: NotificacaoPayload): Promise<
 }
 
 /**
- * Gera link de aprovação para um conteúdo
+ * Gera link de aprovação para um conteúdo (página pública)
  */
 export function gerarLinkAprovacao(conteudoId: string): string {
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://studio.agenciabase.tech'
+  const baseUrl = getPublicBaseUrl()
   return `${baseUrl}/aprovacao/${conteudoId}`
 }
 
+/** URL base da landing/studio (páginas públicas) */
 export function getAppUrl(): string {
+  const base = process.env.NEXT_PUBLIC_BASE_DOMAIN
+  if (base) return `https://studio.${base}`
   return process.env.NEXT_PUBLIC_APP_URL || 'https://studio.agenciabase.tech'
+}
+
+/** URL base da landing/studio (páginas públicas) — alias explícito */
+export function getPublicBaseUrl(): string {
+  return getAppUrl()
+}
+
+/** URL base do app autenticado (equipe interna) */
+export function getInternalAppUrl(): string {
+  const base = process.env.NEXT_PUBLIC_BASE_DOMAIN
+  if (base) return `https://app.${base}`
+  return process.env.NEXT_PUBLIC_APP_URL || 'https://app.agenciabase.tech'
 }
 
 /**

@@ -41,8 +41,6 @@ interface Organization {
   owner_email: string
 }
 
-const ADMIN_EMAILS = (process.env.NEXT_PUBLIC_ADMIN_EMAILS || '').split(',').map(e => e.trim().toLowerCase()).filter(Boolean)
-
 export default function AdminPage() {
   const { user, loading: authLoading } = useAuth()
   const router = useRouter()
@@ -54,8 +52,6 @@ export default function AdminPage() {
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState<string>('all')
   const [page, setPage] = useState(0)
-
-  const isAdmin = user?.email && ADMIN_EMAILS.includes(user.email.toLowerCase())
 
   const fetchData = useCallback(async (p: number) => {
     setLoading(true)
@@ -82,9 +78,8 @@ export default function AdminPage() {
   useEffect(() => {
     if (authLoading) return
     if (!user) { router.replace('/'); return }
-    if (!isAdmin) { router.replace('/'); return }
     fetchData(0)
-  }, [authLoading, user, isAdmin, router, fetchData])
+  }, [authLoading, user, router, fetchData])
 
   const filteredOrgs = organizations.filter(org => {
     const matchesSearch = org.name.toLowerCase().includes(search.toLowerCase()) ||

@@ -1,84 +1,64 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { createServiceClient as createClient } from '@/lib/supabase/server'
-import { getStripe } from '@/lib/stripe'
-import { PLANS, PlanId, BillingInterval } from '@/types/billing'
+import { createServiceClient } from '@/lib/supabase/server'
+import { getStripe, getPriceId, PlanName } from '@/lib/stripe'
+import { getAuthUser, getUserOrgId } from '@/lib/api-auth'
 
 export async function GET(request: NextRequest) {
-  try {
-    const { searchParams, origin } = new URL(request.url)
-    const planId = searchParams.get('plan') as PlanId
-    const interval = (searchParams.get('interval') || 'year') as BillingInterval
-    
-    const supabase = await createClient()
-    const { data: { user } } = await supabase.auth.getUser()
+  const { searchParams, origin } = new URL(request.url)
+  const planId = searchParams.get('plan') as PlanName
+  const interval = (searchParams.get('interval') || 'year') as 'month' | 'year'
 
+  try {
+    const user = await getAuthUser(request)
     if (!user) {
       return NextResponse.redirect(`${origin}/login`)
     }
 
-    // Validate plan
-    const plan = PLANS[planId]
-    if (!plan) {
+    if (!planId || !['starter', 'pro', 'agency'].includes(planId)) {
       return NextResponse.redirect(`${origin}/pricing`)
     }
 
-    const stripe = getStripe()
+    const orgId = await getUserOrgId(user.id)
+    if (!orgId) {
+      return NextResponse.redirect(`${origin}/welcome?plan=${planId}&interval=${interval}`)
+    }
 
-    // Get or create Stripe customer
-    const { data: profile } = await supabase
-      .from('profiles')
+    const admin = createServiceClient()
+    const { data: org } = await admin
+      .from('organizations')
       .select('stripe_customer_id')
-      .eq('id', user.id)
+      .eq('id', orgId)
       .single()
 
-    let customerId = profile?.stripe_customer_id
+    const stripe = getStripe()
+    let customerId = org?.stripe_customer_id
 
     if (!customerId) {
       const customer = await stripe.customers.create({
         email: user.email,
-        metadata: {
-          user_id: user.id,
-        },
+        metadata: { user_id: user.id, organization_id: orgId },
       })
       customerId = customer.id
-
-      await supabase
-        .from('profiles')
-        .update({ stripe_customer_id: customerId })
-        .eq('id', user.id)
+      await admin.from('organizations').update({ stripe_customer_id: customerId }).eq('id', orgId)
     }
 
-    // Get member org
-    const { data: member } = await supabase
-      .from('organization_members')
-      .select('organization_id')
-      .eq('user_id', user.id)
-      .single()
-
-    // Get price ID
-    const priceId = interval === 'year' 
-      ? plan.stripePriceIdAnnual 
-      : plan.stripePriceIdMonthly
-
-    if (!priceId) {
-      return NextResponse.redirect(`${origin}/dashboard?error=pricing-not-configured`)
+    let priceId: string
+    try {
+      priceId = getPriceId(planId, interval)
+    } catch {
+      return NextResponse.redirect(`${origin}/clientes?error=pricing-not-configured`)
     }
 
-    // Create checkout session
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'subscription',
       payment_method_types: ['card'],
       line_items: [{ price: priceId, quantity: 1 }],
-      success_url: `${origin}/dashboard?checkout=success`,
+      success_url: `${origin}/clientes?checkout=success`,
       cancel_url: `${origin}/pricing?checkout=canceled`,
       subscription_data: {
         trial_period_days: 14,
-        metadata: {
-          user_id: user.id,
-          organization_id: member?.organization_id || '',
-          plan_id: planId,
-        },
+        metadata: { user_id: user.id, organization_id: orgId, plan_id: planId },
       },
       allow_promotion_codes: true,
     })
@@ -90,7 +70,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.redirect(`${origin}/pricing?error=checkout-failed`)
   } catch (err) {
     console.error('Checkout redirect error:', err)
-    const origin = new URL(request.url).origin
     return NextResponse.redirect(`${origin}/pricing?error=checkout-failed`)
   }
 }

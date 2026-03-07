@@ -3,6 +3,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
 import { notifyTeamInvite } from '@/lib/notifications'
+import { getPublicBaseUrl } from '@/lib/approval-notifications'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -98,8 +99,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Build invite link
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || request.nextUrl.origin
-    const inviteLink = `${baseUrl}/auth/invite?token=${inviteToken}`
+    const inviteLink = `${getPublicBaseUrl()}/auth/invite?token=${inviteToken}`
     const displayOrgName = orgName || 'BASE Content Studio'
 
     // Strategy 0: Send via Resend (our email system)

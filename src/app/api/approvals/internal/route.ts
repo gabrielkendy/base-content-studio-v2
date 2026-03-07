@@ -1,30 +1,36 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { dispararNotificacao, getAppUrl } from '@/lib/approval-notifications'
+import { dispararNotificacao, getInternalAppUrl, getPublicBaseUrl } from '@/lib/approval-notifications'
+import { dispatchWebhookEvent } from '@/lib/webhook-dispatch'
+import { generateApprovalToken } from '@/lib/tokens'
 import { NextRequest, NextResponse } from 'next/server'
+import { authenticate } from '@/lib/api-auth'
 
 // POST: Enviar para aprovação interna
 export async function POST(request: NextRequest) {
   try {
+    const auth = await authenticate(request)
+    if (!auth) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    const { orgId } = auth
+
     const body = await request.json()
     const {
       conteudo_id,
-      org_id,
       action, // 'submit' | 'approve' | 'reject'
       reviewer_id,
       reviewer_name,
       comment,
     } = body
 
-    if (!conteudo_id || !org_id || !action) {
+    if (!conteudo_id || !action) {
       return NextResponse.json(
-        { error: 'conteudo_id, org_id e action são obrigatórios' },
+        { error: 'conteudo_id e action são obrigatórios' },
         { status: 400 }
       )
     }
 
     const supabase = createServiceClient()
 
-    // Buscar conteúdo atual
+    // Fetch conteudo and verify it belongs to user's org
     const { data: conteudo, error: fetchError } = await supabase
       .from('conteudos')
       .select('*')
@@ -35,19 +41,27 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
     }
 
+    const { data: empresa } = await supabase
+      .from('clientes')
+      .select('id')
+      .eq('id', conteudo.empresa_id)
+      .eq('org_id', orgId)
+      .single()
+
+    if (!empresa) {
+      return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
+    }
+
     const previousStatus = conteudo.status
     let newStatus = previousStatus
     let approvalStatus: string = 'pending'
 
     switch (action) {
       case 'submit':
-        // Designer envia para aprovação interna
-        // Status do conteúdo não muda, mas criamos um registro de aprovação pendente
         approvalStatus = 'pending'
         break
 
       case 'approve':
-        // Gestor aprova internamente
         if (!reviewer_id) {
           return NextResponse.json(
             { error: 'reviewer_id é obrigatório para aprovar' },
@@ -55,11 +69,10 @@ export async function POST(request: NextRequest) {
           )
         }
         approvalStatus = 'approved'
-        newStatus = 'aprovacao' // Avança para aprovação do cliente
+        newStatus = 'aprovacao'
         break
 
       case 'reject':
-        // Gestor pede ajuste interno
         if (!reviewer_id || !comment) {
           return NextResponse.json(
             { error: 'reviewer_id e comment são obrigatórios para rejeitar' },
@@ -67,18 +80,17 @@ export async function POST(request: NextRequest) {
           )
         }
         approvalStatus = 'adjustment'
-        newStatus = 'producao' // Volta para produção
+        newStatus = 'producao'
         break
 
       default:
         return NextResponse.json({ error: 'action inválida' }, { status: 400 })
     }
 
-    // Criar registro de aprovação
     const { error: approvalError } = await supabase
       .from('approvals')
       .insert({
-        org_id,
+        org_id: orgId,
         conteudo_id,
         type: 'internal',
         status: approvalStatus,
@@ -95,14 +107,12 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: approvalError.message }, { status: 500 })
     }
 
-    // Atualizar conteúdo se necessário
     if (action !== 'submit' && newStatus !== previousStatus) {
-      const updateData: any = {
+      const updateData: Record<string, unknown> = {
         status: newStatus,
         updated_at: new Date().toISOString(),
       }
 
-      // Se aprovado internamente, marcar
       if (action === 'approve') {
         updateData.internal_approved = true
         updateData.internal_approved_by = reviewer_id
@@ -120,18 +130,17 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // 🔔 WhatsApp notifications via n8n
+    // WhatsApp notifications via n8n
     try {
-      const { data: empresa } = await supabase
+      const { data: empresaInfo } = await supabase
         .from('clientes')
         .select('id, nome, slug')
         .eq('id', conteudo.empresa_id)
         .single()
 
-      if (empresa) {
-        const APP_URL = getAppUrl()
-        const workflowLink = `${APP_URL}/workflow?content=${conteudo_id}`
-        const empresaInfo = { id: empresa.id, nome: empresa.nome, slug: empresa.slug }
+      if (empresaInfo) {
+        const workflowLink = `${getInternalAppUrl()}/workflow?content=${conteudo_id}`
+        const empresaData = { id: empresaInfo.id, nome: empresaInfo.nome, slug: empresaInfo.slug }
 
         if (action === 'submit') {
           const { data: aprovadores } = await supabase
@@ -152,17 +161,18 @@ export async function POST(request: NextRequest) {
                 status: 'producao',
                 link_aprovacao: workflowLink,
               },
-              empresa: empresaInfo,
-              aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+              empresa: empresaData,
+              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+                nome: a.nome, whatsapp: a.whatsapp, email: a.email,
+                tipo: a.tipo as 'interno' | 'cliente' | 'designer',
+                pode_editar_legenda: a.pode_editar_legenda,
+              })),
               nivel: 1,
               timestamp: new Date().toISOString(),
             })
           }
         } else if (action === 'approve') {
-          // Generate client approval token
-          const token = Array.from({ length: 32 }, () =>
-            'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
-          ).join('')
+          const token = generateApprovalToken()
 
           await supabase.from('aprovacoes_links').insert({
             conteudo_id,
@@ -172,7 +182,7 @@ export async function POST(request: NextRequest) {
             expires_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
           })
 
-          const clientLink = `${APP_URL}/aprovacao?token=${token}`
+          const clientLink = `${getPublicBaseUrl()}/aprovacao?token=${token}`
 
           const { data: aprovadores } = await supabase
             .from('aprovadores')
@@ -192,8 +202,12 @@ export async function POST(request: NextRequest) {
                 status: 'aprovacao',
                 link_aprovacao: clientLink,
               },
-              empresa: empresaInfo,
-              aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+              empresa: empresaData,
+              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+                nome: a.nome, whatsapp: a.whatsapp, email: a.email,
+                tipo: a.tipo as 'interno' | 'cliente' | 'designer',
+                pode_editar_legenda: a.pode_editar_legenda,
+              })),
               nivel: 1,
               timestamp: new Date().toISOString(),
             })
@@ -217,8 +231,12 @@ export async function POST(request: NextRequest) {
                 status: 'producao',
                 link_aprovacao: workflowLink,
               },
-              empresa: empresaInfo,
-              aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+              empresa: empresaData,
+              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+                nome: a.nome, whatsapp: a.whatsapp, email: a.email,
+                tipo: a.tipo as 'interno' | 'cliente' | 'designer',
+                pode_editar_legenda: a.pode_editar_legenda,
+              })),
               nivel: 1,
               timestamp: new Date().toISOString(),
             })
@@ -229,34 +247,23 @@ export async function POST(request: NextRequest) {
       console.error('WhatsApp notification error (non-critical):', whatsappErr)
     }
 
-    // Dispatch webhook
+    // Dispatch webhook directly (no HTTP round-trip)
     try {
-      const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-        (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-      
-      const eventType = action === 'submit' 
+      const eventType = action === 'submit'
         ? 'content.internal_review_requested'
         : action === 'approve'
           ? 'content.internal_approved'
           : 'content.internal_adjustment_requested'
 
-      await fetch(`${baseUrl}/api/webhooks/dispatch`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          org_id,
-          event_type: eventType,
-          data: {
-            conteudo_id,
-            titulo: conteudo.titulo,
-            action,
-            previous_status: previousStatus,
-            new_status: newStatus,
-            reviewer_id,
-            reviewer_name,
-            comment,
-          },
-        }),
+      await dispatchWebhookEvent(orgId, eventType, {
+        conteudo_id,
+        titulo: conteudo.titulo,
+        action,
+        previous_status: previousStatus,
+        new_status: newStatus,
+        reviewer_id,
+        reviewer_name,
+        comment,
       })
     } catch (webhookErr) {
       console.error('Webhook dispatch error:', webhookErr)
@@ -268,8 +275,9 @@ export async function POST(request: NextRequest) {
       previous_status: previousStatus,
       new_status: newStatus,
     })
-  } catch (err: any) {
-    console.error('Internal approval error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : 'Internal error'
+    console.error('Internal approval error:', message)
+    return NextResponse.json({ error: message }, { status: 500 })
   }
 }

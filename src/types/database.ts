@@ -175,6 +175,20 @@ export interface Organization {
   favicon_url: string | null
   created_at: string
   updated_at: string
+  // Z-API WhatsApp integration
+  zapi_instance_id: string | null
+  zapi_token: string | null
+  zapi_status: 'connected' | 'disconnected' | 'qr_code' | null
+  zapi_phone: string | null
+  // Stripe billing
+  stripe_customer_id: string | null
+  stripe_subscription_id: string | null
+  plan_id: string | null
+  subscription_status: string | null
+  current_period_start: string | null
+  current_period_end: string | null
+  cancel_at_period_end: boolean
+  trial_end: string | null
 }
 
 export interface NotificationPreferences {

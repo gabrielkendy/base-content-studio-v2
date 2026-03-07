@@ -2,7 +2,9 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { dispararNotificacao, getAppUrl } from '@/lib/approval-notifications'
+import { dispararNotificacao, getAppUrl, templatesWhatsApp } from '@/lib/approval-notifications'
+import { zapiSendText } from '@/lib/zapi'
+import { generateApprovalToken } from '@/lib/tokens'
 
 export async function POST(request: NextRequest) {
   try {
@@ -29,8 +31,8 @@ export async function POST(request: NextRequest) {
 
     const admin = createServiceClient()
 
-    // Fetch conteudo, empresa and client approvers in parallel
-    const [conteudoRes, empresaRes, aprovadoresRes] = await Promise.all([
+    // Get user's org and Z-API credentials in parallel with other queries
+    const [conteudoRes, empresaRes, aprovadoresRes, memberRes] = await Promise.all([
       admin.from('conteudos').select('id, titulo, legenda, status').eq('id', conteudo_id).single(),
       admin.from('clientes').select('id, nome, slug').eq('id', empresa_id).single(),
       admin.from('aprovadores')
@@ -39,6 +41,12 @@ export async function POST(request: NextRequest) {
         .eq('tipo', 'cliente')
         .eq('ativo', true)
         .eq('recebe_notificacao', true),
+      admin.from('members')
+        .select('org_id')
+        .eq('user_id', user.id)
+        .eq('status', 'active')
+        .limit(1)
+        .maybeSingle(),
     ])
 
     if (!conteudoRes.data) return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
@@ -56,9 +64,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Generate token and create approval link
-    const token = Array.from({ length: 32 }, () =>
-      'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789'[Math.floor(Math.random() * 62)]
-    ).join('')
+    const token = generateApprovalToken()
 
     const { error: insertError } = await admin.from('aprovacoes_links').insert({
       conteudo_id,
@@ -72,34 +78,70 @@ export async function POST(request: NextRequest) {
     const APP_URL = getAppUrl()
     const link = `${APP_URL}/aprovacao?token=${token}`
 
-    // Send WhatsApp via n8n
-    const result = await dispararNotificacao({
-      tipo: 'nivel_aprovado',
-      conteudo: {
-        id: conteudo.id,
-        titulo: conteudo.titulo || 'Sem título',
-        legenda: conteudo.legenda || '',
-        status: conteudo.status || '',
-        link_aprovacao: link,
-      },
-      empresa: { id: empresa.id, nome: empresa.nome, slug: empresa.slug },
-      aprovadores: aprovadores.map((a: any) => ({
-        nome: a.nome,
-        whatsapp: a.whatsapp,
-        email: a.email,
-        tipo: a.tipo,
-        pode_editar_legenda: a.pode_editar_legenda,
-      })),
-      nivel: 0,
-      timestamp: new Date().toISOString(),
-    })
+    const conteudoInfo = {
+      id: conteudo.id,
+      titulo: conteudo.titulo || 'Sem título',
+      legenda: conteudo.legenda || '',
+      status: conteudo.status || '',
+      link_aprovacao: link,
+    }
+    const empresaInfo = { id: empresa.id, nome: empresa.nome, slug: empresa.slug }
 
-    if (!result.success) {
-      console.error('n8n webhook error:', result.error)
-      // Still return success if token was created — WhatsApp may be delayed
+    // Try Z-API first if org has a connected instance
+    let usedZapi = false
+    const orgId = memberRes.data?.org_id
+    if (orgId) {
+      const { data: org } = await admin
+        .from('organizations')
+        .select('zapi_instance_id, zapi_token, zapi_status')
+        .eq('id', orgId)
+        .single()
+
+      if (org?.zapi_instance_id && org?.zapi_token && org?.zapi_status === 'connected') {
+        const message = templatesWhatsApp.nivel_aprovado(conteudoInfo, empresaInfo)
+        const results = await Promise.allSettled(
+          aprovadores
+            .filter((a: { whatsapp: string | null }) => a.whatsapp)
+            .map((a: { whatsapp: string }) =>
+              zapiSendText(org.zapi_instance_id!, org.zapi_token!, a.whatsapp, message)
+            )
+        )
+        const sent = results.filter(r => r.status === 'fulfilled').length
+        const failed = results.filter(r => r.status === 'rejected').length
+        if (failed > 0) {
+          console.warn(`Z-API: ${sent} enviados, ${failed} falharam para org ${orgId}`)
+        }
+        if (sent > 0) usedZapi = true
+      }
     }
 
-    return NextResponse.json({ success: true, count: aprovadores.length, link })
+    // Fall back to n8n if Z-API was not used
+    if (!usedZapi) {
+      const result = await dispararNotificacao({
+        tipo: 'nivel_aprovado',
+        conteudo: conteudoInfo,
+        empresa: empresaInfo,
+        aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+          nome: a.nome,
+          whatsapp: a.whatsapp,
+          email: a.email,
+          tipo: a.tipo as 'interno' | 'cliente' | 'designer',
+          pode_editar_legenda: a.pode_editar_legenda,
+        })),
+        nivel: 0,
+        timestamp: new Date().toISOString(),
+      })
+      if (!result.success) {
+        console.error('n8n webhook error:', result.error)
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      count: aprovadores.length,
+      link,
+      channel: usedZapi ? 'zapi' : 'n8n',
+    })
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : 'Internal error'
     console.error('/api/approvals/send-whatsapp error:', message)

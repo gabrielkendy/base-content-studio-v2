@@ -7,12 +7,12 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
-import { Save, Upload, Building2, Palette, User, Bell, Camera, Share2, Lock, Plug, CheckCircle, XCircle } from 'lucide-react'
+import { Save, Upload, Building2, Palette, User, Bell, Camera, Share2, Lock, Plug, CheckCircle, XCircle, MessageSquare, RefreshCw, Smartphone, Wifi, WifiOff, KeyRound } from 'lucide-react'
 import { createClient } from '@/lib/supabase/client'
 import { useRoleGuard } from '@/hooks/use-role-guard'
 import type { NotificationPreferences } from '@/types/database'
 
-type TabId = 'org' | 'appearance' | 'profile' | 'notifications' | 'social' | 'integrations'
+type TabId = 'org' | 'appearance' | 'profile' | 'notifications' | 'social' | 'whatsapp' | 'integrations'
 
 const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'org', label: 'Organização', icon: Building2 },
@@ -20,6 +20,7 @@ const TABS: { id: TabId; label: string; icon: React.ElementType }[] = [
   { id: 'profile', label: 'Perfil', icon: User },
   { id: 'notifications', label: 'Notificações', icon: Bell },
   { id: 'social', label: 'Redes Sociais', icon: Share2 },
+  { id: 'whatsapp', label: 'WhatsApp', icon: MessageSquare },
   { id: 'integrations', label: 'Integrações', icon: Plug },
 ]
 
@@ -66,6 +67,19 @@ export default function ConfiguracoesPage() {
   // Integrations state
   const [integrations, setIntegrations] = useState<{ resend: boolean; n8n: boolean; uploadPost: boolean; stripe: boolean } | null>(null)
   const [loadingIntegrations, setLoadingIntegrations] = useState(false)
+
+  // WhatsApp / Z-API state
+  const [zapiLoading, setZapiLoading] = useState(false)
+  const [zapiHasCredentials, setZapiHasCredentials] = useState(false)
+  const [zapiInstanceId, setZapiInstanceId] = useState('')
+  const [zapiToken, setZapiToken] = useState('')
+  const [zapiStatus, setZapiStatus] = useState<'connected' | 'disconnected' | 'qr_code' | null>(null)
+  const [zapiPhone, setZapiPhone] = useState<string | null>(null)
+  const [zapiQrCode, setZapiQrCode] = useState<string | null>(null)
+  const [zapiConnecting, setZapiConnecting] = useState(false)
+  const [zapiSavingCredentials, setZapiSavingCredentials] = useState(false)
+  const [zapiShowCredentialsForm, setZapiShowCredentialsForm] = useState(false)
+  const zapiPollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
   // Social accounts state
   const [connectUrl, setConnectUrl] = useState<string | null>(null)
@@ -277,6 +291,107 @@ export default function ConfiguracoesPage() {
         .finally(() => setLoadingSocial(false))
     }
   }, [activeTab, selectedCliente, socialRetry, toast])
+
+  // Load WhatsApp credentials when tab opens
+  useEffect(() => {
+    if (activeTab === 'whatsapp') {
+      setZapiLoading(true)
+      fetch('/api/whatsapp/credentials')
+        .then(res => res.json())
+        .then(data => {
+          setZapiHasCredentials(data.hasCredentials || false)
+          setZapiInstanceId(data.instanceId || '')
+          setZapiStatus(data.status || 'disconnected')
+          setZapiPhone(data.phone || null)
+        })
+        .catch(() => toast('Erro ao carregar status WhatsApp', 'error'))
+        .finally(() => setZapiLoading(false))
+    }
+  }, [activeTab, toast])
+
+  // Stop polling when leaving WhatsApp tab
+  useEffect(() => {
+    if (activeTab !== 'whatsapp') {
+      if (zapiPollRef.current) {
+        clearInterval(zapiPollRef.current)
+        zapiPollRef.current = null
+      }
+      if (zapiConnecting) {
+        setZapiConnecting(false)
+        setZapiQrCode(null)
+      }
+    }
+  }, [activeTab, zapiConnecting])
+
+  async function handleZapiSaveCredentials(e: React.FormEvent) {
+    e.preventDefault()
+    if (!zapiInstanceId.trim() || !zapiToken.trim()) {
+      toast('Preencha Instance ID e Token', 'error')
+      return
+    }
+    setZapiSavingCredentials(true)
+    const res = await fetch('/api/whatsapp/credentials', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ instanceId: zapiInstanceId.trim(), token: zapiToken.trim() }),
+    })
+    const data = await res.json()
+    if (!res.ok) {
+      toast(data.error || 'Erro ao salvar credenciais', 'error')
+    } else {
+      toast('Credenciais salvas!', 'success')
+      setZapiHasCredentials(true)
+      setZapiShowCredentialsForm(false)
+      setZapiToken('') // clear token from UI
+      setZapiStatus('disconnected')
+    }
+    setZapiSavingCredentials(false)
+  }
+
+  async function handleZapiConnect() {
+    setZapiConnecting(true)
+    setZapiQrCode(null)
+
+    // Fetch QR code
+    const fetchQr = async () => {
+      const res = await fetch('/api/whatsapp/qr')
+      const data = await res.json()
+      if (res.ok && data.qrCode) setZapiQrCode(data.qrCode)
+    }
+    await fetchQr()
+
+    // Poll status every 5s
+    zapiPollRef.current = setInterval(async () => {
+      const res = await fetch('/api/whatsapp/status')
+      const data = await res.json()
+      if (data.connected) {
+        clearInterval(zapiPollRef.current!)
+        zapiPollRef.current = null
+        setZapiConnecting(false)
+        setZapiQrCode(null)
+        setZapiStatus('connected')
+        setZapiPhone(data.phone || null)
+        toast('WhatsApp conectado com sucesso!', 'success')
+      }
+    }, 5000)
+
+    // Refresh QR every 25s (Z-API QR expires ~30s)
+    const qrRefresh = setInterval(() => {
+      if (zapiConnecting) fetchQr()
+    }, 25000)
+    setTimeout(() => clearInterval(qrRefresh), 5 * 60 * 1000) // stop after 5 min
+  }
+
+  async function handleZapiDisconnect() {
+    const res = await fetch('/api/whatsapp/disconnect', { method: 'POST' })
+    if (res.ok) {
+      setZapiStatus('disconnected')
+      setZapiPhone(null)
+      toast('WhatsApp desconectado', 'success')
+    } else {
+      toast('Erro ao desconectar', 'error')
+    }
+  }
 
   if (roleLoading || !allowed) {
     return (
@@ -635,6 +750,200 @@ export default function ConfiguracoesPage() {
         </Card>
       )}
 
+      {/* Tab: WhatsApp */}
+      {activeTab === 'whatsapp' && (
+        <Card>
+          <div className="px-6 py-4 border-b border-zinc-100">
+            <h3 className="font-semibold text-zinc-900 flex items-center gap-2">
+              <MessageSquare className="w-5 h-5 text-green-600" /> WhatsApp
+            </h3>
+            <p className="text-sm text-zinc-500 mt-1">
+              Conecte o WhatsApp da sua agência via Z-API para enviar notificações de aprovação
+            </p>
+          </div>
+          <CardContent>
+            {zapiLoading ? (
+              <div className="flex items-center justify-center py-12">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-green-600" />
+              </div>
+            ) : (
+              <div className="space-y-6">
+
+                {/* Status banner */}
+                <div className={`flex items-center gap-3 p-4 rounded-xl border ${
+                  zapiStatus === 'connected'
+                    ? 'bg-green-50 border-green-200'
+                    : 'bg-zinc-50 border-zinc-200'
+                }`}>
+                  {zapiStatus === 'connected' ? (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-green-100 flex items-center justify-center flex-shrink-0">
+                        <Wifi className="w-5 h-5 text-green-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-green-800 text-sm">WhatsApp conectado</div>
+                        {zapiPhone && (
+                          <div className="text-xs text-green-600 mt-0.5 flex items-center gap-1">
+                            <Smartphone className="w-3.5 h-3.5" />
+                            {zapiPhone}
+                          </div>
+                        )}
+                      </div>
+                      <button
+                        onClick={handleZapiDisconnect}
+                        className="text-xs text-red-500 hover:text-red-700 border border-red-200 rounded-lg px-3 py-1.5 hover:bg-red-50 transition-colors"
+                      >
+                        Desconectar
+                      </button>
+                    </>
+                  ) : (
+                    <>
+                      <div className="w-10 h-10 rounded-full bg-zinc-200 flex items-center justify-center flex-shrink-0">
+                        <WifiOff className="w-5 h-5 text-zinc-500" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="font-medium text-zinc-700 text-sm">WhatsApp desconectado</div>
+                        <div className="text-xs text-zinc-500 mt-0.5">
+                          {zapiHasCredentials
+                            ? 'Clique em "Conectar" para gerar o QR code'
+                            : 'Configure suas credenciais Z-API abaixo'}
+                        </div>
+                      </div>
+                    </>
+                  )}
+                </div>
+
+                {/* QR Code section */}
+                {zapiConnecting && (
+                  <div className="flex flex-col items-center py-8 gap-4">
+                    <div className="text-sm font-medium text-zinc-700">
+                      Abra o WhatsApp → Dispositivos Vinculados → Vincular Dispositivo
+                    </div>
+                    {zapiQrCode ? (
+                      <div className="border-4 border-zinc-200 rounded-2xl p-3 bg-white shadow-lg">
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={zapiQrCode.startsWith('data:') ? zapiQrCode : `data:image/png;base64,${zapiQrCode}`}
+                          alt="QR Code WhatsApp"
+                          className="w-56 h-56"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-56 h-56 bg-zinc-100 rounded-2xl flex items-center justify-center">
+                        <RefreshCw className="w-8 h-8 text-zinc-400 animate-spin" />
+                      </div>
+                    )}
+                    <div className="flex items-center gap-2 text-xs text-zinc-500">
+                      <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse" />
+                      Aguardando escaneamento...
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (zapiPollRef.current) {
+                          clearInterval(zapiPollRef.current)
+                          zapiPollRef.current = null
+                        }
+                        setZapiConnecting(false)
+                        setZapiQrCode(null)
+                      }}
+                      className="text-xs text-zinc-500 hover:text-zinc-700 underline"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
+
+                {/* Connect button */}
+                {!zapiConnecting && zapiStatus !== 'connected' && zapiHasCredentials && (
+                  <Button variant="primary" onClick={handleZapiConnect} className="bg-green-600 hover:bg-green-700 text-white">
+                    <Smartphone className="w-4 h-4" />
+                    Conectar WhatsApp
+                  </Button>
+                )}
+
+                {/* Credentials section */}
+                <div className="border-t border-zinc-100 pt-6">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <div className="text-sm font-medium text-zinc-900 flex items-center gap-2">
+                        <KeyRound className="w-4 h-4 text-zinc-500" />
+                        Credenciais Z-API
+                      </div>
+                      <div className="text-xs text-zinc-500 mt-0.5">
+                        {zapiHasCredentials
+                          ? `Instance ID: ${zapiInstanceId || '—'}`
+                          : 'Informe as credenciais da sua instância Z-API'}
+                      </div>
+                    </div>
+                    {zapiHasCredentials && !zapiShowCredentialsForm && (
+                      <button
+                        onClick={() => setZapiShowCredentialsForm(true)}
+                        className="text-xs text-blue-600 hover:underline"
+                      >
+                        Alterar credenciais
+                      </button>
+                    )}
+                  </div>
+
+                  {(!zapiHasCredentials || zapiShowCredentialsForm) && (
+                    <form onSubmit={handleZapiSaveCredentials} className="space-y-4">
+                      <div>
+                        <Label>Instance ID</Label>
+                        <Input
+                          value={zapiInstanceId}
+                          onChange={e => setZapiInstanceId(e.target.value)}
+                          placeholder="Ex: 3D9F5B8C42E1..."
+                          className="mt-1 font-mono text-sm"
+                          required
+                        />
+                      </div>
+                      <div>
+                        <Label>Security Token</Label>
+                        <Input
+                          type="password"
+                          value={zapiToken}
+                          onChange={e => setZapiToken(e.target.value)}
+                          placeholder="Token da instância Z-API"
+                          className="mt-1 font-mono text-sm"
+                          required
+                        />
+                        <p className="text-xs text-zinc-400 mt-1">
+                          Encontre em: Z-API Dashboard → sua instância → Credenciais
+                        </p>
+                      </div>
+                      <div className="flex gap-2">
+                        <Button type="submit" variant="primary" disabled={zapiSavingCredentials}>
+                          <Save className="w-4 h-4" />
+                          {zapiSavingCredentials ? 'Salvando...' : 'Salvar Credenciais'}
+                        </Button>
+                        {zapiHasCredentials && (
+                          <Button type="button" variant="outline" onClick={() => setZapiShowCredentialsForm(false)}>
+                            Cancelar
+                          </Button>
+                        )}
+                      </div>
+                    </form>
+                  )}
+                </div>
+
+                {/* Z-API info box */}
+                {!zapiHasCredentials && (
+                  <div className="bg-blue-50 border border-blue-100 rounded-xl p-4 text-sm text-blue-700">
+                    <div className="font-medium mb-1">Como obter suas credenciais Z-API?</div>
+                    <ol className="list-decimal list-inside space-y-1 text-blue-600 text-xs">
+                      <li>Acesse <strong>developer.z-api.io</strong> e crie uma conta</li>
+                      <li>Crie uma nova instância no painel</li>
+                      <li>Copie o <strong>Instance ID</strong> e o <strong>Security Token</strong></li>
+                      <li>Cole aqui e clique em Salvar</li>
+                    </ol>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Tab: Integrações */}
       {activeTab === 'integrations' && (
         <Card>
@@ -655,7 +964,7 @@ export default function ConfiguracoesPage() {
               <div className="space-y-3">
                 {([
                   { key: 'resend' as const, name: 'Email', provider: 'Resend', desc: 'Envio de notificações por email' },
-                  { key: 'n8n' as const, name: 'WhatsApp', provider: 'n8n Webhook', desc: 'Notificações via WhatsApp' },
+                  { key: 'n8n' as const, name: 'WhatsApp (n8n)', provider: 'n8n Webhook', desc: 'Notificações via WhatsApp (fallback)' },
                   { key: 'uploadPost' as const, name: 'Agendamento Social', provider: 'Upload-Post', desc: 'Publicação agendada em redes sociais' },
                   { key: 'stripe' as const, name: 'Pagamentos', provider: 'Stripe', desc: 'Cobranças e assinaturas' },
                 ] as const).map(item => (

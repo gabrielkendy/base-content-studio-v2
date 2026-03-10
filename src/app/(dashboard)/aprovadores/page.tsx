@@ -10,7 +10,10 @@ import { Modal } from '@/components/ui/modal'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
-import { Plus, Pencil, Trash2, Phone, Mail, Building2, Users, Bell, BellOff, Edit2, CheckCircle2 } from 'lucide-react'
+import { Plus, Pencil, Trash2, Phone, Mail, Building2, Users, Bell, BellOff, Edit2, CheckCircle2, Send, MessageCircle, AtSign } from 'lucide-react'
+
+// Canais de notificação disponíveis
+type CanalNotificacao = 'whatsapp' | 'email' | 'telegram'
 
 interface Aprovador {
   id: string
@@ -18,11 +21,13 @@ interface Aprovador {
   nome: string
   email: string | null
   whatsapp: string
+  telegram_id: string | null
   pais: string
   tipo: 'interno' | 'cliente' | 'designer'
   nivel: number
   pode_editar_legenda: boolean
   recebe_notificacao: boolean
+  canais_notificacao: CanalNotificacao[]
   ativo: boolean
   created_at: string
   empresas?: {
@@ -53,10 +58,12 @@ export default function AprovadoresPage() {
     nome: '',
     email: '',
     whatsapp: '',
+    telegram_id: '',
     tipo: 'interno' as 'interno' | 'cliente' | 'designer',
     nivel: 1,
     pode_editar_legenda: false,
     recebe_notificacao: true,
+    canais_notificacao: ['whatsapp'] as CanalNotificacao[],
     ativo: true
   })
 
@@ -108,11 +115,13 @@ export default function AprovadoresPage() {
       nome: form.nome,
       email: form.email || null,
       whatsapp: whatsappFormatado.startsWith('55') ? whatsappFormatado : `55${whatsappFormatado}`,
+      telegram_id: form.telegram_id || null,
       pais: '+55',
       tipo: form.tipo,
       nivel: form.nivel,
       pode_editar_legenda: form.pode_editar_legenda,
       recebe_notificacao: form.recebe_notificacao,
+      canais_notificacao: form.canais_notificacao,
       ativo: form.ativo
     }
 
@@ -166,10 +175,12 @@ export default function AprovadoresPage() {
       nome: aprovador.nome,
       email: aprovador.email || '',
       whatsapp: aprovador.whatsapp.replace(/^55/, ''),
+      telegram_id: aprovador.telegram_id || '',
       tipo: aprovador.tipo,
       nivel: aprovador.nivel,
       pode_editar_legenda: aprovador.pode_editar_legenda,
       recebe_notificacao: aprovador.recebe_notificacao,
+      canais_notificacao: aprovador.canais_notificacao || ['whatsapp'],
       ativo: aprovador.ativo
     })
     setDialogOpen(true)
@@ -182,12 +193,29 @@ export default function AprovadoresPage() {
       nome: '',
       email: '',
       whatsapp: '',
+      telegram_id: '',
       tipo: 'interno',
       nivel: 1,
       pode_editar_legenda: false,
       recebe_notificacao: true,
+      canais_notificacao: ['whatsapp'],
       ativo: true
     })
+  }
+
+  function toggleCanal(canal: CanalNotificacao) {
+    setForm(prev => {
+      const canais = prev.canais_notificacao.includes(canal)
+        ? prev.canais_notificacao.filter(c => c !== canal)
+        : [...prev.canais_notificacao, canal]
+      return { ...prev, canais_notificacao: canais }
+    })
+  }
+
+  const canaisConfig = {
+    whatsapp: { icon: MessageCircle, label: 'WhatsApp', color: 'bg-green-500', emoji: '💬' },
+    email: { icon: Mail, label: 'Email', color: 'bg-blue-500', emoji: '📧' },
+    telegram: { icon: Send, label: 'Telegram', color: 'bg-sky-500', emoji: '✈️' }
   }
 
   const tipoLabels = {
@@ -328,18 +356,27 @@ export default function AprovadoresPage() {
                             </span>
                           )}
                         </div>
-                        <div className="flex items-center gap-2 mt-2">
-                          {apr.recebe_notificacao ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-green-600 bg-green-50 px-2 py-0.5 rounded-full">
-                              <Bell className="w-3 h-3" /> Notificações
-                            </span>
+                        <div className="flex items-center gap-2 mt-2 flex-wrap">
+                          {apr.recebe_notificacao && apr.canais_notificacao?.length > 0 ? (
+                            apr.canais_notificacao.map(canal => (
+                              <span 
+                                key={canal}
+                                className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${
+                                  canal === 'whatsapp' ? 'text-green-600 bg-green-50' :
+                                  canal === 'email' ? 'text-blue-600 bg-blue-50' :
+                                  'text-sky-600 bg-sky-50'
+                                }`}
+                              >
+                                {canaisConfig[canal].emoji} {canaisConfig[canal].label}
+                              </span>
+                            ))
                           ) : (
                             <span className="inline-flex items-center gap-1 text-[10px] text-zinc-400 bg-zinc-100 px-2 py-0.5 rounded-full">
                               <BellOff className="w-3 h-3" /> Sem notificações
                             </span>
                           )}
                           {apr.pode_editar_legenda && (
-                            <span className="inline-flex items-center gap-1 text-[10px] text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full">
+                            <span className="inline-flex items-center gap-1 text-[10px] text-purple-600 bg-purple-50 px-2 py-0.5 rounded-full">
                               <Edit2 className="w-3 h-3" /> Pode editar
                             </span>
                           )}
@@ -459,15 +496,68 @@ export default function AprovadoresPage() {
             </div>
           </div>
 
-          {/* Email */}
-          <div>
-            <Label>E-mail</Label>
-            <Input 
-              type="email"
-              value={form.email} 
-              onChange={(e) => setForm({...form, email: e.target.value})}
-              placeholder="email@exemplo.com"
-            />
+          {/* Email e Telegram */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>E-mail</Label>
+              <Input 
+                type="email"
+                value={form.email} 
+                onChange={(e) => setForm({...form, email: e.target.value})}
+                placeholder="email@exemplo.com"
+              />
+            </div>
+            <div>
+              <Label>Telegram ID/Username</Label>
+              <Input 
+                value={form.telegram_id} 
+                onChange={(e) => setForm({...form, telegram_id: e.target.value})}
+                placeholder="@usuario ou ID numérico"
+              />
+            </div>
+          </div>
+
+          {/* Canais de Notificação */}
+          <div className="space-y-3 pt-3 border-t">
+            <div>
+              <Label className="mb-3 block">Canais de Notificação</Label>
+              <p className="text-xs text-zinc-500 mb-3">Selecione por onde este aprovador receberá notificações</p>
+              <div className="flex gap-2 flex-wrap">
+                {(['whatsapp', 'email', 'telegram'] as CanalNotificacao[]).map(canal => {
+                  const config = canaisConfig[canal]
+                  const isActive = form.canais_notificacao.includes(canal)
+                  const isDisabled = 
+                    (canal === 'whatsapp' && !form.whatsapp) ||
+                    (canal === 'email' && !form.email) ||
+                    (canal === 'telegram' && !form.telegram_id)
+                  
+                  return (
+                    <button
+                      key={canal}
+                      type="button"
+                      disabled={isDisabled}
+                      onClick={() => !isDisabled && toggleCanal(canal)}
+                      className={`flex items-center gap-2 px-4 py-2.5 rounded-lg border-2 transition-all ${
+                        isActive 
+                          ? 'border-blue-500 bg-blue-50 text-blue-700' 
+                          : isDisabled
+                            ? 'border-zinc-200 bg-zinc-50 text-zinc-300 cursor-not-allowed'
+                            : 'border-zinc-200 bg-white text-zinc-600 hover:border-zinc-300'
+                      }`}
+                    >
+                      <span className={`w-6 h-6 rounded-full flex items-center justify-center text-white text-xs ${isActive ? config.color : 'bg-zinc-300'}`}>
+                        {config.emoji}
+                      </span>
+                      <span className="font-medium text-sm">{config.label}</span>
+                      {isActive && <span className="text-blue-500">✓</span>}
+                    </button>
+                  )
+                })}
+              </div>
+              <p className="text-[10px] text-zinc-400 mt-2">
+                💡 Preencha WhatsApp, Email ou Telegram acima para habilitar o canal
+              </p>
+            </div>
           </div>
 
           {/* Configurações */}
@@ -475,7 +565,7 @@ export default function AprovadoresPage() {
             <div className="flex items-center justify-between py-2">
               <div>
                 <span className="text-sm font-medium text-zinc-900">Receber notificações</span>
-                <p className="text-xs text-zinc-400">Receber mensagens de aprovação</p>
+                <p className="text-xs text-zinc-400">Ativar/desativar todas as notificações</p>
               </div>
               <button
                 type="button"

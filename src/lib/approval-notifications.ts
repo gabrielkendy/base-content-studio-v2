@@ -1,5 +1,5 @@
 // Serviço de Notificações para o fluxo de aprovação
-// Envia WhatsApp e Email via n8n webhook
+// Envia WhatsApp, Email e Telegram via n8n webhook
 
 const N8N_WEBHOOK_URL = process.env.N8N_NOTIFICACAO_WEBHOOK || 
   'https://agenciabase.app.n8n.cloud/webhook/base-content/notificacao'
@@ -11,12 +11,16 @@ export type TipoNotificacao =
   | 'aprovado_final'     // Todos níveis aprovaram
   | 'cliente_aprovado'   // Cliente aprovou, perguntar sobre agendamento
 
+export type CanalNotificacao = 'whatsapp' | 'email' | 'telegram'
+
 interface Aprovador {
   nome: string
   whatsapp: string
   email: string | null
+  telegram_id: string | null
   tipo: 'interno' | 'cliente' | 'designer'
   pode_editar_legenda: boolean
+  canais_notificacao: CanalNotificacao[]
 }
 
 interface ConteudoInfo {
@@ -162,6 +166,54 @@ export const assuntosEmail: Record<TipoNotificacao, (conteudo: ConteudoInfo, emp
   ajuste_solicitado: (c, e) => `🔄 Ajuste: ${c.titulo} - ${e.nome}`,
   aprovado_final: (c, e) => `🎉 Aprovado: ${c.titulo} - ${e.nome}`,
   cliente_aprovado: (c, e) => `✅ Cliente aprovou: ${c.titulo} - ${e.nome}`
+}
+
+/**
+ * Templates de mensagem Telegram por tipo (formato Markdown)
+ */
+export const templatesTelegram: Record<TipoNotificacao, (conteudo: ConteudoInfo, empresa: EmpresaInfo) => string> = {
+  novo_conteudo: (c, e) => `🆕 *Novo conteúdo para aprovação*
+
+📌 *${c.titulo || 'Sem título'}*
+🏢 Cliente: ${e.nome}
+
+${c.legenda ? '📝 ' + c.legenda.substring(0, 150) + '...' : ''}
+
+[👉 Aprovar](${c.link_aprovacao})`,
+
+  nivel_aprovado: (c, e) => `✅ *Conteúdo passou para seu nível*
+
+📌 *${c.titulo || 'Sem título'}*
+🏢 Cliente: ${e.nome}
+
+O conteúdo foi aprovado pelo nível anterior e precisa da sua aprovação.
+
+[👉 Aprovar](${c.link_aprovacao})`,
+
+  ajuste_solicitado: (c, e) => `🔄 *Ajuste solicitado*
+
+📌 *${c.titulo || 'Sem título'}*
+🏢 Cliente: ${e.nome}
+
+Foi solicitado um ajuste neste conteúdo.
+
+[👉 Ver detalhes](${c.link_aprovacao})`,
+
+  aprovado_final: (c, e) => `🎉 *Conteúdo aprovado!*
+
+📌 *${c.titulo || 'Sem título'}*
+🏢 Cliente: ${e.nome}
+
+O conteúdo foi aprovado por todos os níveis e está pronto para publicação!`,
+
+  cliente_aprovado: (c, e) => `✅ *Cliente aprovou o conteúdo!*
+
+📌 *${c.titulo || 'Sem título'}*
+🏢 Cliente: ${e.nome}
+
+Deseja agendar a publicação agora?
+
+[👉 Agendar](${c.link_aprovacao})`
 }
 
 /**

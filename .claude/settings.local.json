@@ -23,7 +23,17 @@
       "Bash(do:*)",
       "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app:*)",
       "Bash(find C:\\\\Users\\\\Gabriel\\\\base-content-studio-v2\\\\src\\\\app\\\\\\(public\\):*)",
-      "Bash(find:*)"
+      "Bash(find:*)",
+      "Bash(npm run:*)",
+      "Bash(__NEW_LINE_74ada615618fc691__ curl:*)",
+      "Bash(python3:*)",
+      "Bash(__NEW_LINE_bc7c5ddea5a295fe__ curl:*)",
+      "Bash(python:*)",
+      "Bash(head:*)",
+      "Bash(__NEW_LINE_018e91448da7ca6e__ curl:*)",
+      "Bash(pip install:*)",
+      "Bash(npx:*)",
+      "Bash(/tmp/test-payload.json:*)"
     ]
   }
 }

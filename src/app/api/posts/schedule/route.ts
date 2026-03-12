@@ -43,15 +43,16 @@ export async function POST(request: NextRequest) {
     if (!membership) return NextResponse.json({ error: 'No active membership' }, { status: 403 })
 
     const body = await request.json()
-    const { 
-      conteudoId, 
-      platforms, 
-      scheduledDate, 
+    const {
+      conteudoId,
+      platforms,
+      scheduledDate,
       scheduledTime,
       timezone = 'America/Sao_Paulo',
       title,
       description,
       firstComment,
+      capaUrl,
     } = body
 
     if (!conteudoId) return NextResponse.json({ error: 'conteudoId is required' }, { status: 400 })
@@ -162,8 +163,11 @@ export async function POST(request: NextRequest) {
 
     // Add media
     if (isVideo) {
-      // Video upload via URL
       formData.append('video', firstMedia)
+      // Thumbnail/capa para vídeo (YouTube, TikTok, etc.)
+      if (capaUrl) {
+        formData.append('thumbnail', capaUrl)
+      }
     } else {
       // Image(s) - for carousels, add multiple
       for (const url of mediaUrls) {

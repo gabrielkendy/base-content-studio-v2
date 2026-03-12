@@ -341,7 +341,7 @@ export async function POST(request: NextRequest) {
                   link_aprovacao: `${APP_URL}/workflow?content=${conteudo.id}`,
                 },
                 empresa: empresaInfo,
-                aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+                aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda, telegram_id: a.telegram_id ?? null, canais_notificacao: a.canais_notificacao ?? ['whatsapp'] })),
                 nivel: 0,
                 timestamp: new Date().toISOString(),
               })
@@ -367,7 +367,7 @@ export async function POST(request: NextRequest) {
                   link_aprovacao: `${APP_URL}/workflow?content=${conteudo.id}`,
                 },
                 empresa: empresaInfo,
-                aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda })),
+                aprovadores: aprovadores.map((a: any) => ({ nome: a.nome, whatsapp: a.whatsapp, email: a.email, tipo: a.tipo, pode_editar_legenda: a.pode_editar_legenda, telegram_id: a.telegram_id ?? null, canais_notificacao: a.canais_notificacao ?? ['whatsapp'] })),
                 nivel: 0,
                 timestamp: new Date().toISOString(),
               })

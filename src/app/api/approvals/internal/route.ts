@@ -1,5 +1,5 @@
 import { createServiceClient } from '@/lib/supabase/server'
-import { dispararNotificacao, getInternalAppUrl, getPublicBaseUrl } from '@/lib/approval-notifications'
+import { dispararNotificacao, getInternalAppUrl, getPublicBaseUrl, type CanalNotificacao } from '@/lib/approval-notifications'
 import { dispatchWebhookEvent } from '@/lib/webhook-dispatch'
 import { generateApprovalToken } from '@/lib/tokens'
 import { NextRequest, NextResponse } from 'next/server'
@@ -162,10 +162,12 @@ export async function POST(request: NextRequest) {
                 link_aprovacao: workflowLink,
               },
               empresa: empresaData,
-              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean; telegram_id?: string | null; canais_notificacao?: string[] }) => ({
                 nome: a.nome, whatsapp: a.whatsapp, email: a.email,
                 tipo: a.tipo as 'interno' | 'cliente' | 'designer',
                 pode_editar_legenda: a.pode_editar_legenda,
+                telegram_id: a.telegram_id ?? null,
+                canais_notificacao: (a.canais_notificacao ?? ['whatsapp']) as CanalNotificacao[],
               })),
               nivel: 1,
               timestamp: new Date().toISOString(),
@@ -203,10 +205,12 @@ export async function POST(request: NextRequest) {
                 link_aprovacao: clientLink,
               },
               empresa: empresaData,
-              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean; telegram_id?: string | null; canais_notificacao?: string[] }) => ({
                 nome: a.nome, whatsapp: a.whatsapp, email: a.email,
                 tipo: a.tipo as 'interno' | 'cliente' | 'designer',
                 pode_editar_legenda: a.pode_editar_legenda,
+                telegram_id: a.telegram_id ?? null,
+                canais_notificacao: (a.canais_notificacao ?? ['whatsapp']) as CanalNotificacao[],
               })),
               nivel: 1,
               timestamp: new Date().toISOString(),
@@ -232,10 +236,12 @@ export async function POST(request: NextRequest) {
                 link_aprovacao: workflowLink,
               },
               empresa: empresaData,
-              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+              aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean; telegram_id?: string | null; canais_notificacao?: string[] }) => ({
                 nome: a.nome, whatsapp: a.whatsapp, email: a.email,
                 tipo: a.tipo as 'interno' | 'cliente' | 'designer',
                 pode_editar_legenda: a.pode_editar_legenda,
+                telegram_id: a.telegram_id ?? null,
+                canais_notificacao: (a.canais_notificacao ?? ['whatsapp']) as CanalNotificacao[],
               })),
               nivel: 1,
               timestamp: new Date().toISOString(),

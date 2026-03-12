@@ -25,6 +25,7 @@ import {
   Check,
   Sparkles,
 } from 'lucide-react'
+import { CoverPicker } from '@/components/cover-picker'
 import type { Cliente } from '@/types/database'
 
 export default function NovaDemandaPage() {
@@ -44,6 +45,7 @@ export default function NovaDemandaPage() {
   const [tagInput, setTagInput] = useState('')
   const [briefing, setBriefing] = useState('')
   const [arquivosRef, setArquivosRef] = useState<File[]>([])
+  const [capaUrl, setCapaUrl] = useState<string | null>(null)
 
   // Data
   const [clientes, setClientes] = useState<Cliente[]>([])
@@ -173,6 +175,7 @@ export default function NovaDemandaPage() {
         prompts_imagem: [],
         prompts_video: [],
         midia_urls: [],
+        capa_url: capaUrl || null,
         assigned_to: member?.user_id || null,
       }, { select: '*', single: true })
 
@@ -432,6 +435,23 @@ export default function NovaDemandaPage() {
             placeholder="Descreva o que deve ser criado, referências, tom de voz, objetivo..."
             rows={6}
             className="w-full px-4 py-3 border border-gray-300 rounded-xl focus:outline-none focus:ring-2 focus:ring-blue-500 resize-none"
+          />
+        </Card>
+
+        {/* Imagem de Capa */}
+        <Card className="p-4 sm:p-6 border-0 shadow-md">
+          <label className="block text-sm font-semibold text-gray-700 mb-1">
+            <ImageIcon className="w-4 h-4 inline mr-2" />
+            Imagem de Capa
+          </label>
+          <p className="text-xs text-gray-400 mb-3">
+            Faça upload de uma foto ou extraia um frame do vídeo de referência como capa.
+          </p>
+          <CoverPicker
+            orgId={org?.id}
+            value={capaUrl}
+            onChange={setCapaUrl}
+            videoSource={arquivosRef.find(f => f.type.startsWith('video/')) ?? null}
           />
         </Card>
 

@@ -1528,6 +1528,9 @@ export default function ConteudoDetailPage() {
           conteudoLegenda={conteudo.legenda || undefined}
           clienteSlug={cliente.slug}
           onScheduled={loadData}
+          midiaUrls={conteudo.midia_urls ?? []}
+          capaUrlInicial={conteudo.capa_url ?? null}
+          orgId={org?.id}
         />
       )}
     </div>

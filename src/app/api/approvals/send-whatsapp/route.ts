@@ -2,7 +2,7 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { NextRequest, NextResponse } from 'next/server'
-import { dispararNotificacao, getAppUrl, templatesWhatsApp } from '@/lib/approval-notifications'
+import { dispararNotificacao, getAppUrl, templatesWhatsApp, type CanalNotificacao } from '@/lib/approval-notifications'
 import { zapiSendText } from '@/lib/zapi'
 import { generateApprovalToken } from '@/lib/tokens'
 
@@ -121,12 +121,14 @@ export async function POST(request: NextRequest) {
         tipo: 'nivel_aprovado',
         conteudo: conteudoInfo,
         empresa: empresaInfo,
-        aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean }) => ({
+        aprovadores: aprovadores.map((a: { nome: string; whatsapp: string; email: string | null; tipo: string; pode_editar_legenda: boolean; telegram_id?: string | null; canais_notificacao?: string[] }) => ({
           nome: a.nome,
           whatsapp: a.whatsapp,
           email: a.email,
           tipo: a.tipo as 'interno' | 'cliente' | 'designer',
           pode_editar_legenda: a.pode_editar_legenda,
+          telegram_id: a.telegram_id ?? null,
+          canais_notificacao: (a.canais_notificacao ?? ['whatsapp']) as CanalNotificacao[],
         })),
         nivel: 0,
         timestamp: new Date().toISOString(),

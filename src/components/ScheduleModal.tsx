@@ -7,6 +7,7 @@ import { Input, Label, Textarea } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { Calendar, Clock, Send, Instagram, Youtube, Facebook, Zap, Hash, AlertCircle } from 'lucide-react'
+import { CoverPicker } from '@/components/cover-picker'
 
 interface SocialAccount {
   platform: string
@@ -22,6 +23,9 @@ interface ScheduleModalProps {
   conteudoLegenda?: string
   clienteSlug: string
   onScheduled?: () => void
+  midiaUrls?: string[]
+  capaUrlInicial?: string | null
+  orgId?: string
 }
 
 const PLATFORMS = [
@@ -42,6 +46,9 @@ export function ScheduleModal({
   conteudoLegenda,
   clienteSlug,
   onScheduled,
+  midiaUrls = [],
+  capaUrlInicial,
+  orgId,
 }: ScheduleModalProps) {
   const { toast } = useToast()
   const [loading, setLoading] = useState(false)
@@ -52,6 +59,7 @@ export function ScheduleModal({
   const [scheduledTime, setScheduledTime] = useState('12:00')
   const [title, setTitle] = useState('')
   const [firstComment, setFirstComment] = useState('')
+  const [capaUrl, setCapaUrl] = useState<string | null>(capaUrlInicial ?? null)
 
   useEffect(() => {
     if (open && clienteSlug) {
@@ -120,6 +128,7 @@ export function ScheduleModal({
           scheduledTime,
           title,
           firstComment,
+          capaUrl: capaUrl || undefined,
         }),
       })
 
@@ -250,6 +259,22 @@ export function ScheduleModal({
               {time}
             </button>
           ))}
+        </div>
+
+        {/* Imagem de Capa */}
+        <div>
+          <Label className="mb-1 block">Imagem de Capa</Label>
+          <p className="text-xs text-zinc-400 mb-3">
+            {/\.(mp4|webm|mov)(\?|$)/i.test(midiaUrls[0] ?? '')
+              ? 'Faça upload ou escolha um frame do vídeo como thumbnail.'
+              : 'Faça upload de uma imagem de capa para este post.'}
+          </p>
+          <CoverPicker
+            orgId={orgId}
+            value={capaUrl}
+            onChange={setCapaUrl}
+            videoSource={/\.(mp4|webm|mov)(\?|$)/i.test(midiaUrls[0] ?? '') ? midiaUrls[0] : null}
+          />
         </div>
 
         {/* Caption override */}

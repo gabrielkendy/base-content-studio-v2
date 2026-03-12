@@ -261,6 +261,7 @@ export interface Conteudo {
   sub_status: string | null
   ordem: number
   midia_urls: string[]
+  capa_url: string | null
   canais: string[]
   assigned_to: string | null
   solicitacao_id?: string

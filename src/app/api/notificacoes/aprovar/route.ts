@@ -77,12 +77,14 @@ export async function POST(request: NextRequest) {
         nome: empresaData?.nome || '',
         slug: empresaData?.slug || ''
       },
-      aprovadores: aprovadores.map(a => ({
+      aprovadores: aprovadores.map((a: any) => ({
         nome: a.nome,
         whatsapp: a.whatsapp,
         email: a.email,
         tipo: a.tipo,
-        pode_editar_legenda: a.pode_editar_legenda
+        pode_editar_legenda: a.pode_editar_legenda,
+        telegram_id: a.telegram_id ?? null,
+        canais_notificacao: a.canais_notificacao ?? ['whatsapp'],
       })),
       nivel,
       timestamp: new Date().toISOString()

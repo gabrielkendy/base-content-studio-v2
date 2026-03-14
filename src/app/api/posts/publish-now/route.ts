@@ -14,6 +14,7 @@ interface PublishNowRequest {
   caption: string
   media_urls?: string[]
   hashtags?: string[]
+  cover_url?: string   // thumbnail/capa para vídeos
 }
 
 async function getAuthUser() {
@@ -74,13 +75,14 @@ export async function POST(request: NextRequest) {
     }
 
     const body: PublishNowRequest = await request.json()
-    const { 
-      cliente_id, 
-      conteudo_id, 
-      platforms, 
-      caption, 
-      media_urls = [], 
-      hashtags = []
+    const {
+      cliente_id,
+      conteudo_id,
+      platforms,
+      caption,
+      media_urls = [],
+      hashtags = [],
+      cover_url,
     } = body
 
     // Support both old format (string[]) and new format (object[])
@@ -137,6 +139,7 @@ export async function POST(request: NextRequest) {
         caption,
         media_urls,
         hashtags,
+        cover_url: cover_url || null,
         scheduled_at: now,
         status: 'publishing',
         created_by: user.id
@@ -166,14 +169,24 @@ export async function POST(request: NextRequest) {
         // Video upload
         const videoUrl = media_urls.find(isVideoUrl)!
         const formData = new FormData()
-        
+
         // Fetch the video file
         const videoResponse = await fetch(videoUrl)
+        if (!videoResponse.ok) throw new Error(`Falha ao baixar vídeo: HTTP ${videoResponse.status}`)
         const videoBlob = await videoResponse.blob()
         formData.append('video', videoBlob, 'video.mp4')
         formData.append('title', fullCaption)
         formData.append('user', username)
         uploadPostPlatforms.forEach(p => formData.append('platform[]', p))
+
+        // Thumbnail/capa do vídeo (Reels, TikTok, YouTube)
+        if (cover_url) {
+          const thumbResponse = await fetch(cover_url)
+          if (thumbResponse.ok) {
+            const thumbBlob = await thumbResponse.blob()
+            formData.append('thumbnail', thumbBlob, 'thumbnail.jpg')
+          }
+        }
 
         const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload`, {
           method: 'POST',

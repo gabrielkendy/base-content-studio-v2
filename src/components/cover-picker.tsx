@@ -2,7 +2,7 @@
 
 import { useState, useRef } from 'react'
 import { createClient } from '@/lib/supabase/client'
-import { Image as ImageIcon, Film, Check, Loader2, X } from 'lucide-react'
+import { Image as ImageIcon, Film, Check, Loader2, X, AlertCircle } from 'lucide-react'
 
 interface CoverPickerProps {
   orgId?: string
@@ -18,18 +18,25 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
   const [selectedFrameIndex, setSelectedFrameIndex] = useState<number | null>(null)
   const [extracting, setExtracting] = useState(false)
   const [uploading, setUploading] = useState(false)
+  const [frameError, setFrameError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
   function extractSingleFrame(video: HTMLVideoElement, time: number): Promise<string> {
-    return new Promise((resolve) => {
+    return new Promise((resolve, reject) => {
+      const timeout = setTimeout(() => reject(new Error('Timeout ao extrair frame')), 10000)
       const onSeeked = () => {
-        const canvas = document.createElement('canvas')
-        canvas.width = video.videoWidth
-        canvas.height = video.videoHeight
-        canvas.getContext('2d')!.drawImage(video, 0, 0)
-        video.removeEventListener('seeked', onSeeked)
-        resolve(canvas.toDataURL('image/jpeg', 0.85))
+        clearTimeout(timeout)
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = video.videoWidth || 640
+          canvas.height = video.videoHeight || 360
+          canvas.getContext('2d')!.drawImage(video, 0, 0)
+          video.removeEventListener('seeked', onSeeked)
+          resolve(canvas.toDataURL('image/jpeg', 0.85))
+        } catch (e) {
+          reject(e)
+        }
       }
       video.addEventListener('seeked', onSeeked, { once: true })
       video.currentTime = time
@@ -40,34 +47,59 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
     if (!videoSource) return
     setExtracting(true)
     setFrames([])
+    setFrameError(null)
     setSelectedFrameIndex(null)
+
+    const isFile = videoSource instanceof File
+    const objectUrl = isFile ? URL.createObjectURL(videoSource) : null
 
     try {
       const video = document.createElement('video')
-      video.crossOrigin = 'anonymous'
       video.muted = true
+      video.playsInline = true
       video.preload = 'auto'
 
-      const src = videoSource instanceof File ? URL.createObjectURL(videoSource) : videoSource
+      // Só usar crossOrigin para URLs externas (pode causar CORS com File local)
+      if (!isFile) {
+        video.crossOrigin = 'anonymous'
+      }
+
+      const src = objectUrl ?? (videoSource as string)
       video.src = src
 
       await new Promise<void>((resolve, reject) => {
-        video.onloadedmetadata = () => resolve()
-        video.onerror = () => reject(new Error('Erro ao carregar vídeo'))
+        const timeout = setTimeout(() => reject(new Error('Timeout ao carregar vídeo')), 15000)
+        video.onloadedmetadata = () => { clearTimeout(timeout); resolve() }
+        video.onerror = () => {
+          clearTimeout(timeout)
+          // Se for URL e der erro, pode ser CORS — tentar sem crossOrigin
+          if (!isFile) {
+            reject(new Error('CORS_ERROR'))
+          } else {
+            reject(new Error('Erro ao carregar vídeo'))
+          }
+        }
         video.load()
       })
 
       const duration = video.duration
+      if (!duration || !isFinite(duration)) throw new Error('Duração inválida do vídeo')
+
       const extracted: string[] = []
       for (const t of [duration * 0.1, duration * 0.5, duration * 0.9]) {
         extracted.push(await extractSingleFrame(video, t))
       }
 
       setFrames(extracted)
-      if (videoSource instanceof File) URL.revokeObjectURL(src)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Frame extraction error:', err)
+      if (err.message === 'CORS_ERROR' || err.message?.includes('CORS')) {
+        setFrameError('Não foi possível extrair frames desta URL. Faça upload de uma imagem de capa manualmente.')
+      } else {
+        setFrameError('Erro ao processar o vídeo. Tente fazer upload de uma imagem de capa.')
+      }
     } finally {
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
       setExtracting(false)
     }
   }
@@ -155,10 +187,18 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
             {extracting
               ? <Loader2 className="w-4 h-4 animate-spin text-purple-500" />
               : <Film className="w-4 h-4 text-purple-500" />}
-            {extracting ? 'Extraindo frames...' : 'Sugerir frames do vídeo'}
+            {extracting ? 'Extraindo frames...' : frames.length > 0 ? 'Regenerar frames' : 'Extrair frames do vídeo'}
           </button>
         )}
       </div>
+
+      {/* Erro de extração */}
+      {frameError && (
+        <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
+          <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
+          <p className="text-xs text-amber-700">{frameError}</p>
+        </div>
+      )}
 
       {/* Sugestões de frames */}
       {frames.length > 0 && (

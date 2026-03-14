@@ -1,10 +1,21 @@
+/**
+ * POST /api/posts/schedule
+ *
+ * Suporta dois formatos de chamada:
+ *
+ * A) Aba "Agendar Post" (novo, direto):
+ *    { cliente_id, platforms, caption, hashtags, media_urls, cover_url, scheduled_at, timezone }
+ *
+ * B) ScheduleModal (a partir de um conteúdo existente):
+ *    { conteudoId, platforms, scheduledDate, scheduledTime, title, firstComment, capaUrl }
+ *
+ * Ambos salvam em `scheduled_posts` (status: 'scheduled').
+ * O cron /api/posts/process-scheduled publica quando chegar a hora.
+ */
 import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-
-const UPLOAD_POST_API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
-const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY!
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -43,186 +54,197 @@ export async function POST(request: NextRequest) {
     if (!membership) return NextResponse.json({ error: 'No active membership' }, { status: 403 })
 
     const body = await request.json()
-    const {
-      conteudoId,
-      platforms,
-      scheduledDate,
-      scheduledTime,
-      timezone = 'America/Sao_Paulo',
-      title,
-      description,
-      firstComment,
-      capaUrl,
-    } = body
-
-    if (!conteudoId) return NextResponse.json({ error: 'conteudoId is required' }, { status: 400 })
-    if (!platforms || platforms.length === 0) return NextResponse.json({ error: 'platforms is required' }, { status: 400 })
-    if (!scheduledDate || !scheduledTime) return NextResponse.json({ error: 'scheduledDate and scheduledTime are required' }, { status: 400 })
-
     const admin = createServiceClient()
 
-    // Get conteúdo with cliente
-    const { data: conteudo, error: contErr } = await admin
-      .from('conteudos')
-      .select('*, empresa:clientes(id, nome, slug, org_id)')
-      .eq('id', conteudoId)
+    // ────────────────────────────────────────────────────────────
+    // FORMATO B — ScheduleModal (conteudoId-based)
+    // ────────────────────────────────────────────────────────────
+    if (body.conteudoId) {
+      const {
+        conteudoId,
+        platforms,
+        scheduledDate,
+        scheduledTime,
+        title,
+        firstComment,
+        capaUrl,
+        timezone = 'America/Sao_Paulo',
+      } = body
+
+      if (!platforms || platforms.length === 0) {
+        return NextResponse.json({ error: 'Selecione pelo menos uma plataforma' }, { status: 400 })
+      }
+      if (!scheduledDate || !scheduledTime) {
+        return NextResponse.json({ error: 'Data e hora são obrigatórios' }, { status: 400 })
+      }
+
+      const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`)
+      if (isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
+        return NextResponse.json({ error: 'Data de agendamento inválida ou no passado' }, { status: 400 })
+      }
+
+      // Buscar conteúdo
+      const { data: conteudo, error: contErr } = await admin
+        .from('conteudos')
+        .select('*, empresa:clientes(id, nome, slug, org_id)')
+        .eq('id', conteudoId)
+        .eq('org_id', membership.org_id)
+        .single()
+
+      if (contErr || !conteudo) {
+        return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
+      }
+
+      const cliente = conteudo.empresa as any
+      if (!cliente) {
+        return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
+      }
+
+      const mediaUrls: string[] = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
+      const caption = title || conteudo.legenda || conteudo.titulo || ''
+      const platformStrings: string[] = Array.isArray(platforms) ? platforms : [platforms]
+
+      // Salvar em scheduled_posts
+      const { data: post, error: insertError } = await admin
+        .from('scheduled_posts')
+        .insert({
+          org_id: membership.org_id,
+          cliente_id: cliente.id,
+          conteudo_id: conteudoId,
+          platforms: JSON.stringify(platformStrings),
+          caption,
+          hashtags: [],
+          media_urls: mediaUrls,
+          cover_url: capaUrl || null,
+          scheduled_at: scheduledAt.toISOString(),
+          status: 'scheduled',
+          created_by: user.id,
+        })
+        .select('id, scheduled_at')
+        .single()
+
+      if (insertError) {
+        console.error('[schedule/conteudo] Insert error:', insertError)
+        return NextResponse.json({ error: 'Erro ao salvar agendamento' }, { status: 500 })
+      }
+
+      // Atualizar status do conteúdo
+      await admin
+        .from('conteudos')
+        .update({
+          status: 'agendado',
+          data_publicacao: scheduledDate,
+          hora_publicacao: scheduledTime,
+          canais: platformStrings,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', conteudoId)
+
+      console.log(`[schedule/conteudo] Post ${post.id} agendado para ${scheduledAt.toISOString()} | cliente: ${cliente.slug}`)
+
+      return NextResponse.json({
+        success: true,
+        job_id: post.id,
+        scheduled_date: scheduledAt.toISOString(),
+        platforms: platformStrings,
+        message: 'Post agendado com sucesso!',
+      })
+    }
+
+    // ────────────────────────────────────────────────────────────
+    // FORMATO A — Aba "Agendar Post" (direto, sem conteúdo)
+    // ────────────────────────────────────────────────────────────
+    const {
+      cliente_id,
+      platforms,
+      caption,
+      hashtags = [],
+      media_urls = [],
+      cover_url,
+      scheduled_at,
+      timezone = 'America/Sao_Paulo',
+    } = body
+
+    if (!cliente_id) {
+      return NextResponse.json({ error: 'cliente_id é obrigatório' }, { status: 400 })
+    }
+    if (!platforms || platforms.length === 0) {
+      return NextResponse.json({ error: 'Selecione pelo menos uma plataforma' }, { status: 400 })
+    }
+    if (!caption || !caption.trim()) {
+      return NextResponse.json({ error: 'A legenda não pode estar vazia' }, { status: 400 })
+    }
+    if (!scheduled_at) {
+      return NextResponse.json({ error: 'Data de agendamento é obrigatória' }, { status: 400 })
+    }
+
+    const scheduledDate = new Date(scheduled_at)
+    if (isNaN(scheduledDate.getTime())) {
+      return NextResponse.json({ error: 'Data de agendamento inválida' }, { status: 400 })
+    }
+    if (scheduledDate <= new Date()) {
+      return NextResponse.json({ error: 'A data de agendamento deve ser no futuro' }, { status: 400 })
+    }
+
+    // Verificar cliente
+    const { data: cliente, error: clienteError } = await admin
+      .from('clientes')
+      .select('id, nome, slug, org_id')
+      .eq('id', cliente_id)
       .eq('org_id', membership.org_id)
       .single()
 
-    if (contErr || !conteudo) {
-      return NextResponse.json({ error: 'Conteúdo não encontrado' }, { status: 404 })
-    }
-
-    const cliente = conteudo.empresa as any
-    if (!cliente) {
+    if (clienteError || !cliente) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Username = slug do cliente (consistente com v2)
-    const username = cliente.slug
+    // Normalizar plataformas
+    const platformStrings: string[] = (platforms as any[]).map((p: any) =>
+      typeof p === 'string' ? p : p.platform
+    )
 
-    // Get media URLs
-    const mediaUrls: string[] = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
-    if (!mediaUrls.length) {
-      return NextResponse.json({ error: 'Nenhuma mídia para publicar' }, { status: 400 })
-    }
-
-    // Build ISO date
-    const scheduledDateTime = `${scheduledDate}T${scheduledTime}:00`
-
-    // Prepare Upload-Post request
-    const uploadPostBody: Record<string, any> = {
-      user: username,
-      title: title || conteudo.legenda || conteudo.titulo || '',
-      scheduled_date: scheduledDateTime,
-      timezone,
-      async_upload: true,
-    }
-
-    // Add platforms
-    platforms.forEach((p: string) => {
-      uploadPostBody[`platform[]`] = uploadPostBody[`platform[]`] || []
-      if (!Array.isArray(uploadPostBody[`platform[]`])) {
-        uploadPostBody[`platform[]`] = [uploadPostBody[`platform[]`]]
-      }
-      uploadPostBody[`platform[]`].push(p)
-    })
-
-    // Platform-specific fields
-    if (platforms.includes('instagram')) {
-      uploadPostBody.instagram_title = title || conteudo.legenda
-    }
-    if (platforms.includes('tiktok')) {
-      uploadPostBody.tiktok_title = title || conteudo.legenda
-    }
-    if (platforms.includes('youtube')) {
-      uploadPostBody.youtube_title = conteudo.titulo
-      uploadPostBody.youtube_description = description || conteudo.descricao || conteudo.legenda
-    }
-    if (platforms.includes('facebook')) {
-      uploadPostBody.facebook_title = title || conteudo.legenda
-    }
-    if (platforms.includes('linkedin')) {
-      uploadPostBody.linkedin_title = title || conteudo.legenda
-      uploadPostBody.linkedin_description = description || conteudo.descricao
-    }
-
-    // First comment
-    if (firstComment) {
-      uploadPostBody.first_comment = firstComment
-    }
-
-    // Determine if video or image(s)
-    const firstMedia = mediaUrls[0]
-    const isVideo = /\.(mp4|webm|mov)(\?|$)/i.test(firstMedia)
-
-    // Build form data
-    const formData = new FormData()
-    
-    // Add all simple fields
-    formData.append('user', username)
-    formData.append('title', uploadPostBody.title)
-    formData.append('scheduled_date', scheduledDateTime)
-    formData.append('timezone', timezone)
-    formData.append('async_upload', 'true')
-
-    // Add platforms
-    platforms.forEach((p: string) => {
-      formData.append('platform[]', p)
-    })
-
-    // Add platform-specific
-    if (uploadPostBody.instagram_title) formData.append('instagram_title', uploadPostBody.instagram_title)
-    if (uploadPostBody.tiktok_title) formData.append('tiktok_title', uploadPostBody.tiktok_title)
-    if (uploadPostBody.youtube_title) formData.append('youtube_title', uploadPostBody.youtube_title)
-    if (uploadPostBody.youtube_description) formData.append('youtube_description', uploadPostBody.youtube_description)
-    if (uploadPostBody.facebook_title) formData.append('facebook_title', uploadPostBody.facebook_title)
-    if (uploadPostBody.linkedin_title) formData.append('linkedin_title', uploadPostBody.linkedin_title)
-    if (uploadPostBody.linkedin_description) formData.append('linkedin_description', uploadPostBody.linkedin_description)
-    if (firstComment) formData.append('first_comment', firstComment)
-
-    // Add media
-    if (isVideo) {
-      formData.append('video', firstMedia)
-      // Thumbnail/capa para vídeo (YouTube, TikTok, etc.)
-      if (capaUrl) {
-        formData.append('thumbnail', capaUrl)
-      }
-    } else {
-      // Image(s) - for carousels, add multiple
-      for (const url of mediaUrls) {
-        formData.append('photos[]', url)
-      }
-    }
-
-    console.log('=== SCHEDULE POST DEBUG ===')
-    console.log('Username:', username)
-    console.log('Platforms:', platforms)
-    console.log('Scheduled:', scheduledDateTime)
-    console.log('Media count:', mediaUrls.length)
-    console.log('Is video:', isVideo)
-
-    // Call Upload-Post API
-    const response = await fetch(`${UPLOAD_POST_API_URL}/api/upload${isVideo ? '' : '_photos'}`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Apikey ${UPLOAD_POST_API_KEY}`,
-      },
-      body: formData,
-    })
-
-    const result = await response.json()
-    console.log('Upload-Post response:', response.status, result)
-
-    if (!response.ok) {
-      return NextResponse.json({ 
-        error: result.message || result.error || 'Erro ao agendar',
-        details: result
-      }, { status: response.status })
-    }
-
-    // Update conteúdo status
-    await admin
-      .from('conteudos')
-      .update({
-        status: 'agendado',
-        data_publicacao: scheduledDate,
-        hora_publicacao: scheduledTime,
-        canais: platforms,
-        scheduled_job_id: result.job_id || result.request_id || null,
-        updated_at: new Date().toISOString(),
+    // Salvar em scheduled_posts
+    const { data: post, error: insertError } = await admin
+      .from('scheduled_posts')
+      .insert({
+        org_id: membership.org_id,
+        cliente_id,
+        platforms: JSON.stringify(platformStrings),
+        caption: caption.trim(),
+        hashtags,
+        media_urls,
+        cover_url: cover_url || null,
+        scheduled_at: scheduledDate.toISOString(),
+        status: 'scheduled',
+        created_by: user.id,
       })
-      .eq('id', conteudoId)
+      .select('id, scheduled_at, status')
+      .single()
+
+    if (insertError) {
+      console.error('[schedule/direto] Insert error:', insertError)
+      return NextResponse.json({ error: 'Erro ao salvar agendamento. Tente novamente.' }, { status: 500 })
+    }
+
+    const scheduledBR = scheduledDate.toLocaleString('pt-BR', {
+      timeZone: timezone,
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
+    })
+
+    console.log(`[schedule/direto] Post ${post.id} agendado para ${scheduledBR} | cliente: ${cliente.slug} | plataformas: ${platformStrings.join(', ')}`)
 
     return NextResponse.json({
       success: true,
-      job_id: result.job_id || result.request_id,
-      scheduled_date: scheduledDateTime,
-      platforms,
+      id: post.id,
+      scheduled_at: post.scheduled_at,
+      message: `Post agendado para ${scheduledBR}! 📅`,
     })
-
   } catch (err: any) {
-    console.error('Schedule error:', err)
-    return NextResponse.json({ error: err.message }, { status: 500 })
+    console.error('[schedule] Unexpected error:', err)
+    return NextResponse.json({ error: err.message || 'Erro interno' }, { status: 500 })
   }
 }

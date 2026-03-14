@@ -9,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import type { Cliente } from '@/types/database'
+import { CoverPicker } from '@/components/cover-picker'
 
 // ─── Platform Config ────────────────────────────────────────────────
 interface PlatformConfig {
@@ -114,6 +115,7 @@ interface UploadedMedia {
   type: string
   isVideo: boolean
   preview?: string
+  localFile?: File
 }
 
 interface PlatformFormat {
@@ -155,6 +157,7 @@ export default function AgendarPage() {
   const dropZoneRef = useRef<HTMLDivElement>(null)
   const [dragOver, setDragOver] = useState(false)
   const [previewIndex, setPreviewIndex] = useState(0)
+  const [coverUrl, setCoverUrl] = useState<string | null>(null)
 
   // ─── Load Clientes ──────────────────────────────────────────────
   useEffect(() => {
@@ -232,6 +235,38 @@ export default function AgendarPage() {
     ? Math.min(...activePlatformConfigs.map(p => p.maxChars))
     : null
 
+  // ─── Generate video thumbnail locally (no CORS dependency) ───
+  function generateVideoThumbnail(file: File): Promise<string> {
+    return new Promise((resolve, reject) => {
+      const video = document.createElement('video')
+      video.muted = true
+      video.preload = 'metadata'
+      const objectUrl = URL.createObjectURL(file)
+      video.src = objectUrl
+      video.onloadedmetadata = () => {
+        video.currentTime = Math.min(1, video.duration * 0.1)
+      }
+      video.onseeked = () => {
+        try {
+          const canvas = document.createElement('canvas')
+          canvas.width = video.videoWidth || 640
+          canvas.height = video.videoHeight || 360
+          canvas.getContext('2d')!.drawImage(video, 0, 0)
+          URL.revokeObjectURL(objectUrl)
+          resolve(canvas.toDataURL('image/jpeg', 0.8))
+        } catch {
+          URL.revokeObjectURL(objectUrl)
+          reject(new Error('Erro ao gerar thumbnail'))
+        }
+      }
+      video.onerror = () => {
+        URL.revokeObjectURL(objectUrl)
+        reject(new Error('Erro ao carregar vídeo'))
+      }
+      video.load()
+    })
+  }
+
   // ─── Media Upload ─────────────────────────────────────────────
   async function uploadFile(file: File) {
     if (!selectedCliente || !org) return
@@ -288,13 +323,19 @@ export default function AgendarPage() {
         if (!res.ok) throw new Error(result.error || 'Erro no upload')
       }
 
-      // Create preview for images
+      // Create preview: image → objectUrl, video → thumbnail from canvas
       let preview: string | undefined
       if (!isVideo) {
         preview = URL.createObjectURL(file)
+      } else {
+        try {
+          preview = await generateVideoThumbnail(file)
+        } catch {
+          // fallback: no preview
+        }
       }
 
-      setUploadedMedia(prev => [...prev, { ...result, preview }])
+      setUploadedMedia(prev => [...prev, { ...result, preview, localFile: isVideo ? file : undefined }])
       toast(`${file.name} enviado com sucesso!`, 'success')
     } catch (error: any) {
       toast(error.message || 'Erro ao enviar arquivo', 'error')
@@ -375,6 +416,7 @@ export default function AgendarPage() {
           caption: customCaptions ? Object.values(captionByPlatform).join('\n---\n') : caption,
           hashtags: hashtags.split(/\s+/).filter(t => t.startsWith('#')),
           media_urls: uploadedMedia.map(m => m.url),
+          cover_url: coverUrl || undefined,
           scheduled_at: localDateTime.toISOString(),
           timezone: 'America/Sao_Paulo',
         })
@@ -403,6 +445,7 @@ export default function AgendarPage() {
           caption: caption,
           hashtags: hashtags.split(/\s+/).filter(t => t.startsWith('#')),
           media_urls: uploadedMedia.map(m => m.url),
+          cover_url: coverUrl || undefined,
         })
       })
       const json = await res.json()
@@ -420,6 +463,7 @@ export default function AgendarPage() {
     setCaption('')
     setHashtags('')
     setUploadedMedia([])
+    setCoverUrl(null)
     setScheduledDate('')
     setScheduledTime('')
     setSelectedProfiles(new Set())
@@ -774,15 +818,22 @@ export default function AgendarPage() {
                   {uploadedMedia.map((media, index) => (
                     <div key={index} className="flex items-center gap-3 p-3 bg-zinc-50 rounded-xl border border-zinc-100">
                       {/* Thumbnail */}
-                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 flex-shrink-0">
-                        {media.isVideo ? (
-                          <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-white text-lg">
-                            🎬
-                          </div>
-                        ) : media.preview ? (
-                          <img src={media.preview} alt="" className="w-full h-full object-cover" />
+                      <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 flex-shrink-0 relative">
+                        {media.preview ? (
+                          <>
+                            <img src={media.preview} alt="" className="w-full h-full object-cover" />
+                            {media.isVideo && (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                <svg className="w-5 h-5 text-white drop-shadow" fill="currentColor" viewBox="0 0 24 24">
+                                  <path d="M8 5v14l11-7z" />
+                                </svg>
+                              </div>
+                            )}
+                          </>
                         ) : (
-                          <div className="w-full h-full flex items-center justify-center text-lg">🖼️</div>
+                          <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-white text-lg">
+                            {media.isVideo ? '🎬' : '🖼️'}
+                          </div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
@@ -803,6 +854,30 @@ export default function AgendarPage() {
                   ))}
                 </div>
               )}
+
+              {/* Cover Picker — aparece quando há vídeo na lista */}
+              {uploadedMedia.some(m => m.isVideo) && (() => {
+                const videoMedia = uploadedMedia.find(m => m.isVideo)!
+                return (
+                  <div className="mt-4 pt-4 border-t border-zinc-100">
+                    <h3 className="text-sm font-semibold text-zinc-700 mb-1 flex items-center gap-2">
+                      <svg className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.362a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
+                      </svg>
+                      Capa do Vídeo
+                    </h3>
+                    <p className="text-xs text-zinc-400 mb-3">
+                      Escolha uma imagem de capa ou selecione um frame do vídeo
+                    </p>
+                    <CoverPicker
+                      orgId={org?.id}
+                      videoSource={videoMedia.localFile ?? videoMedia.url}
+                      value={coverUrl}
+                      onChange={setCoverUrl}
+                    />
+                  </div>
+                )
+              })()}
             </CardContent>
           </Card>
         </div>

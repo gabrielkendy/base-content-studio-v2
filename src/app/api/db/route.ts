@@ -249,7 +249,7 @@ export async function POST(request: NextRequest) {
             query = query.order(o.col, { ascending: o.asc !== false })
           }
         }
-        if (lim) query = query.limit(lim)
+        query = query.limit(lim || 1000) // Prevent unbounded queries
         if (single) query = query.single()
         break
       }

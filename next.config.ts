@@ -12,7 +12,7 @@ const securityHeaders = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-eval' 'unsafe-inline'",
       "style-src 'self' 'unsafe-inline'",
-      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://*.cdninstagram.com https://*.fbcdn.net https://*.twimg.com https://*.licdn.com https://*.ytimg.com https://*.tiktokcdn.com https://*.upload-post.com",
+      "img-src 'self' data: blob: https://*.supabase.co https://*.supabase.in https://lh3.googleusercontent.com https://avatars.githubusercontent.com https://*.cdninstagram.com https://*.fbcdn.net https://*.fbsbx.com https://*.twimg.com https://*.licdn.com https://media.licdn.com https://*.ytimg.com https://*.tiktokcdn.com https://*.muscdn.com https://*.upload-post.com https://*.pinimg.com https://*.googleusercontent.com",
       "connect-src 'self' https://*.supabase.co https://*.supabase.in wss://*.supabase.co https://api.z-api.io https://js.stripe.com https://api.stripe.com https://api.upload-post.com",
       "font-src 'self' https://fonts.gstatic.com",
       "frame-src 'self' https://js.stripe.com https://hooks.stripe.com",

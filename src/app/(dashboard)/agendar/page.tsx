@@ -601,6 +601,7 @@ export default function AgendarPage() {
                                   src={account.profile_avatar}
                                   alt=""
                                   className="w-8 h-8 rounded-lg object-cover"
+                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
                                 />
                               ) : (
                                 <span>{platform.icon}</span>
@@ -879,9 +880,10 @@ export default function AgendarPage() {
                 </div>
               )}
 
-              {/* Cover Picker — aparece quando há vídeo já enviado */}
-              {uploadedMedia.some(m => m.isVideo && !m.uploading) && (() => {
-                const videoMedia = uploadedMedia.find(m => m.isVideo && !m.uploading)!
+              {/* Cover Picker — aparece quando há vídeo (mesmo enviando) */}
+              {uploadedMedia.some(m => m.isVideo) && (() => {
+                const videoMedia = uploadedMedia.find(m => m.isVideo && !m.uploading)
+                const videoUploading = uploadedMedia.some(m => m.isVideo && m.uploading)
                 return (
                   <div className="mt-4 pt-4 border-t border-zinc-100">
                     <h3 className="text-sm font-semibold text-zinc-700 mb-1 flex items-center gap-2">
@@ -891,11 +893,13 @@ export default function AgendarPage() {
                       Capa do Vídeo
                     </h3>
                     <p className="text-xs text-zinc-400 mb-3">
-                      Escolha uma imagem de capa ou selecione um frame do vídeo
+                      {videoUploading
+                        ? 'Aguardando upload do vídeo para extrair frames...'
+                        : 'Escolha uma imagem de capa ou selecione um frame do vídeo'}
                     </p>
                     <CoverPicker
                       orgId={org?.id}
-                      videoSource={videoMedia.localFile ?? videoMedia.url}
+                      videoSource={videoMedia ? (videoMedia.localFile ?? videoMedia.url) : undefined}
                       value={coverUrl}
                       onChange={setCoverUrl}
                     />
@@ -935,12 +939,20 @@ export default function AgendarPage() {
                           <div className="w-8 h-8 rounded-full bg-gradient-to-br from-yellow-400 via-pink-500 to-purple-600 p-[2px]">
                             <div className="w-full h-full rounded-full bg-white p-[1px]">
                               {account.profile_avatar ? (
-                                <img src={account.profile_avatar} alt="" className="w-full h-full rounded-full object-cover" />
-                              ) : (
-                                <div className="w-full h-full rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500">
-                                  {(account.profile_name || platform.name).charAt(0).toUpperCase()}
-                                </div>
-                              )}
+                                <img
+                                  src={account.profile_avatar}
+                                  alt=""
+                                  className="w-full h-full rounded-full object-cover"
+                                  onError={e => {
+                                    const img = e.target as HTMLImageElement
+                                    img.style.display = 'none'
+                                    img.nextElementSibling?.classList.remove('hidden')
+                                  }}
+                                />
+                              ) : null}
+                              <div className={`w-full h-full rounded-full bg-zinc-100 flex items-center justify-center text-xs font-bold text-zinc-500 ${account.profile_avatar ? 'hidden' : ''}`}>
+                                {(account.profile_name || platform.name).charAt(0).toUpperCase()}
+                              </div>
                             </div>
                           </div>
                           <div className="flex-1 min-w-0">

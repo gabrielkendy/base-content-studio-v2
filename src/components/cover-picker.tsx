@@ -19,6 +19,7 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
   const [extracting, setExtracting] = useState(false)
   const [uploading, setUploading] = useState(false)
   const [frameError, setFrameError] = useState<string | null>(null)
+  const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
   const supabase = createClient()
 
@@ -107,24 +108,26 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
   async function uploadToStorage(blob: Blob, ext: string): Promise<string> {
     const folder = orgId ? `${orgId}/capas` : 'capas'
     const path = `${folder}/capa-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('media').upload(path, blob, {
+    const { error } = await supabase.storage.from('post-media').upload(path, blob, {
       cacheControl: '3600',
       upsert: true,
     })
     if (error) throw error
-    return supabase.storage.from('media').getPublicUrl(path).data.publicUrl
+    return supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl
   }
 
   async function handleSelectFrame(dataUrl: string, index: number) {
     setUploading(true)
+    setUploadError(null)
     try {
       const res = await fetch(dataUrl)
       const blob = await res.blob()
       const url = await uploadToStorage(blob, 'jpg')
       setSelectedFrameIndex(index)
       onChange(url)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload frame error:', err)
+      setUploadError(err?.message || 'Erro ao salvar frame. Tente fazer upload de uma imagem.')
     } finally {
       setUploading(false)
     }
@@ -134,13 +137,15 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
     const file = e.target.files?.[0]
     if (!file) return
     setUploading(true)
+    setUploadError(null)
     try {
       const ext = file.name.split('.').pop() || 'jpg'
       const url = await uploadToStorage(file, ext)
       setSelectedFrameIndex(null)
       onChange(url)
-    } catch (err) {
+    } catch (err: any) {
       console.error('Upload error:', err)
+      setUploadError(err?.message || 'Erro ao fazer upload da imagem. Tente novamente.')
     } finally {
       setUploading(false)
       if (fileRef.current) fileRef.current.value = ''
@@ -197,6 +202,14 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
         <div className="flex items-start gap-2 p-3 bg-amber-50 rounded-xl border border-amber-200">
           <AlertCircle className="w-4 h-4 text-amber-500 mt-0.5 shrink-0" />
           <p className="text-xs text-amber-700">{frameError}</p>
+        </div>
+      )}
+
+      {/* Erro de upload */}
+      {uploadError && (
+        <div className="flex items-start gap-2 p-3 bg-red-50 rounded-xl border border-red-200">
+          <AlertCircle className="w-4 h-4 text-red-500 mt-0.5 shrink-0" />
+          <p className="text-xs text-red-700">{uploadError}</p>
         </div>
       )}
 

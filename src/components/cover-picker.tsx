@@ -1,7 +1,6 @@
 'use client'
 
 import { useState, useRef } from 'react'
-import { createClient } from '@/lib/supabase/client'
 import { Image as ImageIcon, Film, Check, Loader2, X, AlertCircle } from 'lucide-react'
 
 interface CoverPickerProps {
@@ -21,7 +20,6 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
   const [frameError, setFrameError] = useState<string | null>(null)
   const [uploadError, setUploadError] = useState<string | null>(null)
   const fileRef = useRef<HTMLInputElement>(null)
-  const supabase = createClient()
 
   function extractSingleFrame(video: HTMLVideoElement, time: number): Promise<string> {
     return new Promise((resolve, reject) => {
@@ -106,14 +104,13 @@ export function CoverPicker({ orgId, videoSource, value, onChange }: CoverPicker
   }
 
   async function uploadToStorage(blob: Blob, ext: string): Promise<string> {
-    const folder = orgId ? `${orgId}/capas` : 'capas'
-    const path = `${folder}/capa-${Date.now()}.${ext}`
-    const { error } = await supabase.storage.from('post-media').upload(path, blob, {
-      cacheControl: '3600',
-      upsert: true,
-    })
-    if (error) throw error
-    return supabase.storage.from('post-media').getPublicUrl(path).data.publicUrl
+    const file = new File([blob], `capa.${ext}`, { type: blob.type || 'image/jpeg' })
+    const fd = new FormData()
+    fd.append('file', file)
+    const res = await fetch('/api/media/upload-cover', { method: 'POST', body: fd })
+    const json = await res.json()
+    if (!res.ok) throw new Error(json.error || 'Erro ao fazer upload da capa')
+    return json.url
   }
 
   async function handleSelectFrame(dataUrl: string, index: number) {

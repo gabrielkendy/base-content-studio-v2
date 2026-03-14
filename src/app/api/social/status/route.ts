@@ -49,10 +49,10 @@ export async function GET(request: NextRequest) {
 
     const admin = createServiceClient()
 
-    // Get client
+    // Get client (inclui logo_url para fallback de avatar)
     const { data: cliente, error: clienteError } = await admin
       .from('clientes')
-      .select('id, nome, slug, org_id')
+      .select('id, nome, slug, org_id, logo_url')
       .eq('slug', clienteSlug)
       .eq('org_id', membership.org_id)
       .single()
@@ -62,6 +62,7 @@ export async function GET(request: NextRequest) {
     }
 
     const username = cliente.slug
+    const clienteLogo = (cliente as any).logo_url || null
 
     const contas = await UP.verificarConexoes(username)
 
@@ -72,7 +73,8 @@ export async function GET(request: NextRequest) {
         platform: c.plataforma,
         profile_id: username,
         profile_name: c.nome || c.plataforma,
-        profile_avatar: c.avatar || null,
+        // Usa foto da rede social (Upload-Post), fallback para logo do cliente
+        profile_avatar: c.avatar || clienteLogo,
         status: 'connected',
       }))
 

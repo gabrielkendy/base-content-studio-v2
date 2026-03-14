@@ -10,6 +10,7 @@ import { Input, Label, Textarea } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import type { Cliente } from '@/types/database'
 import { CoverPicker } from '@/components/cover-picker'
+import { Loader2 } from 'lucide-react'
 
 // ─── Platform Config ────────────────────────────────────────────────
 interface PlatformConfig {
@@ -116,6 +117,7 @@ interface UploadedMedia {
   isVideo: boolean
   preview?: string
   localFile?: File
+  uploading?: boolean
 }
 
 interface PlatformFormat {
@@ -272,15 +274,36 @@ export default function AgendarPage() {
     if (!selectedCliente || !org) return
 
     const isVideo = file.type.startsWith('video/')
-    // Sem limite de tamanho — upload direto pro storage via presigned URL
 
+    // 1. Generate preview locally BEFORE upload (no network needed)
+    let preview: string | undefined
+    if (!isVideo) {
+      preview = URL.createObjectURL(file)
+    } else {
+      try {
+        preview = await generateVideoThumbnail(file)
+      } catch { /* fallback: no preview */ }
+    }
+
+    // 2. Add placeholder immediately — preview appears in UI while uploading
+    const placeholder: UploadedMedia = {
+      url: '',
+      filename: file.name,
+      size: file.size,
+      type: file.type,
+      isVideo,
+      preview,
+      localFile: isVideo ? file : undefined,
+      uploading: true,
+    }
+    setUploadedMedia(prev => [...prev, placeholder])
     setUploading(true)
+
     try {
       let result: any
 
       // Files > 4MB: use presigned URL (direct upload to storage, bypasses Vercel body limit)
       if (file.size > 4 * 1024 * 1024) {
-        // Step 1: Get presigned URL
         const presignRes = await fetch('/api/media/presign', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -293,7 +316,6 @@ export default function AgendarPage() {
         const presign = await presignRes.json()
         if (!presignRes.ok) throw new Error(presign.error || 'Erro ao gerar URL de upload')
 
-        // Step 2: Upload directly to Supabase Storage
         const uploadRes = await fetch(presign.signedUrl, {
           method: 'PUT',
           headers: { 'Content-Type': file.type },
@@ -323,21 +345,16 @@ export default function AgendarPage() {
         if (!res.ok) throw new Error(result.error || 'Erro no upload')
       }
 
-      // Create preview: image → objectUrl, video → thumbnail from canvas
-      let preview: string | undefined
-      if (!isVideo) {
-        preview = URL.createObjectURL(file)
-      } else {
-        try {
-          preview = await generateVideoThumbnail(file)
-        } catch {
-          // fallback: no preview
-        }
-      }
-
-      setUploadedMedia(prev => [...prev, { ...result, preview, localFile: isVideo ? file : undefined }])
+      // 3. Replace placeholder with final item (url real + preview mantido)
+      setUploadedMedia(prev => prev.map(m =>
+        m === placeholder
+          ? { ...result, preview, localFile: isVideo ? file : undefined }
+          : m
+      ))
       toast(`${file.name} enviado com sucesso!`, 'success')
     } catch (error: any) {
+      // Remove placeholder on error
+      setUploadedMedia(prev => prev.filter(m => m !== placeholder))
       toast(error.message || 'Erro ao enviar arquivo', 'error')
     } finally {
       setUploading(false)
@@ -821,30 +838,37 @@ export default function AgendarPage() {
                       <div className="w-12 h-12 rounded-lg overflow-hidden bg-zinc-200 flex-shrink-0 relative">
                         {media.preview ? (
                           <>
-                            <img src={media.preview} alt="" className="w-full h-full object-cover" />
-                            {media.isVideo && (
+                            <img src={media.preview} alt="" className={`w-full h-full object-cover ${media.uploading ? 'opacity-40' : ''}`} />
+                            {media.uploading ? (
+                              <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+                                <Loader2 className="w-4 h-4 text-white animate-spin" />
+                              </div>
+                            ) : media.isVideo ? (
                               <div className="absolute inset-0 flex items-center justify-center bg-black/30">
                                 <svg className="w-5 h-5 text-white drop-shadow" fill="currentColor" viewBox="0 0 24 24">
                                   <path d="M8 5v14l11-7z" />
                                 </svg>
                               </div>
-                            )}
+                            ) : null}
                           </>
                         ) : (
                           <div className="w-full h-full flex items-center justify-center bg-zinc-800 text-white text-lg">
-                            {media.isVideo ? '🎬' : '🖼️'}
+                            {media.uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : media.isVideo ? '🎬' : '🖼️'}
                           </div>
                         )}
                       </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium text-zinc-700 truncate">{media.filename}</p>
                         <p className="text-xs text-zinc-400">
-                          {formatFileSize(media.size)} • {media.isVideo ? 'Vídeo' : 'Imagem'}
+                          {media.uploading
+                            ? 'Enviando...'
+                            : `${formatFileSize(media.size)} • ${media.isVideo ? 'Vídeo' : 'Imagem'}`}
                         </p>
                       </div>
                       <button
                         onClick={() => removeMedia(index)}
-                        className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors"
+                        disabled={media.uploading}
+                        className="p-1.5 rounded-lg hover:bg-red-50 text-zinc-400 hover:text-red-500 transition-colors disabled:opacity-30 disabled:pointer-events-none"
                       >
                         <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                           <path strokeLinecap="round" strokeLinejoin="round" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
@@ -855,9 +879,9 @@ export default function AgendarPage() {
                 </div>
               )}
 
-              {/* Cover Picker — aparece quando há vídeo na lista */}
-              {uploadedMedia.some(m => m.isVideo) && (() => {
-                const videoMedia = uploadedMedia.find(m => m.isVideo)!
+              {/* Cover Picker — aparece quando há vídeo já enviado */}
+              {uploadedMedia.some(m => m.isVideo && !m.uploading) && (() => {
+                const videoMedia = uploadedMedia.find(m => m.isVideo && !m.uploading)!
                 return (
                   <div className="mt-4 pt-4 border-t border-zinc-100">
                     <h3 className="text-sm font-semibold text-zinc-700 mb-1 flex items-center gap-2">
@@ -939,12 +963,25 @@ export default function AgendarPage() {
                             style={{ aspectRatio: `${format.width}/${format.height}` }}
                           >
                             {currentMedia?.isVideo ? (
-                              <video
-                                src={currentMedia.url}
-                                className="w-full h-full object-contain bg-black"
-                                muted
-                                playsInline
-                              />
+                              currentMedia.uploading ? (
+                                // Show thumbnail while uploading
+                                <div className="relative w-full h-full">
+                                  {currentMedia.preview
+                                    ? <img src={currentMedia.preview} alt="" className="w-full h-full object-contain opacity-60" />
+                                    : <div className="w-full h-full bg-zinc-900" />}
+                                  <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                                    <Loader2 className="w-8 h-8 text-white animate-spin" />
+                                    <span className="text-white text-xs font-medium">Enviando vídeo...</span>
+                                  </div>
+                                </div>
+                              ) : (
+                                <video
+                                  src={currentMedia.url}
+                                  className="w-full h-full object-contain bg-black"
+                                  muted
+                                  playsInline
+                                />
+                              )
                             ) : currentMedia ? (
                               <img
                                 src={currentMedia.preview || currentMedia.url}

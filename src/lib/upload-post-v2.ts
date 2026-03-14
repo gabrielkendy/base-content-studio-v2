@@ -118,7 +118,9 @@ export async function verificarConexoes(username: string): Promise<ContaConectad
         conectada: true,
         nome: v.display_name || v.username,
         handle: v.handle,
-        avatar: v.social_images,
+        avatar: Array.isArray(v.social_images)
+          ? (v.social_images[0] as string) || undefined
+          : (typeof v.social_images === 'string' ? v.social_images : undefined),
         reautenticar: v.reauth_required,
       })
     } else {

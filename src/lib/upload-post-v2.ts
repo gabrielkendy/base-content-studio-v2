@@ -98,6 +98,36 @@ export interface ContaConectada {
   reautenticar?: boolean
 }
 
+/** Extrai URL de avatar do objeto de conta social retornado pela Upload-Post API.
+ *  Tenta todos os campos possíveis — a API pode retornar string, array ou objeto. */
+function extractAvatarUrl(v: any): string | undefined {
+  // Campos candidatos em ordem de prioridade
+  const candidates = [
+    v.social_images,
+    v.profile_picture,
+    v.profile_picture_url,
+    v.avatar,
+    v.avatar_url,
+    v.image,
+    v.image_url,
+    v.picture,
+    v.photo,
+  ]
+
+  for (const c of candidates) {
+    if (!c) continue
+    if (typeof c === 'string' && c.startsWith('http')) return c
+    if (Array.isArray(c)) {
+      const first = c.find((x: any) =>
+        typeof x === 'string' ? x.startsWith('http') : typeof x === 'object' && x?.url
+      )
+      if (first) return typeof first === 'string' ? first : first.url
+    }
+    if (typeof c === 'object' && c.url) return c.url
+  }
+  return undefined
+}
+
 export async function verificarConexoes(username: string): Promise<ContaConectada[]> {
   const data = await buscarPerfil(username)
   
@@ -113,14 +143,16 @@ export async function verificarConexoes(username: string): Promise<ContaConectad
       contas.push({ plataforma, conectada: false })
     } else if (typeof valor === 'object') {
       const v = valor as any
+
+      // Extrai URL de avatar tentando todos os campos possíveis da Upload-Post API
+      const avatar = extractAvatarUrl(v)
+
       contas.push({
         plataforma,
         conectada: true,
         nome: v.display_name || v.username,
-        handle: v.handle,
-        avatar: Array.isArray(v.social_images)
-          ? (v.social_images[0] as string) || undefined
-          : (typeof v.social_images === 'string' ? v.social_images : undefined),
+        handle: v.handle || v.username,
+        avatar,
         reautenticar: v.reauth_required,
       })
     } else {

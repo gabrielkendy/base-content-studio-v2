@@ -179,12 +179,16 @@ export async function POST(request: NextRequest) {
         formData.append('user', username)
         uploadPostPlatforms.forEach(p => formData.append('platform[]', p))
 
-        // Thumbnail/capa do vídeo (Reels, TikTok, YouTube)
+        // Thumbnail/capa do vídeo (Reels, TikTok, YouTube) — opcional, não bloqueia publicação
         if (cover_url) {
-          const thumbResponse = await fetch(cover_url)
-          if (thumbResponse.ok) {
-            const thumbBlob = await thumbResponse.blob()
-            formData.append('thumbnail', thumbBlob, 'thumbnail.jpg')
+          try {
+            const thumbResponse = await fetch(cover_url)
+            if (thumbResponse.ok) {
+              const thumbBlob = await thumbResponse.blob()
+              formData.append('thumbnail', thumbBlob, 'thumbnail.jpg')
+            }
+          } catch {
+            // thumbnail é opcional — falha não impede o post
           }
         }
 

@@ -596,16 +596,22 @@ export default function AgendarPage() {
                               className="w-10 h-10 rounded-xl flex items-center justify-center text-lg shrink-0"
                               style={{ backgroundColor: platform.bgColor }}
                             >
-                              {account.profile_avatar ? (
-                                <img
-                                  src={account.profile_avatar}
-                                  alt=""
-                                  className="w-8 h-8 rounded-lg object-cover"
-                                  onError={e => { (e.target as HTMLImageElement).style.display = 'none' }}
-                                />
-                              ) : (
-                                <span>{platform.icon}</span>
-                              )}
+                              {account.profile_avatar
+                                ? <>
+                                    <img
+                                      src={account.profile_avatar}
+                                      alt=""
+                                      className="w-8 h-8 rounded-lg object-cover"
+                                      onError={e => {
+                                        const img = e.currentTarget
+                                        img.style.display = 'none';
+                                        (img.nextElementSibling as HTMLElement | null)?.removeAttribute('style')
+                                      }}
+                                    />
+                                    <span style={{ display: 'none' }}>{platform.icon}</span>
+                                  </>
+                                : <span>{platform.icon}</span>
+                              }
                             </div>
                             <div className="flex-1 min-w-0">
                               <div className="font-medium text-sm text-zinc-900 truncate">

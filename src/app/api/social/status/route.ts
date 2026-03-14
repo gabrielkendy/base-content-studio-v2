@@ -42,7 +42,7 @@ export async function GET(request: NextRequest) {
 
     const { searchParams } = new URL(request.url)
     const clienteSlug = searchParams.get('clienteSlug')
-    
+
     if (!clienteSlug) {
       return NextResponse.json({ error: 'clienteSlug is required' }, { status: 400 })
     }
@@ -61,13 +61,10 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Usar a mesma lógica da v2: username = slug do cliente
     const username = cliente.slug
 
-    // Verificar conexões usando a mesma função da v2
     const contas = await UP.verificarConexoes(username)
 
-    // Converter formato v2 para formato esperado pelo agendar post
     const accounts = contas
       .filter((c: any) => c.conectada)
       .map((c: any) => ({

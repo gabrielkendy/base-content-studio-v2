@@ -170,14 +170,16 @@ export async function POST(request: NextRequest) {
         const videoUrl = media_urls.find(isVideoUrl)!
         const formData = new FormData()
 
-        formData.append('video', videoUrl)   // URL string — evita download+reupload no servidor
+        formData.append('video', videoUrl)   // URL string — Upload-Post busca diretamente
         formData.append('title', fullCaption)
         formData.append('user', username)
         uploadPostPlatforms.forEach(p => formData.append('platform[]', p))
 
-        // Thumbnail/capa do vídeo (Reels, TikTok, YouTube) — opcional, não bloqueia publicação
+        // Capa por plataforma (campos distintos conforme doc oficial Upload-Post)
         if (cover_url) {
-          formData.append('thumbnail', cover_url)  // URL string também
+          formData.append('cover_url', cover_url)        // Instagram Reels
+          formData.append('thumbnail_url', cover_url)    // YouTube
+          // TikTok usa cover_timestamp (ms) — não aceita URL de imagem, omitir
         }
 
         const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload`, {

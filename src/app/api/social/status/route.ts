@@ -64,7 +64,11 @@ export async function GET(request: NextRequest) {
     const username = cliente.slug
     const clienteLogo = (cliente as any).logo_url || null
 
+    const rawProfile = await UP.buscarPerfil(username)
+    console.log('[social/status] raw Upload-Post profile:', JSON.stringify(rawProfile, null, 2))
+
     const contas = await UP.verificarConexoes(username)
+    console.log('[social/status] contas extraídas:', JSON.stringify(contas, null, 2))
 
     const accounts = contas
       .filter((c: any) => c.conectada)

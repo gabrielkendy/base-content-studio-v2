@@ -67,30 +67,19 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
     let publishResponse: any = null
 
     if (media_urls.length > 0 && media_urls.some(isVideoUrl)) {
-      // Video upload
+      // Video upload — passa URL diretamente, Upload-Post busca o vídeo
       const videoUrl = media_urls.find(isVideoUrl)!
       const formData = new FormData()
 
-      const videoResponse = await fetch(videoUrl)
-      if (!videoResponse.ok) return { success: false, error: `Falha ao baixar vídeo: HTTP ${videoResponse.status}` }
-      const videoBlob = await videoResponse.blob()
-      formData.append('video', videoBlob, 'video.mp4')
+      formData.append('video', videoUrl)   // URL string — evita download+reupload no servidor
       formData.append('title', fullCaption)
       formData.append('user', username)
       uploadPostPlatforms.forEach(p => formData.append('platform[]', p))
 
-      // Thumbnail/capa do vídeo (Reels, TikTok, YouTube)
+      // Thumbnail/capa do vídeo (Reels, TikTok, YouTube) — opcional
       const coverUrl: string | undefined = post.cover_url
       if (coverUrl) {
-        try {
-          const thumbResponse = await fetch(coverUrl)
-          if (thumbResponse.ok) {
-            const thumbBlob = await thumbResponse.blob()
-            formData.append('thumbnail', thumbBlob, 'thumbnail.jpg')
-          }
-        } catch {
-          // thumbnail é opcional — não bloqueia a publicação
-        }
+        formData.append('thumbnail', coverUrl)  // URL string também
       }
 
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload`, {

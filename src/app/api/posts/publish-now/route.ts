@@ -166,30 +166,18 @@ export async function POST(request: NextRequest) {
 
     try {
       if (media_urls.length > 0 && media_urls.some(isVideoUrl)) {
-        // Video upload
+        // Video upload — passa URL diretamente, Upload-Post busca o vídeo
         const videoUrl = media_urls.find(isVideoUrl)!
         const formData = new FormData()
 
-        // Fetch the video file
-        const videoResponse = await fetch(videoUrl)
-        if (!videoResponse.ok) throw new Error(`Falha ao baixar vídeo: HTTP ${videoResponse.status}`)
-        const videoBlob = await videoResponse.blob()
-        formData.append('video', videoBlob, 'video.mp4')
+        formData.append('video', videoUrl)   // URL string — evita download+reupload no servidor
         formData.append('title', fullCaption)
         formData.append('user', username)
         uploadPostPlatforms.forEach(p => formData.append('platform[]', p))
 
         // Thumbnail/capa do vídeo (Reels, TikTok, YouTube) — opcional, não bloqueia publicação
         if (cover_url) {
-          try {
-            const thumbResponse = await fetch(cover_url)
-            if (thumbResponse.ok) {
-              const thumbBlob = await thumbResponse.blob()
-              formData.append('thumbnail', thumbBlob, 'thumbnail.jpg')
-            }
-          } catch {
-            // thumbnail é opcional — falha não impede o post
-          }
+          formData.append('thumbnail', cover_url)  // URL string também
         }
 
         const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload`, {

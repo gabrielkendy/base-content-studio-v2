@@ -905,9 +905,9 @@ export default function AgendarPage() {
                     </p>
                     <CoverPicker
                       orgId={org?.id}
-                      videoSource={videoMedia ? (videoMedia.localFile ?? videoMedia.url) : undefined}
+                      videoSource={videoMedia?.preview ? (videoMedia.localFile ?? videoMedia.url) : undefined}
                       value={coverUrl}
-                      onChange={setCoverUrl}
+                      onChange={(url) => { setCoverUrl(url); if (url) toast('Capa salva!', 'success') }}
                     />
                   </div>
                 )

@@ -892,17 +892,9 @@ export default function AgendarPage() {
                 const videoUploading = uploadedMedia.some(m => m.isVideo && m.uploading)
                 return (
                   <div className="mt-4 pt-4 border-t border-zinc-100">
-                    <h3 className="text-sm font-semibold text-zinc-700 mb-1 flex items-center gap-2">
-                      <svg className="w-4 h-4 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15 10l4.553-2.069A1 1 0 0121 8.82v6.362a1 1 0 01-1.447.894L15 14M3 8a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2H5a2 2 0 01-2-2V8z" />
-                      </svg>
-                      Capa do Vídeo
+                    <h3 className="text-sm font-semibold text-zinc-700 mb-3">
+                      Defina a capa do seu vídeo
                     </h3>
-                    <p className="text-xs text-zinc-400 mb-3">
-                      {videoUploading
-                        ? 'Aguardando upload do vídeo para extrair frames...'
-                        : 'Escolha uma imagem de capa ou selecione um frame do vídeo'}
-                    </p>
                     <CoverPicker
                       orgId={org?.id}
                       videoSource={videoMedia?.preview ? (videoMedia.localFile ?? videoMedia.url) : undefined}

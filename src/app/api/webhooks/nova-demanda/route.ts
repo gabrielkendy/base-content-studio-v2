@@ -165,10 +165,10 @@ export async function POST(req: NextRequest) {
     // MODO CRIAÇÃO: Criar nova demanda
     // ========================================
 
-    // Validações para criação
-    if (!cliente_slug || !titulo || !tipo || midias.length === 0) {
+    // Validações para criação (midia_urls pode ser vazio — demanda fica como rascunho)
+    if (!cliente_slug || !titulo || !tipo) {
       return NextResponse.json({ 
-        error: 'Campos obrigatórios: cliente_slug, titulo, tipo, midia_urls (array) ou midia_url (string)' 
+        error: 'Campos obrigatórios: cliente_slug, titulo, tipo' 
       }, { status: 400 })
     }
 
@@ -197,7 +197,8 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado no banco' }, { status: 404 })
     }
 
-    // Criar conteúdo
+    // Criar conteúdo (se sem mídia → rascunho; com mídia → aprovação cliente)
+    const statusInicial = midias.length > 0 ? 'aprovacao_cliente' : 'rascunho'
     const now = new Date()
     const { data: conteudo, error: conteudoError } = await supabase
       .from('conteudos')
@@ -208,7 +209,7 @@ export async function POST(req: NextRequest) {
         tipo: tipoMapeado,
         legenda: legenda || '',
         midia_urls: midias,
-        status: 'aprovacao_cliente',
+        status: statusInicial,
         mes: now.getMonth() + 1,
         ano: now.getFullYear(),
         categoria: tipoMapeado === 'material_grafico' ? 'material_grafico' : 'post_social',
@@ -221,37 +222,44 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: conteudoError.message }, { status: 500 })
     }
 
-    // Gerar link de aprovação
-    const token = crypto.randomBytes(24).toString('hex')
-    const expiresAt = new Date()
-    expiresAt.setDate(expiresAt.getDate() + 30)
+    // Gerar link de aprovação SOMENTE se tem mídia
+    let linkAprovacao: string | null = null
 
-    const { data: aprovacao, error: aprovacaoError } = await supabase
-      .from('aprovacoes_links')
-      .insert({
-        conteudo_id: conteudo.id,
-        empresa_id,
-        token,
-        status: 'pendente',
-        expires_at: expiresAt.toISOString(),
-      })
-      .select()
-      .single()
+    if (midias.length > 0) {
+      const token = crypto.randomBytes(24).toString('hex')
+      const expiresAt = new Date()
+      expiresAt.setDate(expiresAt.getDate() + 30)
 
-    if (aprovacaoError) {
-      console.error('Erro ao criar link:', aprovacaoError)
+      const { data: aprovacao, error: aprovacaoError } = await supabase
+        .from('aprovacoes_links')
+        .insert({
+          conteudo_id: conteudo.id,
+          empresa_id,
+          token,
+          status: 'pendente',
+          expires_at: expiresAt.toISOString(),
+        })
+        .select()
+        .single()
+
+      if (aprovacaoError) {
+        console.error('Erro ao criar link:', aprovacaoError)
+      }
+
+      linkAprovacao = aprovacao ? `${getPublicBaseUrl()}/aprovacao?token=${token}` : null
     }
-
-    const linkAprovacao = aprovacao ? `${getPublicBaseUrl()}/aprovacao?token=${token}` : null
 
     return NextResponse.json({
       success: true,
       mode: 'create',
       conteudo_id: conteudo.id,
       demanda_id: (conteudo as any).demanda_id,
+      status: statusInicial,
       link_aprovacao: linkAprovacao,
       total_midias: midias.length,
-      message: `Demanda criada com sucesso! (${midias.length} arquivo${midias.length > 1 ? 's' : ''})`
+      message: midias.length > 0 
+        ? `Demanda criada com sucesso! (${midias.length} arquivo${midias.length > 1 ? 's' : ''})` 
+        : `Demanda criada como rascunho (sem arquivos). Aguardando upload do designer.`
     })
 
   } catch (err: any) {

@@ -5,6 +5,9 @@ const API_KEY = process.env.UPLOAD_POST_API_KEY!
 const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://base-content-studio-v2.vercel.app'
 
 export async function GET() {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+  }
   const testUsername = `test_flow_${Date.now()}`
   const results: any = { steps: [] }
 

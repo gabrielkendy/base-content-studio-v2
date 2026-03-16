@@ -3,8 +3,11 @@ import { createServiceClient } from '@/lib/supabase/server'
 import { ensureProfile, generateJwtUrl, buildUsername } from '@/lib/upload-post'
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+  }
   const results: any = { steps: [] }
-  
+
   try {
     const admin = createServiceClient()
     

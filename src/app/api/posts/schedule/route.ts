@@ -140,8 +140,6 @@ export async function POST(request: NextRequest) {
         })
         .eq('id', conteudoId)
 
-      console.log(`[schedule/conteudo] Post ${post.id} agendado para ${scheduledAt.toISOString()} | cliente: ${cliente.slug}`)
-
       return NextResponse.json({
         success: true,
         job_id: post.id,
@@ -234,8 +232,6 @@ export async function POST(request: NextRequest) {
       hour: '2-digit',
       minute: '2-digit',
     })
-
-    console.log(`[schedule/direto] Post ${post.id} agendado para ${scheduledBR} | cliente: ${cliente.slug} | plataformas: ${platformStrings.join(', ')}`)
 
     return NextResponse.json({
       success: true,

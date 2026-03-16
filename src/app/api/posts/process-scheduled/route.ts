@@ -4,7 +4,8 @@ import { buildUsername } from '@/lib/upload-post'
 
 const UPLOAD_POST_API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
 const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY!
-const CRON_SECRET = process.env.CRON_SECRET
+// CRON_SECRET must be set; never bypass
+
 
 // Map platform IDs to Upload-Post platform names
 const PLATFORM_MAP: Record<string, string> = {
@@ -139,29 +140,18 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
 }
 
 export async function GET(request: NextRequest) {
-  // Verify cron secret (optional but recommended)
+  const CRON_SECRET = process.env.CRON_SECRET
+  if (!CRON_SECRET) {
+    return NextResponse.json({ error: 'Server misconfigured: CRON_SECRET not set' }, { status: 500 })
+  }
   const authHeader = request.headers.get('authorization')
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
-    // Allow without auth for testing, but log it
-    console.log('[process-scheduled] No auth header, proceeding anyway for testing')
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
   const admin = createServiceClient()
   const now = new Date()
   const nowISO = now.toISOString()
-
-  // Format for logging in Brazilian time
-  const brFormatter = new Intl.DateTimeFormat('pt-BR', {
-    timeZone: 'America/Sao_Paulo',
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-  })
-
-  console.log(`[process-scheduled] Running at ${brFormatter.format(now)} (BR) / ${nowISO} (UTC)`)
 
   // Get all scheduled posts that are due
   const { data: duePosts, error: fetchError } = await admin
@@ -177,13 +167,12 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ error: 'Error fetching posts' }, { status: 500 })
   }
 
-  console.log(`[process-scheduled] Found ${duePosts?.length || 0} posts due`)
+
 
   if (!duePosts || duePosts.length === 0) {
     return NextResponse.json({ 
       message: 'No posts to process', 
       processed: 0,
-      checked_at_br: brFormatter.format(now),
       checked_at_utc: nowISO,
     })
   }

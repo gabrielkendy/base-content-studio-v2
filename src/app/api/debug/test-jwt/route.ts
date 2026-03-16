@@ -4,6 +4,9 @@ const API_URL = 'https://api.upload-post.com'
 const API_KEY = process.env.UPLOAD_POST_API_KEY!
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+  }
   const { searchParams } = new URL(request.url)
   const username = searchParams.get('username') || 'kendyproducoes'
   

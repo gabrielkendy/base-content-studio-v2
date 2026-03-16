@@ -80,8 +80,6 @@ export async function POST(req: NextRequest) {
     // MODO ATUALIZAÇÃO: Se demanda_id foi informado
     // ========================================
     if (demanda_id) {
-      console.log(`[nova-demanda] Atualizando demanda #${demanda_id}`)
-      
       // Buscar demanda existente
       const { data: demandaExistente, error: buscaError } = await supabase
         .from('conteudos')

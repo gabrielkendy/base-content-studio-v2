@@ -64,10 +64,6 @@ export async function POST(request: NextRequest) {
     // Build consistent username (same as schedule uses)
     const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
 
-    console.log('=== CONNECT-URL DEBUG ===')
-    console.log('clienteSlug:', clienteSlug)
-    console.log('Generated username:', username)
-
     // Ensure profile exists
     const profileResult = await ensureProfile(username)
     if (!profileResult.success) {

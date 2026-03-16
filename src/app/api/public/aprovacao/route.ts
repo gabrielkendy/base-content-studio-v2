@@ -301,7 +301,6 @@ export async function POST(request: NextRequest) {
               ],
             })
 
-          console.log('✅ Task de ajuste criada automaticamente')
         } catch (taskErr) {
           console.error('Error creating adjustment task:', taskErr)
           // Continue - não é crítico

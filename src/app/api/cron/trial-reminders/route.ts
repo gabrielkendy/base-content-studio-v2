@@ -8,13 +8,14 @@ const supabase = createClient(
   process.env.SUPABASE_SERVICE_ROLE_KEY!
 )
 
-// Verify cron secret to prevent unauthorized access
-const CRON_SECRET = process.env.CRON_SECRET
-
 export async function GET(request: NextRequest) {
-  // Verify authorization
+  // Require CRON_SECRET — always enforce, never bypass
+  const CRON_SECRET = process.env.CRON_SECRET
+  if (!CRON_SECRET) {
+    return NextResponse.json({ error: 'Server misconfigured: CRON_SECRET not set' }, { status: 500 })
+  }
   const authHeader = request.headers.get('authorization')
-  if (CRON_SECRET && authHeader !== `Bearer ${CRON_SECRET}`) {
+  if (authHeader !== `Bearer ${CRON_SECRET}`) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 
@@ -105,8 +106,6 @@ export async function GET(request: NextRequest) {
         }
       }
     }
-
-    console.log('Trial reminders cron completed:', results)
 
     return NextResponse.json({
       success: true,

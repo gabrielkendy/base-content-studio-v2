@@ -44,7 +44,7 @@ export async function POST(request: NextRequest) {
         await handleInvoiceFailed(event.data.object as Stripe.Invoice, admin)
         break
       default:
-        console.log(`Unhandled event type: ${event.type}`)
+        // Unhandled event types are silently ignored
     }
 
     return NextResponse.json({ received: true })
@@ -92,7 +92,6 @@ async function handleCheckoutComplete(session: Stripe.Checkout.Session, admin: A
     }
   }
 
-  console.log(`Checkout complete for org ${metadata.organization_id}`)
 }
 
 async function handleSubscriptionUpdate(subscription: Stripe.Subscription, admin: AdminClient) {
@@ -146,7 +145,6 @@ async function handleSubscriptionUpdate(subscription: Stripe.Subscription, admin
     })
     .eq('id', org.id)
 
-  console.log(`Subscription updated for org ${org.id}: ${planId} (${status})`)
 }
 
 async function handleSubscriptionCanceled(subscription: Stripe.Subscription, admin: AdminClient) {
@@ -188,7 +186,6 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription, adm
     }
   }
 
-  console.log(`Subscription canceled for org ${org.id}`)
 }
 
 async function handleInvoicePaid(invoice: Stripe.Invoice, admin: AdminClient) {
@@ -218,7 +215,6 @@ async function handleInvoicePaid(invoice: Stripe.Invoice, admin: AdminClient) {
     { onConflict: 'stripe_invoice_id' },
   )
 
-  console.log(`Invoice paid: ${id} for org ${org.id}`)
 }
 
 async function handleInvoiceFailed(invoice: Stripe.Invoice, admin: AdminClient) {
@@ -257,5 +253,4 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice, admin: AdminClient) 
     }
   }
 
-  console.log(`Invoice payment failed: ${id} for org ${org.id}`)
 }

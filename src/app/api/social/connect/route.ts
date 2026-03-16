@@ -79,12 +79,6 @@ export async function POST(request: NextRequest) {
       || 'https://base-content-studio-v2.vercel.app'
     const redirectUrl = `${appUrl}/auth/social-callback?connected=true&cliente=${encodeURIComponent(cliente.slug)}`
     
-    console.log('=== SOCIAL CONNECT DEBUG ===')
-    console.log('Username Upload-Post:', username)
-    console.log('App URL:', appUrl)
-    console.log('Redirect URL:', redirectUrl)
-    console.log('Cliente:', cliente.nome, '/', cliente.slug)
-
     // Gerar JWT URL (Whitelabel - requer plano Pro+)
     const jwtResult = await generateJwtUrl({
       username,

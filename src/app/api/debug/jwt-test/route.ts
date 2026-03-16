@@ -4,6 +4,9 @@ const API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
 const API_KEY = process.env.UPLOAD_POST_API_KEY || ''
 
 export async function GET(request: NextRequest) {
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json({ error: 'Not Found' }, { status: 404 })
+  }
   // Mostrar info da API key (sem expor ela toda)
   const keyInfo = {
     length: API_KEY.length,

@@ -69,7 +69,23 @@ export default function EquipePage() {
     const { data: mems } = await db.select('members', {
       filters: [{ op: 'eq', col: 'org_id', val: org!.id }],
     })
-    setMembers(mems || [])
+
+    // Enriquece membros com email via admin API
+    try {
+      const emailRes = await fetch('/api/members/emails')
+      if (emailRes.ok) {
+        const { emails } = await emailRes.json()
+        const enriched = (mems || []).map((m: any) => ({
+          ...m,
+          email: emails[m.user_id] || m.email || null,
+        }))
+        setMembers(enriched)
+      } else {
+        setMembers(mems || [])
+      }
+    } catch {
+      setMembers(mems || [])
+    }
 
     const { data: invs } = await db.select('invites', {
       filters: [

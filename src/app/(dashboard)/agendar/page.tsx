@@ -232,6 +232,12 @@ export default function AgendarPage() {
   const selectedPlatformIds = [...new Set(selectedPlatforms.map(acc => acc.platform))]
   const activePlatformConfigs = PLATFORMS.filter(p => selectedPlatformIds.includes(p.id))
 
+  // ─── Stories detection ────────────────────────────────────────
+  // Stories (Instagram/Facebook) não têm legenda
+  const FORMATS_WITHOUT_CAPTION = ['stories']
+  const isStoriesOnly = selectedPlatformIds.length > 0 &&
+    selectedPlatformIds.every(pid => FORMATS_WITHOUT_CAPTION.includes(platformFormats.get(pid) || ''))
+
   // ─── Character counting ───────────────────────────────────────
   const minMaxChars = activePlatformConfigs.length > 0
     ? Math.min(...activePlatformConfigs.map(p => p.maxChars))
@@ -409,10 +415,11 @@ export default function AgendarPage() {
   function validate(requireDateTime = true): boolean {
     if (!selectedCliente) { toast('Selecione um cliente', 'error'); return false }
     if (selectedProfiles.size === 0) { toast('Selecione pelo menos um perfil', 'error'); return false }
-    if (!caption.trim() && !customCaptions) { toast('Digite a legenda do post', 'error'); return false }
+    if (!caption.trim() && !customCaptions && !isStoriesOnly) { toast('Digite a legenda do post', 'error'); return false }
     if (requireDateTime) {
       if (!scheduledDate || !scheduledTime) { toast('Defina data e hora', 'error'); return false }
-      if (new Date(`${scheduledDate}T${scheduledTime}`) <= new Date()) { toast('Data deve ser no futuro', 'error'); return false }
+      const startOfToday = new Date(); startOfToday.setHours(0,0,0,0)
+      if (new Date(`${scheduledDate}T${scheduledTime}`) < startOfToday) { toast('Data deve ser hoje ou no futuro', 'error'); return false }
     }
     return true
   }
@@ -701,7 +708,7 @@ export default function AgendarPage() {
                 <h2 className="font-semibold text-zinc-900 text-sm uppercase tracking-wide">
                   ✏️ Legenda
                 </h2>
-                {minMaxChars && (
+                {!isStoriesOnly && minMaxChars && (
                   <span className={`text-xs font-mono ${
                     caption.length > minMaxChars ? 'text-red-500 font-bold' : 'text-zinc-400'
                   }`}>
@@ -710,74 +717,100 @@ export default function AgendarPage() {
                 )}
               </div>
 
-              {/* Personalizar toggle */}
-              {activePlatformConfigs.length > 1 && (
-                <label className="flex items-center gap-2 mb-3 cursor-pointer group">
-                  <div
-                    className={`relative w-9 h-5 rounded-full transition-colors ${
-                      customCaptions ? 'bg-blue-500' : 'bg-zinc-200'
-                    }`}
-                    onClick={() => setCustomCaptions(!customCaptions)}
-                  >
-                    <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
-                      customCaptions ? 'translate-x-4' : ''
-                    }`} />
+              {isStoriesOnly ? (
+                <div className="flex items-start gap-3 p-3 rounded-xl bg-blue-50 border border-blue-100">
+                  <span className="text-lg mt-0.5">📖</span>
+                  <div>
+                    <p className="text-sm font-medium text-blue-800">Stories não têm legenda</p>
+                    <p className="text-xs text-blue-600 mt-0.5">
+                      No formato Stories, a imagem ou vídeo fala por si. Adicione texto diretamente na mídia se necessário.
+                    </p>
                   </div>
-                  <span className="text-xs text-zinc-500 group-hover:text-zinc-700">
-                    Personalizar por rede
-                  </span>
-                </label>
-              )}
-
-              {customCaptions ? (
-                <div className="space-y-3">
-                  {activePlatformConfigs.map(platform => (
-                    <div key={platform.id}>
-                      <div className="flex items-center justify-between mb-1">
-                        <div className="flex items-center gap-1.5">
-                          <span className="text-sm">{platform.icon}</span>
-                          <span className="text-xs font-medium text-zinc-700">{platform.name}</span>
-                        </div>
-                        <span className={`text-[10px] font-mono ${
-                          (captionByPlatform[platform.id] || '').length > platform.maxChars ? 'text-red-500' : 'text-zinc-400'
-                        }`}>
-                          {(captionByPlatform[platform.id] || '').length}/{platform.maxChars}
-                        </span>
-                      </div>
-                      <Textarea
-                        value={captionByPlatform[platform.id] || ''}
-                        onChange={e => setCaptionByPlatform(prev => ({ ...prev, [platform.id]: e.target.value }))}
-                        placeholder={`Legenda para ${platform.name}...`}
-                        className="min-h-[80px]"
-                      />
-                    </div>
-                  ))}
                 </div>
               ) : (
-                <Textarea
-                  value={caption}
-                  onChange={e => setCaption(e.target.value)}
-                  placeholder="Escreva a legenda do seu post..."
-                  className="min-h-[140px]"
-                />
-              )}
+                <>
+                  {/* Personalizar toggle */}
+                  {activePlatformConfigs.length > 1 && (
+                    <label className="flex items-center gap-2 mb-3 cursor-pointer group">
+                      <div
+                        className={`relative w-9 h-5 rounded-full transition-colors ${
+                          customCaptions ? 'bg-blue-500' : 'bg-zinc-200'
+                        }`}
+                        onClick={() => setCustomCaptions(!customCaptions)}
+                      >
+                        <div className={`absolute top-0.5 left-0.5 w-4 h-4 bg-white rounded-full shadow transition-transform ${
+                          customCaptions ? 'translate-x-4' : ''
+                        }`} />
+                      </div>
+                      <span className="text-xs text-zinc-500 group-hover:text-zinc-700">
+                        Personalizar por rede
+                      </span>
+                    </label>
+                  )}
 
-              {/* Char limits info */}
-              {activePlatformConfigs.length > 0 && !customCaptions && (
-                <div className="flex flex-wrap gap-2 mt-3">
-                  {activePlatformConfigs.map(p => (
-                    <span
-                      key={p.id}
-                      className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${
-                        caption.length > p.maxChars
-                          ? 'bg-red-50 text-red-600'
-                          : 'bg-zinc-50 text-zinc-400'
-                      }`}
-                    >
-                      {p.icon} {p.maxChars}
-                    </span>
-                  ))}
-                </div>
+                  {customCaptions ? (
+                    <div className="space-y-3">
+                      {activePlatformConfigs.map(platform => {
+                        const isStories = platformFormats.get(platform.id) === 'stories'
+                        if (isStories) {
+                          return (
+                            <div key={platform.id} className="flex items-center gap-2 p-2.5 rounded-lg bg-blue-50 border border-blue-100">
+                              <span className="text-sm">{platform.icon}</span>
+                              <span className="text-xs font-medium text-blue-700">{platform.name}</span>
+                              <span className="text-xs text-blue-500 ml-1">· Stories não têm legenda</span>
+                            </div>
+                          )
+                        }
+                        return (
+                          <div key={platform.id}>
+                            <div className="flex items-center justify-between mb-1">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-sm">{platform.icon}</span>
+                                <span className="text-xs font-medium text-zinc-700">{platform.name}</span>
+                              </div>
+                              <span className={`text-[10px] font-mono ${
+                                (captionByPlatform[platform.id] || '').length > platform.maxChars ? 'text-red-500' : 'text-zinc-400'
+                              }`}>
+                                {(captionByPlatform[platform.id] || '').length}/{platform.maxChars}
+                              </span>
+                            </div>
+                            <Textarea
+                              value={captionByPlatform[platform.id] || ''}
+                              onChange={e => setCaptionByPlatform(prev => ({ ...prev, [platform.id]: e.target.value }))}
+                              placeholder={`Legenda para ${platform.name}...`}
+                              className="min-h-[80px]"
+                            />
+                          </div>
+                        )
+                      })}
+                    </div>
+                  ) : (
+                    <Textarea
+                      value={caption}
+                      onChange={e => setCaption(e.target.value)}
+                      placeholder="Escreva a legenda do seu post..."
+                      className="min-h-[140px]"
+                    />
+                  )}
+
+                  {/* Char limits info */}
+                  {activePlatformConfigs.length > 0 && !customCaptions && (
+                    <div className="flex flex-wrap gap-2 mt-3">
+                      {activePlatformConfigs.map(p => (
+                        <span
+                          key={p.id}
+                          className={`inline-flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full ${
+                            caption.length > p.maxChars
+                              ? 'bg-red-50 text-red-600'
+                              : 'bg-zinc-50 text-zinc-400'
+                          }`}
+                        >
+                          {p.icon} {p.maxChars}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </>
               )}
             </CardContent>
           </Card>

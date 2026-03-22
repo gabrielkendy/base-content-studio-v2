@@ -40,6 +40,7 @@ async function getUserMembership(userId: string) {
     .select('id, org_id, role, user_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data
@@ -180,8 +181,9 @@ export async function POST(request: NextRequest) {
     if (isNaN(scheduledDate.getTime())) {
       return NextResponse.json({ error: 'Data de agendamento inválida' }, { status: 400 })
     }
-    if (scheduledDate <= new Date()) {
-      return NextResponse.json({ error: 'A data de agendamento deve ser no futuro' }, { status: 400 })
+    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
+    if (scheduledDate < startOfToday) {
+      return NextResponse.json({ error: 'A data de agendamento deve ser hoje ou no futuro' }, { status: 400 })
     }
 
     // Verificar cliente

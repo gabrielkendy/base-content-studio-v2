@@ -213,7 +213,7 @@ export async function POST(request: NextRequest) {
         org_id: membership.org_id,
         cliente_id,
         platforms: JSON.stringify(platformStrings),
-        caption: caption.trim(),
+        caption: (caption || '').trim(),
         hashtags,
         media_urls,
         cover_url: cover_url || null,

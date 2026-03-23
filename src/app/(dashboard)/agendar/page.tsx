@@ -466,7 +466,7 @@ export default function AgendarPage() {
         body: JSON.stringify({
           cliente_id: selectedCliente!.id,
           platforms: getPlatformFormatsArray(),
-          caption: caption,
+          caption: customCaptions ? Object.values(captionByPlatform).join('\n---\n') : caption,
           hashtags: hashtags.split(/\s+/).filter(t => t.startsWith('#')),
           media_urls: uploadedMedia.map(m => m.url),
           cover_url: coverUrl || undefined,

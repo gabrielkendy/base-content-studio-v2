@@ -162,9 +162,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Determine media type and call appropriate Upload-Post endpoint
-    const fullCaption = hashtags.length > 0 
-      ? `${caption}\n\n${hashtags.join(' ')}` 
-      : caption
+    const fullCaption = hashtags.length > 0
+      ? `${caption || ''}\n\n${hashtags.join(' ')}`.trim()
+      : (caption || '')
 
     const uploadPostPlatforms = platformStrings
       .map(p => PLATFORM_MAP[p])

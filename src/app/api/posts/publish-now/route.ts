@@ -40,6 +40,7 @@ async function getUserMembership(userId: string) {
     .select('id, org_id, role, user_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data
@@ -59,7 +60,12 @@ const PLATFORM_MAP: Record<string, string> = {
 
 function isVideoUrl(url: string): boolean {
   const videoExtensions = ['.mp4', '.mov', '.webm', '.avi']
-  return videoExtensions.some(ext => url.toLowerCase().includes(ext))
+  try {
+    const pathname = new URL(url).pathname.toLowerCase()
+    return videoExtensions.some(ext => pathname.endsWith(ext))
+  } catch {
+    return videoExtensions.some(ext => url.toLowerCase().split('?')[0].endsWith(ext))
+  }
 }
 
 export async function POST(request: NextRequest) {
@@ -87,10 +93,13 @@ export async function POST(request: NextRequest) {
 
     // Support both old format (string[]) and new format (object[])
     const platformStrings = platforms.map(p => typeof p === 'string' ? p : p.platform)
+    const isStoriesOnly = platforms.every((p: any) =>
+      (typeof p === 'object' ? p.format : '') === 'stories'
+    )
 
-    if (!cliente_id || !platforms || platforms.length === 0 || !caption) {
-      return NextResponse.json({ 
-        error: 'Missing required fields: cliente_id, platforms, caption' 
+    if (!cliente_id || !platforms || platforms.length === 0 || (!caption && !isStoriesOnly)) {
+      return NextResponse.json({
+        error: 'Missing required fields: cliente_id, platforms, caption'
       }, { status: 400 })
     }
 

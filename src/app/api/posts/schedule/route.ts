@@ -170,7 +170,10 @@ export async function POST(request: NextRequest) {
     if (!platforms || platforms.length === 0) {
       return NextResponse.json({ error: 'Selecione pelo menos uma plataforma' }, { status: 400 })
     }
-    if (!caption || !caption.trim()) {
+    const isStoriesOnly = (platforms as any[]).every((p: any) =>
+      (typeof p === 'object' ? p.format : '') === 'stories'
+    )
+    if (!isStoriesOnly && (!caption || !caption.trim())) {
       return NextResponse.json({ error: 'A legenda não pode estar vazia' }, { status: 400 })
     }
     if (!scheduled_at) {

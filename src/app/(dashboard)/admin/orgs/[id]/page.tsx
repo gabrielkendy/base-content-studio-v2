@@ -18,6 +18,7 @@ import {
   Check,
 } from 'lucide-react'
 import Link from 'next/link'
+import { useToast } from '@/components/ui/toast'
 
 interface OrgDetail {
   id: string
@@ -51,6 +52,7 @@ const PLAN_LABELS: Record<string, { label: string; color: string; bg: string }> 
 
 export default function AdminOrgDetailPage() {
   const { user, loading: authLoading } = useAuth()
+  const { toast } = useToast()
   const router = useRouter()
   const params = useParams()
   const orgId = params.id as string
@@ -98,7 +100,7 @@ export default function AdminOrgDetailPage() {
       setPlanSuccess(true)
       setTimeout(() => setPlanSuccess(false), 2000)
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao salvar plano')
+      toast(err instanceof Error ? err.message : 'Erro ao salvar plano', 'error')
     } finally {
       setPlanSaving(false)
     }
@@ -124,7 +126,7 @@ export default function AdminOrgDetailPage() {
         }
       })
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao atualizar membro')
+      toast(err instanceof Error ? err.message : 'Erro ao atualizar membro', 'error')
     } finally {
       setTogglingMember(null)
     }

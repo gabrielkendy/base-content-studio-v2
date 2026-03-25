@@ -159,7 +159,6 @@ export function useCampanhaNotificacoesIntegration() {
     for (const notif of pendentes) {
       // TODO: Integrar com sistema de notificações existente
       // await criarNotificacaoNoSistema(notif)
-      console.log('Notificação de campanha:', notif.titulo)
     }
 
     // Marcar todas como enviadas

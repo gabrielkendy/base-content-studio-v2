@@ -170,6 +170,7 @@ async function handleSubscriptionCanceled(subscription: Stripe.Subscription, adm
     .eq('org_id', org.id)
     .eq('role', 'admin')
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -239,6 +240,7 @@ async function handleInvoiceFailed(invoice: Stripe.Invoice, admin: AdminClient) 
     .eq('org_id', org.id)
     .eq('role', 'admin')
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 

@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
@@ -50,6 +51,7 @@ export default function AprovadoresPage() {
   const [dialogOpen, setDialogOpen] = useState(false)
   const [editingId, setEditingId] = useState<string | null>(null)
   const [filtroEmpresa, setFiltroEmpresa] = useState<string>('todas')
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
   const [filtroTipo, setFiltroTipo] = useState<string>('todos')
   const { toast } = useToast()
   
@@ -146,15 +148,13 @@ export default function AprovadoresPage() {
     loadData()
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Tem certeza que deseja excluir este aprovador?')) return
-    
+  async function doDelete(id: string) {
+    setConfirmDeleteId(null)
     const { error } = await db.delete('aprovadores', { id })
     if (error) {
       toast('Erro ao excluir aprovador', 'error')
       return
     }
-    
     toast('Aprovador excluído!', 'success')
     loadData()
   }
@@ -394,7 +394,7 @@ export default function AprovadoresPage() {
                       <Button size="sm" variant="ghost" onClick={() => openEdit(apr)}>
                         <Pencil className="w-4 h-4 text-zinc-400" />
                       </Button>
-                      <Button size="sm" variant="ghost" onClick={() => handleDelete(apr.id)}>
+                      <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(apr.id)}>
                         <Trash2 className="w-4 h-4 text-red-400" />
                       </Button>
                     </div>
@@ -610,6 +610,13 @@ export default function AprovadoresPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Tem certeza que deseja excluir este aprovador?"
+        onConfirm={() => confirmDeleteId && doDelete(confirmDeleteId)}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   )
 }

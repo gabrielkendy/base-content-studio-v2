@@ -198,19 +198,10 @@ export default function EquipePage() {
       role: inviteRole,
       token,
       invited_by: currentMember?.user_id,
+      client_ids: inviteRole === 'cliente' ? selectedClienteIds : [],
     }, { select: '*', single: true })
 
     if (error) { toast('Erro ao criar convite', 'error'); return }
-
-    if (inviteRole === 'cliente' && selectedClienteIds.length > 0 && invite) {
-      for (const clienteId of selectedClienteIds) {
-        await db.insert('member_clients', {
-          member_id: invite.id,
-          cliente_id: clienteId,
-          org_id: org!.id,
-        })
-      }
-    }
 
     const link = `${window.location.origin}/auth/invite?token=${token}`
     setInviteOpen(false)

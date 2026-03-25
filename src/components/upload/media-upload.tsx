@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useRef } from 'react'
+import { useToast } from '@/components/ui/toast'
 import { createClient } from '@/lib/supabase/client'
 import { Button } from '@/components/ui/button'
 import { Upload, X, Download, Image, Film } from 'lucide-react'
@@ -15,6 +16,7 @@ interface MediaUploadProps {
 }
 
 export function MediaUpload({ orgId, conteudoId, existingUrls, onUpdate, onUpload, maxFiles }: MediaUploadProps) {
+  const { toast } = useToast()
   const [uploading, setUploading] = useState(false)
   const [urls, setUrls] = useState<string[]>(existingUrls || [])
   const fileRef = useRef<HTMLInputElement>(null)
@@ -30,7 +32,7 @@ export function MediaUpload({ orgId, conteudoId, existingUrls, onUpdate, onUploa
     if (!files?.length) return
 
     if (maxFiles && urls.length + files.length > maxFiles) {
-      alert(`Máximo de ${maxFiles} arquivos`)
+      toast(`Máximo de ${maxFiles} arquivos permitidos`, 'error')
       return
     }
 

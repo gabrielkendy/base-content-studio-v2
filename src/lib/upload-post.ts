@@ -106,9 +106,6 @@ export async function generateJwtUrl(params: {
   show_calendar?: boolean
 }): Promise<{ success: boolean; access_url?: string; error?: string }> {
   try {
-    console.log('=== GENERATE JWT DEBUG ===')
-    console.log('Params:', JSON.stringify(params, null, 2))
-    
     const res = await fetch(`${API_URL}/api/uploadposts/users/generate-jwt`, {
       method: 'POST',
       headers: headers(),
@@ -116,9 +113,6 @@ export async function generateJwtUrl(params: {
     })
 
     const data = await res.json()
-    
-    console.log('Response status:', res.status)
-    console.log('Response data:', JSON.stringify(data, null, 2))
 
     if (!res.ok) {
       return { success: false, error: data.message || `HTTP ${res.status}` }

@@ -1,6 +1,7 @@
 'use client'
 
 import { useState } from 'react'
+import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Card } from '@/components/ui/card'
 import {
@@ -36,6 +37,7 @@ export function NewTaskModal({
   clientes,
   onCreated,
 }: NewTaskModalProps) {
+  const { toast } = useToast()
   const [titulo, setTitulo] = useState('')
   const [descricao, setDescricao] = useState('')
   const [prioridade, setPrioridade] = useState<'baixa' | 'normal' | 'alta' | 'urgente'>('normal')
@@ -106,7 +108,7 @@ export function NewTaskModal({
       handleClose()
     } catch (err) {
       console.error('Erro ao criar tarefa:', err)
-      alert('Erro ao criar tarefa')
+      toast('Erro ao criar tarefa. Tente novamente.', 'error')
     } finally {
       setSaving(false)
     }

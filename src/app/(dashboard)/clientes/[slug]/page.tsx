@@ -12,6 +12,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { MESES, STATUS_CONFIG } from '@/lib/utils'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { useToast } from '@/components/ui/toast'
 import { ChevronLeft, ChevronRight, Calendar, Users, Trash2, Mail, Palette, FolderOpen, Share2, Target, FileText, CheckCircle2, Plus, Phone, GripVertical, Bell, BellOff, Edit2, MessageCircle } from 'lucide-react'
 import Link from 'next/link'
@@ -67,6 +68,11 @@ export default function ClienteDetailPage() {
     pode_editar_legenda: false,
     recebe_notificacao: true
   })
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; message: string; onConfirm: () => void }>({ open: false, message: '', onConfirm: () => {} })
+  const showConfirm = (message: string, onConfirm: () => void) => setConfirmDialog({ open: true, message, onConfirm })
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }))
 
   useEffect(() => { if (org) loadData() }, [org, ano])
 
@@ -154,12 +160,14 @@ export default function ClienteDetailPage() {
     loadAprovadores(cliente.id)
   }
 
-  async function handleDeleteAprovador(id: string) {
-    if (!confirm('Remover este aprovador?')) return
-    const { error } = await db.delete('aprovadores', { id })
-    if (error) { toast('Erro ao remover', 'error'); return }
-    toast('Aprovador removido!', 'success')
-    if (cliente) loadAprovadores(cliente.id)
+  function handleDeleteAprovador(id: string) {
+    showConfirm('Remover este aprovador?', async () => {
+      closeConfirm()
+      const { error } = await db.delete('aprovadores', { id })
+      if (error) { toast('Erro ao remover', 'error'); return }
+      toast('Aprovador removido!', 'success')
+      if (cliente) loadAprovadores(cliente.id)
+    })
   }
 
   async function toggleAprovadorAtivo(apr: Aprovador) {
@@ -186,11 +194,13 @@ export default function ClienteDetailPage() {
     setLoadingAccess(false)
   }
 
-  async function handleRemoveAccess(mcId: string) {
-    if (!confirm('Remover acesso?')) return
-    await db.delete('member_clients', { id: mcId })
-    toast('Removido', 'success')
-    if (cliente) loadAccessData(cliente.id)
+  function handleRemoveAccess(mcId: string) {
+    showConfirm('Remover acesso deste membro ao cliente?', async () => {
+      closeConfirm()
+      await db.delete('member_clients', { id: mcId })
+      toast('Removido', 'success')
+      if (cliente) loadAccessData(cliente.id)
+    })
   }
 
   async function handleInviteForClient(e: React.FormEvent) {
@@ -810,6 +820,13 @@ export default function ClienteDetailPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
     </div>
   )
 }

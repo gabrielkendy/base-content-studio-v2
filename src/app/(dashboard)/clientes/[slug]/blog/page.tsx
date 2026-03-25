@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { 
@@ -57,6 +58,7 @@ export default function ClienteBlogPage() {
   const [artigos, setArtigos] = useState<Conteudo[]>([])
   const [loading, setLoading] = useState(true)
   const [view, setView] = useState<TabView>('artigos')
+  const [confirmPublishId, setConfirmPublishId] = useState<string | null>(null)
   
   // Config WordPress
   const [wpConfig, setWpConfig] = useState<WordPressConfig>({
@@ -197,8 +199,8 @@ export default function ClienteBlogPage() {
   }
 
   // Publicar artigo
-  async function handlePublish(artigoId: string) {
-    if (!confirm('Publicar este artigo no WordPress?')) return
+  async function doPublish(artigoId: string) {
+    setConfirmPublishId(null)
     
     try {
       const res = await fetch(`/api/blog/${artigoId}/publish`, {
@@ -360,7 +362,7 @@ export default function ClienteBlogPage() {
                       {artigo.status !== 'publicado' && wpConfig.wp_url && (
                         <Button 
                           size="sm" 
-                          onClick={() => handlePublish(artigo.id)}
+                          onClick={() => setConfirmPublishId(artigo.id)}
                         >
                           <Globe className="w-4 h-4 mr-1" />
                           Publicar
@@ -500,6 +502,16 @@ export default function ClienteBlogPage() {
           </CardContent>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={!!confirmPublishId}
+        title="Publicar no WordPress"
+        message="Publicar este artigo no WordPress agora?"
+        confirmLabel="Publicar"
+        variant="default"
+        onConfirm={() => confirmPublishId && doPublish(confirmPublishId)}
+        onCancel={() => setConfirmPublishId(null)}
+      />
     </div>
   )
 }

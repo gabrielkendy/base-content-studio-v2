@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { useAuth } from '@/hooks/use-auth'
+import { useToast } from '@/components/ui/toast'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
@@ -57,6 +58,7 @@ type TaskStatus = 'pendentes' | 'concluidas'
 
 export default function TarefasPage() {
   const { org, member } = useAuth()
+  const { toast } = useToast()
   const [tasks, setTasks] = useState<WorkflowTask[]>([])
   const [completedTasks, setCompletedTasks] = useState<WorkflowTask[]>([])
   const [loading, setLoading] = useState(true)
@@ -248,7 +250,7 @@ export default function TarefasPage() {
       loadWorkflowTasks()
     } catch (err) {
       console.error('Erro ao concluir tarefa:', err)
-      alert('Erro ao concluir tarefa')
+      toast('Erro ao concluir tarefa. Tente novamente.', 'error')
     }
   }
 

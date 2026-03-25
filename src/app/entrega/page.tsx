@@ -24,6 +24,8 @@ function EntregaContent() {
   const [cliente, setCliente] = useState<Cliente | null>(null)
   const [invalid, setInvalid] = useState(false)
   const [downloading, setDownloading] = useState(false)
+  const [downloadError, setDownloadError] = useState<string | null>(null)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     if (!token) { setInvalid(true); setLoading(false); return }
@@ -79,7 +81,7 @@ function EntregaContent() {
         await new Promise(r => setTimeout(r, 500))
       }
     } catch {
-      alert('Erro ao baixar. Tente novamente.')
+      setDownloadError('Erro ao baixar. Tente novamente.')
     } finally {
       setDownloading(false)
     }
@@ -199,10 +201,10 @@ function EntregaContent() {
               <div className="bg-gray-50 rounded-lg p-4 relative group">
                 <pre className="whitespace-pre-wrap text-sm text-gray-700 font-sans">{conteudo.legenda}</pre>
                 <button
-                  onClick={() => { navigator.clipboard.writeText(conteudo.legenda || ''); alert('Legenda copiada!') }}
+                  onClick={() => { navigator.clipboard.writeText(conteudo.legenda || ''); setCopied(true); setTimeout(() => setCopied(false), 2000) }}
                   className="absolute top-2 right-2 px-2 py-1 bg-white border border-gray-200 rounded text-xs text-gray-500 hover:bg-gray-50 opacity-0 group-hover:opacity-100 transition-opacity"
                 >
-                  📋 Copiar
+                  {copied ? '✅ Copiado!' : '📋 Copiar'}
                 </button>
               </div>
             </CardContent>
@@ -238,6 +240,9 @@ function EntregaContent() {
                   <Download className="w-4 h-4" /> {downloading ? 'Baixando...' : 'Baixar Todos'}
                 </Button>
               </div>
+              {downloadError && (
+                <p className="text-sm text-red-600 mt-2">{downloadError}</p>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {mediaUrls.map((url: string, i: number) => (

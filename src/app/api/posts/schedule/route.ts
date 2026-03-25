@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
+import { parseScheduledAt, formatBR } from '@/lib/timezone'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -79,9 +80,19 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Data e hora são obrigatórios' }, { status: 400 })
       }
 
-      const scheduledAt = new Date(`${scheduledDate}T${scheduledTime}:00`)
-      if (isNaN(scheduledAt.getTime()) || scheduledAt <= new Date()) {
-        return NextResponse.json({ error: 'Data de agendamento inválida ou no passado' }, { status: 400 })
+      // Converter horário local (timezone do usuário) para UTC corretamente
+      // new Date(`${date}T${time}:00`) em servidor UTC cria horário errado para SP (UTC-3)
+      let scheduledAt: Date
+      try {
+        scheduledAt = parseScheduledAt(scheduledDate, scheduledTime, timezone)
+      } catch {
+        return NextResponse.json({ error: 'Formato de data ou hora inválido' }, { status: 400 })
+      }
+      if (isNaN(scheduledAt.getTime())) {
+        return NextResponse.json({ error: 'Data de agendamento inválida' }, { status: 400 })
+      }
+      if (scheduledAt <= new Date()) {
+        return NextResponse.json({ error: 'A data de agendamento deve ser no futuro' }, { status: 400 })
       }
 
       // Buscar conteúdo
@@ -180,12 +191,26 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Data de agendamento é obrigatória' }, { status: 400 })
     }
 
-    const scheduledDate = new Date(scheduled_at)
+    // Aceita tanto ISO string com timezone (ex: "2026-03-25T18:00:00Z")
+    // quanto datetime local sem timezone (ex: "2026-03-25T15:00") + timezone separado
+    let scheduledDate: Date
+    if (typeof scheduled_at === 'string' && scheduled_at.includes('T') && !scheduled_at.endsWith('Z') && !scheduled_at.includes('+')) {
+      // datetime sem timezone → interpretar no timezone do usuário
+      const [datePart, timePart] = scheduled_at.split('T')
+      try {
+        scheduledDate = parseScheduledAt(datePart, timePart.substring(0, 5), timezone)
+      } catch {
+        return NextResponse.json({ error: 'Data de agendamento inválida' }, { status: 400 })
+      }
+    } else {
+      scheduledDate = new Date(scheduled_at)
+    }
     if (isNaN(scheduledDate.getTime())) {
       return NextResponse.json({ error: 'Data de agendamento inválida' }, { status: 400 })
     }
-    const startOfToday = new Date(); startOfToday.setHours(0, 0, 0, 0)
-    if (scheduledDate < startOfToday) {
+    // Verificar que não está no passado (com margem de 5 minutos)
+    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
+    if (scheduledDate < fiveMinutesAgo) {
       return NextResponse.json({ error: 'A data de agendamento deve ser hoje ou no futuro' }, { status: 400 })
     }
 
@@ -229,14 +254,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Erro ao salvar agendamento. Tente novamente.' }, { status: 500 })
     }
 
-    const scheduledBR = scheduledDate.toLocaleString('pt-BR', {
-      timeZone: timezone,
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    })
+    const scheduledBR = formatBR(scheduledDate)
 
     return NextResponse.json({
       success: true,

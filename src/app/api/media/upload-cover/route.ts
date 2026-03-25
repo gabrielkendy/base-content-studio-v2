@@ -26,6 +26,7 @@ async function getUserMembership(userId: string) {
     .select('id, org_id, role, user_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data
@@ -43,7 +44,24 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData()
     const file = formData.get('file') as File | null
 
-    if (!file) return NextResponse.json({ error: 'No file provided' }, { status: 400 })
+    if (!file) return NextResponse.json({ error: 'Nenhum arquivo enviado' }, { status: 400 })
+
+    // Validar tipo de arquivo
+    const ALLOWED_COVER_TYPES = ['image/jpeg', 'image/png', 'image/webp']
+    if (!ALLOWED_COVER_TYPES.includes(file.type)) {
+      return NextResponse.json({
+        error: `Tipo não suportado para capa: ${file.type}. Use JPG, PNG ou WebP.`
+      }, { status: 400 })
+    }
+
+    // Limitar capa a 10 MB
+    const MAX_COVER_SIZE = 10 * 1024 * 1024
+    if (file.size > MAX_COVER_SIZE) {
+      const fileMB = (file.size / (1024 * 1024)).toFixed(1)
+      return NextResponse.json({
+        error: `Capa muito grande: ${fileMB} MB. Limite: 10 MB.`
+      }, { status: 413 })
+    }
 
     const admin = createServiceClient()
     const ext = file.name.includes('.') ? file.name.split('.').pop() : 'jpg'

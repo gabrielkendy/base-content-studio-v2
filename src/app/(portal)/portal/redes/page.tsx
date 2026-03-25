@@ -12,6 +12,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { Instagram, Youtube, Facebook, Linkedin, Twitter, Hash, Zap, ExternalLink, RefreshCw } from 'lucide-react'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 interface SocialAccount {
   id: string
@@ -55,6 +56,7 @@ export default function AgendamentoPage() {
   const [connecting, setConnecting] = useState(false)
   const [refreshing, setRefreshing] = useState(false)
   const [disconnectingId, setDisconnectingId] = useState<string | null>(null)
+  const [confirmDisconnect, setConfirmDisconnect] = useState<{ id: string; name: string } | null>(null)
 
   const fetchStatus = useCallback(async (slug: string, showRefresh = false) => {
     if (showRefresh) setRefreshing(true)
@@ -133,8 +135,12 @@ export default function AgendamentoPage() {
     }
   }
 
-  async function handleDisconnect(accountId: string, platformName: string) {
-    if (!confirm(`Desconectar ${platformName}? Você poderá reconectar depois.`)) return
+  function handleDisconnect(accountId: string, platformName: string) {
+    setConfirmDisconnect({ id: accountId, name: platformName })
+  }
+
+  async function doDisconnect(accountId: string, name?: string) {
+    setConfirmDisconnect(null)
     setDisconnectingId(accountId)
     try {
       const res = await fetch('/api/social/disconnect', {
@@ -148,7 +154,7 @@ export default function AgendamentoPage() {
         return
       }
       setSocialAccounts(prev => prev.filter(a => a.id !== accountId))
-      toast(`${platformName} desconectado`, 'success')
+      toast(`${name ?? 'Rede social'} desconectada`, 'success')
     } catch {
       toast('Erro ao desconectar', 'error')
     } finally {
@@ -309,6 +315,16 @@ export default function AgendamentoPage() {
           </Card>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDisconnect}
+        title="Desconectar rede social"
+        message={`Desconectar ${confirmDisconnect?.name}? Você poderá reconectar depois.`}
+        confirmLabel="Desconectar"
+        variant="danger"
+        onConfirm={() => confirmDisconnect && doDisconnect(confirmDisconnect.id, confirmDisconnect.name)}
+        onCancel={() => setConfirmDisconnect(null)}
+      />
     </div>
   )
 }

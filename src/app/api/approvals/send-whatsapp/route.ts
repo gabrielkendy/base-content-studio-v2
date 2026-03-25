@@ -45,6 +45,7 @@ export async function POST(request: NextRequest) {
         .select('org_id')
         .eq('user_id', user.id)
         .eq('status', 'active')
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle(),
     ])

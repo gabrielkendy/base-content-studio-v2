@@ -7,7 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
-import { Bell, Check, CheckCheck, ExternalLink, Clock, Paintbrush } from 'lucide-react'
+import { Bell, Check, CheckCheck, ExternalLink, Clock, Paintbrush, Loader2 } from 'lucide-react'
+import { Skeleton } from '@/components/ui/skeleton'
 import { useRouter } from 'next/navigation'
 import { db } from '@/lib/api'
 import Link from 'next/link'
@@ -23,10 +24,19 @@ type DemandasAguardando = {
 
 export default function NotificacoesPage() {
   const { user, org } = useAuth()
-  const { notifications, unreadCount, markAsRead, markAllRead } = useNotifications(user?.id)
+  const { notifications, unreadCount, markAsRead, markAllRead, refetch } = useNotifications(user?.id)
+  const [loadingNotifs, setLoadingNotifs] = useState(true)
   const router = useRouter()
   const [demandasAguardando, setDemandasAguardando] = useState<DemandasAguardando[]>([])
   const [loadingDemandas, setLoadingDemandas] = useState(true)
+
+  // Marcar notifs como "carregadas" após primeiro mount com userId
+  useEffect(() => {
+    if (user?.id) {
+      const t = setTimeout(() => setLoadingNotifs(false), 800)
+      return () => clearTimeout(t)
+    }
+  }, [user?.id])
 
   // Buscar demandas aguardando design
   useEffect(() => {
@@ -145,7 +155,29 @@ export default function NotificacoesPage() {
       </div>
 
       {/* Demandas Aguardando Design */}
-      {demandasAguardando.length > 0 && (
+      {loadingDemandas && (
+        <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <Skeleton className="w-9 h-9 rounded-lg" />
+              <Skeleton className="h-5 w-48" />
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 space-y-3">
+            {[1, 2].map(i => (
+              <div key={i} className="flex items-center gap-4 p-3 bg-white rounded-xl border border-yellow-100">
+                <Skeleton className="w-10 h-10 rounded-full flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-3/4" />
+                  <Skeleton className="h-3 w-1/2" />
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      )}
+
+      {!loadingDemandas && demandasAguardando.length > 0 && (
         <Card className="border-yellow-200 bg-gradient-to-r from-yellow-50 to-orange-50">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-lg">
@@ -226,7 +258,20 @@ export default function NotificacoesPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="p-0">
-          {notifications.length === 0 ? (
+          {loadingNotifs ? (
+            <div className="divide-y divide-zinc-50">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="flex items-start gap-4 px-6 py-4">
+                  <Skeleton className="w-7 h-7 rounded-full flex-shrink-0 mt-0.5" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-4 w-2/3" />
+                    <Skeleton className="h-3 w-full" />
+                    <Skeleton className="h-3 w-24" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : notifications.length === 0 ? (
             <div className="py-16 text-center">
               <Bell className="w-12 h-12 text-zinc-200 mx-auto mb-4" />
               <h3 className="text-lg font-semibold text-zinc-400">Tudo limpo!</h3>

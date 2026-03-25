@@ -32,6 +32,7 @@ async function getUserMembership(userId: string) {
     .select('id, org_id, role, user_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data

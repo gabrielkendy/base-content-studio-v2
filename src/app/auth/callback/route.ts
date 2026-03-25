@@ -59,6 +59,7 @@ export async function GET(request: Request) {
           .select('org_id')
           .eq('user_id', data.user.id)
           .eq('status', 'active')
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle()
 
@@ -77,6 +78,7 @@ export async function GET(request: Request) {
         .select('role')
         .eq('user_id', data.user.id)
         .eq('status', 'active')
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle()
 

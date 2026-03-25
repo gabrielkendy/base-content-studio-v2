@@ -26,14 +26,18 @@ async function getUserMembership(userId: string) {
     .select('id, org_id, role, user_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data
 }
 
-// No size limits — presigned URL handles large files directly to storage
 const ALLOWED_IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 const ALLOWED_VIDEO_TYPES = ['video/mp4', 'video/quicktime', 'video/webm']
+
+// Limites de tamanho (esta rota é para uploads pequenos; vídeos grandes usam presigned URL)
+const MAX_IMAGE_SIZE = 50 * 1024 * 1024    // 50 MB
+const MAX_VIDEO_SIZE = 500 * 1024 * 1024   // 500 MB
 
 export async function POST(request: NextRequest) {
   try {
@@ -63,12 +67,21 @@ export async function POST(request: NextRequest) {
     const isVideo = ALLOWED_VIDEO_TYPES.includes(file.type)
 
     if (!isImage && !isVideo) {
-      return NextResponse.json({ 
-        error: `Tipo de arquivo não suportado: ${file.type}. Use JPG, PNG, WebP, GIF, MP4, MOV ou WebM.` 
+      return NextResponse.json({
+        error: `Tipo de arquivo não suportado: ${file.type}. Use JPG, PNG, WebP, GIF, MP4, MOV ou WebM.`
       }, { status: 400 })
     }
 
-    // No size check — large files use presigned URL (bypasses this route)
+    // Validação de tamanho
+    const maxSize = isVideo ? MAX_VIDEO_SIZE : MAX_IMAGE_SIZE
+    if (file.size > maxSize) {
+      const maxMB = Math.round(maxSize / (1024 * 1024))
+      const fileMB = (file.size / (1024 * 1024)).toFixed(1)
+      return NextResponse.json({
+        error: `Arquivo muito grande: ${fileMB} MB. Limite: ${maxMB} MB para ${isVideo ? 'vídeos' : 'imagens'}. Para vídeos maiores, use o upload direto.`,
+      }, { status: 413 })
+    }
+
     const admin = createServiceClient()
 
     // Verify client belongs to org

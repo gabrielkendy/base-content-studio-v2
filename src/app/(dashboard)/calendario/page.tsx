@@ -9,7 +9,7 @@ import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/input'
 import { Skeleton } from '@/components/ui/skeleton'
 import { STATUS_CONFIG, TIPO_EMOJI, MESES, normalizeStatus } from '@/lib/utils'
-import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { ChevronLeft, ChevronRight, LayoutGrid, LayoutList } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente } from '@/types/database'
 
@@ -32,6 +32,16 @@ export default function CalendarioPage() {
   const [mes, setMes] = useState(new Date().getMonth())
   const [ano, setAno] = useState(new Date().getFullYear())
   const [loading, setLoading] = useState(true)
+  const [view, setView] = useState<'month' | 'week'>('month')
+  // weekStart: Monday of the current week (stored as date string)
+  const [weekStart, setWeekStart] = useState<Date>(() => {
+    const d = new Date()
+    const day = d.getDay()
+    const diff = day === 0 ? -6 : 1 - day // Mon
+    d.setDate(d.getDate() + diff)
+    d.setHours(0, 0, 0, 0)
+    return d
+  })
 
   useEffect(() => {
     if (!org) return
@@ -129,6 +139,25 @@ export default function CalendarioPage() {
     return { firstDay, startDay, days }
   }, [ano, mes, conteudosByDate, scheduledByDate])
 
+  // Week days array — 7 days starting from weekStart
+  const weekDays = useMemo(() => {
+    const days = []
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(weekStart)
+      d.setDate(weekStart.getDate() + i)
+      const dateStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`
+      days.push({
+        date: d,
+        dateStr,
+        label: d.toLocaleDateString('pt-BR', { weekday: 'short' }),
+        dayNum: d.getDate(),
+        conteudos: conteudosByDate.get(dateStr) || [],
+        scheduled: scheduledByDate.get(dateStr) || [],
+      })
+    }
+    return days
+  }, [weekStart, conteudosByDate, scheduledByDate])
+
   function prevMonth() {
     if (mes === 0) { setMes(11); setAno(a => a - 1) }
     else setMes(m => m - 1)
@@ -139,8 +168,41 @@ export default function CalendarioPage() {
     else setMes(m => m + 1)
   }
 
+  function prevWeek() {
+    setWeekStart(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() - 7)
+      // Keep month/year in sync for data loading
+      setMes(d.getMonth())
+      setAno(d.getFullYear())
+      return d
+    })
+  }
+
+  function nextWeek() {
+    setWeekStart(prev => {
+      const d = new Date(prev)
+      d.setDate(d.getDate() + 7)
+      setMes(d.getMonth())
+      setAno(d.getFullYear())
+      return d
+    })
+  }
+
+  function goToCurrentWeek() {
+    const d = new Date()
+    const day = d.getDay()
+    const diff = day === 0 ? -6 : 1 - day
+    d.setDate(d.getDate() + diff)
+    d.setHours(0, 0, 0, 0)
+    setWeekStart(d)
+    setMes(d.getMonth())
+    setAno(d.getFullYear())
+  }
+
   const today = new Date()
   const isToday = (d: number) => d === today.getDate() && mes === today.getMonth() && ano === today.getFullYear()
+  const isTodayDate = (dateStr: string) => dateStr === `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`
 
   if (loading) {
     return <div className="space-y-4"><Skeleton className="h-8 w-48" /><Skeleton className="h-96 rounded-xl" /></div>
@@ -158,16 +220,143 @@ export default function CalendarioPage() {
             <option value="todos">Todos os clientes</option>
             {clientes.map(c => <option key={c.id} value={c.id}>{c.nome}</option>)}
           </Select>
-          <div className="flex items-center gap-1">
-            <Button size="sm" variant="ghost" onClick={prevMonth} className="min-h-[44px] min-w-[44px] max-sm:flex-1"><ChevronLeft className="w-4 h-4" /></Button>
-            <span className="font-semibold text-sm min-w-[140px] text-center max-sm:flex-1 max-sm:px-2">{MESES[mes]} {ano}</span>
-            <Button size="sm" variant="ghost" onClick={nextMonth} className="min-h-[44px] min-w-[44px] max-sm:flex-1"><ChevronRight className="w-4 h-4" /></Button>
+
+          {/* View toggle */}
+          <div className="flex items-center border border-zinc-200 rounded-lg overflow-hidden">
+            <button
+              onClick={() => setView('month')}
+              className={`flex items-center gap-1.5 px-3 h-9 text-xs font-medium transition-colors ${
+                view === 'month' ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-500 hover:bg-zinc-50'
+              }`}
+            >
+              <LayoutGrid className="w-3.5 h-3.5" /> Mês
+            </button>
+            <button
+              onClick={() => setView('week')}
+              className={`flex items-center gap-1.5 px-3 h-9 text-xs font-medium transition-colors border-l border-zinc-200 ${
+                view === 'week' ? 'bg-zinc-900 text-white' : 'bg-white text-zinc-500 hover:bg-zinc-50'
+              }`}
+            >
+              <LayoutList className="w-3.5 h-3.5" /> Semana
+            </button>
           </div>
+
+          {view === 'month' ? (
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" onClick={prevMonth} className="min-h-[44px] min-w-[44px] max-sm:flex-1"><ChevronLeft className="w-4 h-4" /></Button>
+              <span className="font-semibold text-sm min-w-[140px] text-center max-sm:flex-1 max-sm:px-2">{MESES[mes]} {ano}</span>
+              <Button size="sm" variant="ghost" onClick={nextMonth} className="min-h-[44px] min-w-[44px] max-sm:flex-1"><ChevronRight className="w-4 h-4" /></Button>
+            </div>
+          ) : (
+            <div className="flex items-center gap-1">
+              <Button size="sm" variant="ghost" onClick={prevWeek} className="min-h-[44px] min-w-[44px]"><ChevronLeft className="w-4 h-4" /></Button>
+              <button onClick={goToCurrentWeek} className="font-semibold text-sm min-w-[170px] text-center hover:text-blue-600 transition-colors">
+                {weekDays[0]?.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short' })} –{' '}
+                {weekDays[6]?.date.toLocaleDateString('pt-BR', { day: '2-digit', month: 'short', year: 'numeric' })}
+              </button>
+              <Button size="sm" variant="ghost" onClick={nextWeek} className="min-h-[44px] min-w-[44px]"><ChevronRight className="w-4 h-4" /></Button>
+            </div>
+          )}
         </div>
       </div>
 
+      {/* Weekly View */}
+      {view === 'week' && (
+        <Card className="overflow-hidden">
+          {/* Day headers */}
+          <div className="grid grid-cols-7 border-b border-zinc-100 bg-zinc-50">
+            {weekDays.map(d => (
+              <div
+                key={d.dateStr}
+                className={`px-2 py-3 text-center border-r border-zinc-100 last:border-r-0 ${
+                  isTodayDate(d.dateStr) ? 'bg-blue-50' : ''
+                }`}
+              >
+                <div className="text-[11px] font-medium text-zinc-400 uppercase">{d.label}</div>
+                <div className={`text-lg font-bold mt-0.5 leading-none ${
+                  isTodayDate(d.dateStr) ? 'text-blue-600' : 'text-zinc-800'
+                }`}>
+                  <span className={isTodayDate(d.dateStr)
+                    ? 'bg-blue-600 text-white rounded-full w-8 h-8 flex items-center justify-center mx-auto'
+                    : ''
+                  }>
+                    {d.dayNum}
+                  </span>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          {/* Day columns */}
+          <div className="grid grid-cols-7 min-h-[60vh]">
+            {weekDays.map(d => {
+              const allItems = [
+                ...d.conteudos.map(c => ({ type: 'conteudo' as const, data: c })),
+                ...d.scheduled.map(s => ({ type: 'scheduled' as const, data: s })),
+              ]
+              return (
+                <div
+                  key={d.dateStr}
+                  className={`border-r border-zinc-100 last:border-r-0 p-1.5 space-y-1 ${
+                    isTodayDate(d.dateStr) ? 'bg-blue-50/30' : 'hover:bg-zinc-50/50'
+                  }`}
+                >
+                  {allItems.length === 0 && (
+                    <div className="text-[10px] text-zinc-300 text-center pt-4">—</div>
+                  )}
+                  {allItems.map(item => {
+                    if (item.type === 'conteudo') {
+                      const p = item.data as Conteudo & { empresa?: Cliente }
+                      const cfg = STATUS_CONFIG[p.status as keyof typeof STATUS_CONFIG]
+                      return (
+                        <Link
+                          key={`c-${p.id}`}
+                          href={`/clientes/${p.empresa?.slug}/conteudo/${p.id}`}
+                          className="block group"
+                        >
+                          <div
+                            className="text-[10px] px-1.5 py-1.5 rounded hover:opacity-80 transition-opacity"
+                            style={{
+                              backgroundColor: (p.empresa?.cores?.primaria || '#6366F1') + '15',
+                              borderLeft: `2px solid ${cfg?.color || '#ccc'}`,
+                            }}
+                            title={`${p.titulo} — ${p.empresa?.nome}`}
+                          >
+                            <div className="font-medium truncate">{TIPO_EMOJI[p.tipo] || '📄'} {p.titulo || 'Sem título'}</div>
+                            <div className="text-zinc-400 truncate mt-0.5">{p.empresa?.nome}</div>
+                          </div>
+                        </Link>
+                      )
+                    } else {
+                      const sp = item.data as ScheduledPost
+                      const statusColors = { scheduled: '#3B82F6', published: '#22C55E', failed: '#EF4444', publishing: '#F59E0B' }
+                      const statusEmoji = { scheduled: '📅', published: '🚀', failed: '❌', publishing: '⏳' }
+                      const time = new Date(sp.scheduled_at).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+                      return (
+                        <div
+                          key={`s-${sp.id}`}
+                          className="text-[10px] px-1.5 py-1.5 rounded hover:opacity-80 transition-opacity"
+                          style={{
+                            backgroundColor: (sp.cliente?.cores?.primaria || '#6366F1') + '15',
+                            borderLeft: `2px solid ${statusColors[sp.status as keyof typeof statusColors] || '#ccc'}`,
+                          }}
+                          title={`${sp.caption.substring(0, 60)} — ${sp.cliente?.nome} — ${sp.platforms.join(', ')}`}
+                        >
+                          <div className="font-medium truncate">{statusEmoji[sp.status as keyof typeof statusEmoji] || '📅'} {sp.caption.substring(0, 25)}</div>
+                          <div className="text-zinc-400 truncate mt-0.5">{time} • {sp.platforms[0]}</div>
+                        </div>
+                      )
+                    }
+                  })}
+                </div>
+              )
+            })}
+          </div>
+        </Card>
+      )}
+
       {/* Desktop Calendar View */}
-      <Card className="overflow-hidden max-md:hidden">
+      {view === 'month' && <Card className="overflow-hidden max-md:hidden">
         {/* Weekday headers */}
         <div className="grid grid-cols-7 border-b border-zinc-100">
           {['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'].map(d => (
@@ -262,7 +451,7 @@ export default function CalendarioPage() {
             )
           })}
         </div>
-      </Card>
+      </Card>}
 
       {/* Mobile Agenda View */}
       <div className="md:hidden space-y-3">

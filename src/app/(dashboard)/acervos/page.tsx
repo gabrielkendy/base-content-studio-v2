@@ -6,6 +6,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input, Label, Textarea } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { Plus, FolderOpen, RefreshCw, Copy, ExternalLink, Trash2, Edit2, FileImage } from 'lucide-react'
@@ -68,6 +69,7 @@ export default function AcervosPage() {
 
   // Filtro
   const [filtroCliente, setFiltroCliente] = useState('')
+  const [confirmDelete, setConfirmDelete] = useState<Acervo | null>(null)
 
   useEffect(() => {
     if (!org) return
@@ -198,9 +200,12 @@ export default function AcervosPage() {
     }
   }
 
-  async function handleDelete(acervo: Acervo) {
-    if (!confirm(`Excluir acervo "${acervo.titulo}"?`)) return
+  function handleDelete(acervo: Acervo) {
+    setConfirmDelete(acervo)
+  }
 
+  async function doDelete(acervo: Acervo) {
+    setConfirmDelete(null)
     try {
       const res = await fetch(`/api/acervos/${acervo.id}`, { method: 'DELETE' })
       
@@ -491,6 +496,13 @@ export default function AcervosPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!confirmDelete}
+        message={`Excluir acervo "${confirmDelete?.titulo}"? Esta ação não pode ser desfeita.`}
+        onConfirm={() => confirmDelete && doDelete(confirmDelete)}
+        onCancel={() => setConfirmDelete(null)}
+      />
     </div>
   )
 }

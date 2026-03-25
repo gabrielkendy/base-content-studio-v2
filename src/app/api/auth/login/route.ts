@@ -68,6 +68,7 @@ export async function POST(request: NextRequest) {
       .select('role, org_id')
       .eq('user_id', data.user.id)
       .eq('status', 'active')
+      .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle()
 

@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input, Label } from '@/components/ui/input'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { Plus, Trash2, Webhook, ToggleLeft, ToggleRight } from 'lucide-react'
@@ -27,6 +28,7 @@ export default function WebhooksPage() {
   const [loading, setLoading] = useState(true)
   const [modalOpen, setModalOpen] = useState(false)
   const [form, setForm] = useState({ url: '', events: [] as string[] })
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null)
 
   useEffect(() => {
     if (!org) return
@@ -59,8 +61,8 @@ export default function WebhooksPage() {
     loadData()
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('Excluir este webhook?')) return
+  async function doDelete(id: string) {
+    setConfirmDeleteId(null)
     await db.delete('webhook_configs', { id })
     toast('Webhook excluído', 'success')
     loadData()
@@ -115,7 +117,7 @@ export default function WebhooksPage() {
                 <Badge variant={w.active ? 'success' : 'default'}>
                   {w.active ? 'Ativo' : 'Inativo'}
                 </Badge>
-                <Button size="sm" variant="ghost" onClick={() => handleDelete(w.id)}>
+                <Button size="sm" variant="ghost" onClick={() => setConfirmDeleteId(w.id)}>
                   <Trash2 className="w-4 h-4 text-zinc-400" />
                 </Button>
               </CardContent>
@@ -158,6 +160,13 @@ export default function WebhooksPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        message="Excluir este webhook? Esta ação não pode ser desfeita."
+        onConfirm={() => confirmDeleteId && doDelete(confirmDeleteId)}
+        onCancel={() => setConfirmDeleteId(null)}
+      />
     </div>
   )
 }

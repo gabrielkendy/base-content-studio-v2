@@ -285,6 +285,7 @@ function AprovacaoContent() {
   const [expired, setExpired] = useState(false)
   const [downloading, setDownloading] = useState(false)
   const [submitting, setSubmitting] = useState(false)
+  const [formError, setFormError] = useState<string | null>(null)
 
   useEffect(() => {
     if (!token) return
@@ -333,19 +334,15 @@ function AprovacaoContent() {
   }, [token])
 
   async function handleSubmit(aprovado: boolean) {
-    // Validação para ajustes
+    setFormError(null)
     const comentarioTrimmed = comentario.trim()
     if (!aprovado && !comentarioTrimmed) {
-      alert('Por favor, descreva os ajustes necessários no campo de comentários.')
+      setFormError('Por favor, descreva os ajustes necessários no campo de comentários.')
       return
     }
-
-    // Prevenir duplo clique
     if (submitting) return
     setSubmitting(true)
-
     const newStatus = aprovado ? 'aprovado' : 'ajuste'
-    
     try {
       const res = await fetch('/api/public/aprovacao', {
         method: 'POST',
@@ -357,30 +354,26 @@ function AprovacaoContent() {
           cliente_nome: nomeCliente.trim() || null,
         }),
       })
-
       const data = await res.json()
-      
       if (!res.ok) {
-        // Mensagens de erro mais claras
         if (res.status === 409) {
-          alert('Este link já foi utilizado. Se precisar fazer mais alterações, solicite um novo link.')
+          setFormError('Este link já foi utilizado. Se precisar fazer mais alterações, solicite um novo link.')
           setSubmitted(true)
           setStatus('usado')
           return
         }
         if (res.status === 410) {
-          alert('Este link expirou. Solicite um novo link para aprovação.')
+          setFormError('Este link expirou. Solicite um novo link para aprovação.')
           setExpired(true)
           return
         }
         throw new Error(data.error || 'Erro ao enviar. Tente novamente.')
       }
-
       setSubmitted(true)
       setStatus(newStatus)
     } catch (error) {
       console.error('Erro ao enviar aprovação:', error)
-      alert(`Erro ao enviar: ${error instanceof Error ? error.message : 'Erro de conexão. Verifique sua internet e tente novamente.'}`)
+      setFormError(error instanceof Error ? error.message : 'Erro de conexão. Verifique sua internet e tente novamente.')
     } finally {
       setSubmitting(false)
     }
@@ -414,7 +407,7 @@ function AprovacaoContent() {
       }
     } catch (error) {
       console.error('Erro ao baixar mídia:', error)
-      alert('Erro ao baixar arquivos. Tente novamente.')
+      setFormError('Erro ao baixar arquivos. Tente novamente.')
     } finally {
       setDownloading(false)
     }
@@ -698,6 +691,12 @@ function AprovacaoContent() {
                     <p className="text-xs text-green-600 mt-1">✓ Comentário preenchido</p>
                   )}
                 </div>
+
+                {formError && (
+                  <div className="p-3 bg-red-50 border border-red-200 rounded-lg text-sm text-red-700">
+                    {formError}
+                  </div>
+                )}
 
                 <div className="flex flex-col sm:flex-row gap-3 pt-2">
                   <Button

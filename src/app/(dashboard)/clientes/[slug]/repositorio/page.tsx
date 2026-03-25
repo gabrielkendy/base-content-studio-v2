@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge'
 import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Modal } from '@/components/ui/modal'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 import { Input, Label } from '@/components/ui/input'
 import { useToast } from '@/components/ui/toast'
 import {
@@ -79,6 +80,7 @@ export default function RepositorioPage() {
   const [editDesc, setEditDesc] = useState('')
   const [moveTarget, setMoveTarget] = useState('/')
   const [actionMenuId, setActionMenuId] = useState<string | null>(null)
+  const [confirmDialog, setConfirmDialog] = useState<{ open: boolean; asset: ClientAsset | null }>({ open: false, asset: null })
   
   // External link modal (Google Drive, Dropbox, etc.)
   const [externalLinkOpen, setExternalLinkOpen] = useState(false)
@@ -223,9 +225,12 @@ export default function RepositorioPage() {
     if (fileInputRef.current) fileInputRef.current.value = ''
   }
 
-  async function handleDelete(asset: ClientAsset) {
-    if (!confirm(`Excluir "${asset.filename}"?`)) return
+  function handleDelete(asset: ClientAsset) {
+    setConfirmDialog({ open: true, asset })
+  }
 
+  async function doDelete(asset: ClientAsset) {
+    setConfirmDialog({ open: false, asset: null })
     try {
       const res = await fetch(`/api/assets/${asset.id}`, { method: 'DELETE' })
       if (res.ok) {
@@ -376,17 +381,10 @@ export default function RepositorioPage() {
       : `${currentFolder}/${folderName}`
     
     // Check if we're already in this folder (prevents double-click issues)
-    if (currentFolder === targetPath) {
-      console.log('Already in folder:', targetPath)
-      return
-    }
-    
-    // Check if folder name is already the last part of current path (prevent duplication)
+    if (currentFolder === targetPath) return
+
     const currentParts = currentFolder.split('/').filter(Boolean)
-    if (currentParts.length > 0 && currentParts[currentParts.length - 1] === folderName) {
-      console.log('Folder already in path:', folderName)
-      return
-    }
+    if (currentParts.length > 0 && currentParts[currentParts.length - 1] === folderName) return
     
     setCurrentFolder(targetPath)
     setSearchQuery('')
@@ -1052,6 +1050,13 @@ export default function RepositorioPage() {
           </div>
         </form>
       </Modal>
+
+      <ConfirmDialog
+        open={confirmDialog.open}
+        message={`Excluir "${confirmDialog.asset?.filename}"? Esta ação não pode ser desfeita.`}
+        onConfirm={() => confirmDialog.asset && doDelete(confirmDialog.asset)}
+        onCancel={() => setConfirmDialog({ open: false, asset: null })}
+      />
     </div>
   )
 }

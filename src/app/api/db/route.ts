@@ -64,6 +64,7 @@ async function getUserMembership(userId: string) {
     .select('id, org_id, role, user_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return data
@@ -116,23 +117,16 @@ export async function POST(request: NextRequest) {
         .eq('org_id', userOrgId)
 
       if (mcError) {
-        // Table error — be restrictive, get all org clients as fallback
-        clienteIds = []
-      } else {
-        clienteIds = (memberClients || []).map((mc: { cliente_id: string }) => mc.cliente_id)
+        // Erro ao buscar vínculos — negar acesso por segurança (fail-secure)
+        console.error('[db proxy] Erro ao verificar member_clients, acesso negado:', mcError.message)
+        return NextResponse.json({ error: 'Acesso negado: não foi possível verificar permissões de cliente' }, { status: 403 })
       }
 
-      if (clienteIds.length === 0) {
-        // No linked clients — fallback: use all org clients so portal works
-        const { data: allClients } = await admin
-          .from('clientes')
-          .select('id')
-          .eq('org_id', userOrgId)
-        clienteIds = (allClients || []).map((c: { id: string }) => c.id)
+      clienteIds = (memberClients || []).map((mc: { cliente_id: string }) => mc.cliente_id)
 
-        if (clienteIds.length === 0 && action === 'select') {
-          return NextResponse.json({ data: [] })
-        }
+      if (clienteIds.length === 0 && action === 'select') {
+        // Nenhum cliente vinculado — retornar vazio (não expor clientes de outras orgs)
+        return NextResponse.json({ data: [] })
       }
     }
 

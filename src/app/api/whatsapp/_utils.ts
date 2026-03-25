@@ -35,6 +35,7 @@ export async function getOrgId(request: NextRequest): Promise<string | null> {
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 
@@ -52,6 +53,7 @@ export async function getOrgZapiCredentials(request: NextRequest): Promise<OrgCr
     .select('org_id')
     .eq('user_id', user.id)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
 

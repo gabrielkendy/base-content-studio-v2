@@ -11,7 +11,7 @@ import { Avatar } from '@/components/ui/avatar'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { STATUS_CONFIG, SUB_STATUS_CONFIG, TIPO_EMOJI, MESES, TIPOS_CONTEUDO, formatDate, normalizeStatus } from '@/lib/utils'
-import { Search, X, Filter, Inbox, ChevronDown, ChevronRight, Image, Play, MoreHorizontal, Eye, Trash2, Calendar } from 'lucide-react'
+import { Search, X, Filter, Inbox, ChevronDown, ChevronRight, Image, Play, MoreHorizontal, Eye, Trash2, Calendar, CheckSquare, Square, CheckCheck } from 'lucide-react'
 import Link from 'next/link'
 import type { Conteudo, Cliente, Solicitacao, Member, AprovacaoLink } from '@/types/database'
 
@@ -50,6 +50,11 @@ function WorkflowContent() {
   const [members, setMembers] = useState<Member[]>([])
   const [loading, setLoading] = useState(true)
   const [dragging, setDragging] = useState<string | null>(null)
+
+  // Bulk select
+  const [selectMode, setSelectMode] = useState(false)
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set())
+  const [bulkLoading, setBulkLoading] = useState(false)
 
   // Colunas colapsadas
   const [collapsedCols, setCollapsedCols] = useState<Record<string, boolean>>({})
@@ -264,6 +269,65 @@ function WorkflowContent() {
 
   const hasFilters = filtroCliente !== 'todos' || filtroMes !== 'todos' || filtroResponsavel !== 'todos' || filtroTipo !== 'todos' || busca !== ''
 
+  function toggleSelectMode() {
+    setSelectMode(prev => !prev)
+    setSelectedIds(new Set())
+  }
+
+  function toggleSelectItem(id: string) {
+    setSelectedIds(prev => {
+      const next = new Set(prev)
+      if (next.has(id)) next.delete(id)
+      else next.add(id)
+      return next
+    })
+  }
+
+  function selectAll() {
+    setSelectedIds(new Set(kanbanItems.map(i => i.id)))
+  }
+
+  function clearSelection() {
+    setSelectedIds(new Set())
+  }
+
+  async function handleBulkStatusChange(newStatus: string) {
+    if (selectedIds.size === 0) return
+    setBulkLoading(true)
+    try {
+      const ids = Array.from(selectedIds)
+      await Promise.all(ids.map(id =>
+        db.update('conteudos', { status: newStatus, updated_at: new Date().toISOString() }, { id })
+      ))
+      const cfg = STATUS_CONFIG[newStatus]
+      toast(`${cfg?.emoji || '✅'} ${ids.length} ${ids.length === 1 ? 'item movido' : 'itens movidos'} para ${cfg?.label || newStatus}`, 'success')
+      setSelectedIds(new Set())
+      await loadData()
+    } catch {
+      toast('Erro ao mover itens', 'error')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
+  async function handleBulkArchive() {
+    if (selectedIds.size === 0) return
+    setBulkLoading(true)
+    try {
+      const ids = Array.from(selectedIds)
+      await Promise.all(ids.map(id =>
+        db.update('conteudos', { status: 'arquivado', updated_at: new Date().toISOString() }, { id })
+      ))
+      toast(`📦 ${ids.length} ${ids.length === 1 ? 'item arquivado' : 'itens arquivados'}`, 'success')
+      setSelectedIds(new Set())
+      await loadData()
+    } catch {
+      toast('Erro ao arquivar itens', 'error')
+    } finally {
+      setBulkLoading(false)
+    }
+  }
+
   if (loading) {
     return (
       <div className="space-y-4">
@@ -327,18 +391,72 @@ function WorkflowContent() {
           </div>
         </div>
 
-        {/* Toggle arquivados */}
-        <button
-          onClick={() => setShowArchived(!showArchived)}
-          className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
-            showArchived 
-              ? 'bg-zinc-100 border-zinc-300 text-zinc-700'
-              : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'
-          }`}
-        >
-          {showArchived ? '📦 Ocultar arquivados' : '📦 Ver arquivados'}
-        </button>
+          <div className="flex items-center gap-2">
+          {/* Toggle arquivados */}
+          <button
+            onClick={() => setShowArchived(!showArchived)}
+            className={`text-xs px-3 py-1.5 rounded-lg border transition-all ${
+              showArchived
+                ? 'bg-zinc-100 border-zinc-300 text-zinc-700'
+                : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+            }`}
+          >
+            {showArchived ? '📦 Ocultar arquivados' : '📦 Ver arquivados'}
+          </button>
+          {/* Selecionar itens */}
+          <button
+            onClick={toggleSelectMode}
+            className={`flex items-center gap-1.5 text-xs px-3 py-1.5 rounded-lg border transition-all ${
+              selectMode
+                ? 'bg-blue-50 border-blue-200 text-blue-700'
+                : 'bg-white border-zinc-200 text-zinc-500 hover:bg-zinc-50'
+            }`}
+          >
+            <CheckSquare className="w-3.5 h-3.5" />
+            {selectMode ? 'Cancelar seleção' : 'Selecionar'}
+          </button>
+        </div>
       </div>
+
+      {/* Floating bulk action bar */}
+      {selectMode && selectedIds.size > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 flex items-center gap-2 bg-zinc-900 text-white rounded-2xl px-4 py-3 shadow-2xl animate-fade-in">
+          <span className="text-xs font-semibold text-zinc-300 mr-1">
+            {selectedIds.size} {selectedIds.size === 1 ? 'item' : 'itens'}
+          </span>
+          <Select
+            value=""
+            onChange={e => { if (e.target.value) handleBulkStatusChange(e.target.value) }}
+            className="h-8 text-xs bg-zinc-800 border-zinc-700 text-white rounded-lg min-w-[160px]"
+            disabled={bulkLoading}
+          >
+            <option value="">Mover para...</option>
+            {KANBAN_VISIBLE_STATUSES.map(s => {
+              const cfg = STATUS_CONFIG[s]
+              return cfg ? <option key={s} value={s}>{cfg.emoji} {cfg.label}</option> : null
+            })}
+          </Select>
+          <button
+            onClick={handleBulkArchive}
+            disabled={bulkLoading}
+            className="flex items-center gap-1.5 text-xs px-3 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 transition-colors disabled:opacity-50"
+          >
+            📦 Arquivar
+          </button>
+          <button
+            onClick={selectAll}
+            className="flex items-center gap-1.5 text-xs px-3 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 transition-colors"
+          >
+            <CheckCheck className="w-3.5 h-3.5" /> Todos
+          </button>
+          <button
+            onClick={clearSelection}
+            className="flex items-center gap-1.5 text-xs px-3 h-8 rounded-lg bg-zinc-700 hover:bg-zinc-600 transition-colors"
+          >
+            <X className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex items-center gap-2">
@@ -536,6 +654,9 @@ function WorkflowContent() {
                       onDragStart={() => setDragging(item.id)}
                       onDragEnd={() => setDragging(null)}
                       clienteSlug={(item.empresa as any)?.slug}
+                      selectMode={selectMode}
+                      isSelected={selectedIds.has(item.id)}
+                      onToggleSelect={() => toggleSelectItem(item.id)}
                     />
                   ))}
                   {items.length === 0 && !isDragActive && (
@@ -645,32 +766,50 @@ function KanbanCard({
   onDragStart,
   onDragEnd,
   clienteSlug,
+  selectMode,
+  isSelected,
+  onToggleSelect,
 }: {
   item: KanbanItem
   isDragging: boolean
   onDragStart: () => void
   onDragEnd: () => void
   clienteSlug?: string
+  selectMode?: boolean
+  isSelected?: boolean
+  onToggleSelect?: () => void
 }) {
   const subStatusCfg = item.sub_status ? SUB_STATUS_CONFIG[item.sub_status] : null
 
   const cardContent = (
     <div
-      draggable
-      onDragStart={e => {
+      draggable={!selectMode}
+      onDragStart={selectMode ? undefined : e => {
         e.dataTransfer.setData('text/plain', item.id)
         e.dataTransfer.effectAllowed = 'move'
         onDragStart()
       }}
-      onDragEnd={onDragEnd}
+      onDragEnd={selectMode ? undefined : onDragEnd}
+      onClick={selectMode ? onToggleSelect : undefined}
       className={`
-        bg-white rounded-xl overflow-hidden cursor-grab active:cursor-grabbing
-        hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] transition-all duration-200 ease-out
+        relative bg-white rounded-xl overflow-hidden transition-all duration-200 ease-out
+        ${selectMode
+          ? `cursor-pointer ${isSelected ? 'ring-2 ring-blue-500 border-blue-400 shadow-md' : 'border border-zinc-200 hover:border-blue-300'}`
+          : `cursor-grab active:cursor-grabbing hover:shadow-lg hover:-translate-y-1 hover:scale-[1.02] border border-zinc-200 hover:border-zinc-300`
+        }
         ${isDragging ? 'opacity-40 scale-90 rotate-2 shadow-2xl' : 'shadow-sm'}
-        border border-zinc-200 hover:border-zinc-300
         group/card
       `}
     >
+      {/* Select checkbox overlay */}
+      {selectMode && (
+        <div className={`absolute top-2 right-2 z-10 pointer-events-none`}>
+          {isSelected
+            ? <CheckSquare className="w-5 h-5 text-blue-500 fill-blue-500" />
+            : <Square className="w-5 h-5 text-zinc-400" />
+          }
+        </div>
+      )}
       {/* Thumbnail da mídia */}
       {item.midiaUrl && (
         <div className="relative h-32 bg-gradient-to-br from-zinc-100 to-zinc-200 overflow-hidden">
@@ -790,7 +929,7 @@ function KanbanCard({
     </div>
   )
 
-  if (clienteSlug) {
+  if (clienteSlug && !selectMode) {
     return (
       <Link href={`/clientes/${clienteSlug}/conteudo/${item.id}`}>
         {cardContent}

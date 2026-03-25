@@ -36,11 +36,14 @@ import {
   Send,
 } from 'lucide-react'
 import { STATUS_CONFIG, TIPO_EMOJI, CANAIS, formatDateFull } from '@/lib/utils'
+import { useToast } from '@/components/ui/toast'
 import type { Conteudo, Cliente, Member } from '@/types/database'
 import Link from 'next/link'
 import { ApprovalTimeline } from '@/components/ApprovalTimeline'
 import { InternalApprovalActions } from '@/components/InternalApprovalActions'
 import { ScheduleModal } from '@/components/ScheduleModal'
+import { CoverPicker } from '@/components/cover-picker'
+import { ConfirmDialog } from '@/components/ui/confirm-dialog'
 
 // ============== COMPONENTE DE AJUSTES DO CLIENTE ==============
 interface AdjustmentCardProps {
@@ -50,10 +53,12 @@ interface AdjustmentCardProps {
 }
 
 function AdjustmentCard({ conteudo, lastAdjustment, onUpdate }: AdjustmentCardProps) {
+  const { toast } = useToast()
   const [isEditing, setIsEditing] = useState(false)
   const [editText, setEditText] = useState('')
   const [saving, setSaving] = useState(false)
   const [markingDone, setMarkingDone] = useState(false)
+  const [confirmOpen, setConfirmOpen] = useState(false)
 
   const feedbackText = (conteudo as any).comentario_cliente || lastAdjustment?.comment || ''
   const feedbackAuthor = (conteudo as any).cliente_nome_feedback || lastAdjustment?.reviewer_name || ''
@@ -74,14 +79,13 @@ function AdjustmentCard({ conteudo, lastAdjustment, onUpdate }: AdjustmentCardPr
       onUpdate()
     } catch (err) {
       console.error('Erro ao salvar:', err)
-      alert('Erro ao salvar observação')
+      toast('Erro ao salvar observação', 'error')
     }
     setSaving(false)
   }
 
   // Marcar ajustes como concluídos
   const handleMarkDone = async () => {
-    if (!confirm('Marcar ajustes como concluídos? O conteúdo voltará para aprovação.')) return
     setMarkingDone(true)
     try {
       const { error } = await db.update('conteudos', {
@@ -91,8 +95,8 @@ function AdjustmentCard({ conteudo, lastAdjustment, onUpdate }: AdjustmentCardPr
       if (error) throw new Error(error)
       onUpdate()
     } catch (err) {
-      console.error('Erro:', err)
-      alert('Erro ao atualizar status')
+      console.error('Erro ao marcar ajustes:', err)
+      toast('Erro ao atualizar status', 'error')
     }
     setMarkingDone(false)
   }
@@ -111,7 +115,7 @@ function AdjustmentCard({ conteudo, lastAdjustment, onUpdate }: AdjustmentCardPr
           </div>
         </div>
         <Button
-          onClick={handleMarkDone}
+          onClick={() => setConfirmOpen(true)}
           disabled={markingDone}
           size="sm"
           className="bg-green-600 hover:bg-green-700 text-white shadow-md"
@@ -205,12 +209,23 @@ function AdjustmentCard({ conteudo, lastAdjustment, onUpdate }: AdjustmentCardPr
         {!feedbackText && !isEditing && (
           <div className="mt-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-xs text-blue-700">
-              💡 <strong>Dica:</strong> Para que as observações apareçam automaticamente, gere um link de aprovação e envie ao cliente. 
+              💡 <strong>Dica:</strong> Para que as observações apareçam automaticamente, gere um link de aprovação e envie ao cliente.
               Quando ele solicitar ajustes, o comentário será salvo aqui.
             </p>
           </div>
         )}
       </div>
+
+      <ConfirmDialog
+        open={confirmOpen}
+        title="Marcar como Concluído"
+        message="Marcar ajustes como concluídos? O conteúdo voltará para aprovação."
+        confirmLabel="Confirmar"
+        variant="default"
+        loading={markingDone}
+        onConfirm={() => { setConfirmOpen(false); handleMarkDone() }}
+        onCancel={() => setConfirmOpen(false)}
+      />
     </div>
   )
 }
@@ -225,6 +240,7 @@ function formatFileSize(bytes: number) {
 export default function ConteudoDetailPage() {
   const params = useParams()
   const router = useRouter()
+  const { toast } = useToast()
   const slug = params.slug as string
   const conteudoId = params.id as string
   const { org, member } = useAuth()
@@ -254,11 +270,21 @@ export default function ConteudoDetailPage() {
   const [uploadProgress, setUploadProgress] = useState<Record<string, number>>({})
   const fileInputRef = useState<HTMLInputElement | null>(null)
 
-  // Cover/Thumbnail state para Reels
-  const [showCoverSelector, setShowCoverSelector] = useState(false)
-  const [uploadingCover, setUploadingCover] = useState(false)
   const videoRef = useRef<HTMLVideoElement>(null)
-  
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState<{
+    open: boolean
+    title: string
+    message: string
+    onConfirm: () => void
+  }>({ open: false, title: '', message: '', onConfirm: () => {} })
+
+  const showConfirm = (title: string, message: string, onConfirm: () => void) => {
+    setConfirmDialog({ open: true, title, message, onConfirm })
+  }
+  const closeConfirm = () => setConfirmDialog(prev => ({ ...prev, open: false }))
+
   // Preview mode (tamanho real)
   const [previewMode, setPreviewMode] = useState<'feed' | 'reels' | 'story' | null>(null)
 
@@ -361,7 +387,7 @@ export default function ConteudoDetailPage() {
       setConteudo(prev => prev ? { ...prev, status } : null)
     } catch (err) {
       console.error('Erro ao atualizar status:', err)
-      alert('Erro ao atualizar status')
+      toast('Erro ao atualizar status', 'error')
     }
   }
 
@@ -369,26 +395,16 @@ export default function ConteudoDetailPage() {
   const startEditing = (field: 'titulo' | 'descricao' | 'legenda' | 'data_publicacao') => {
     if (!conteudo) return
     setEditingField(field)
-    
+
     if (field === 'data_publicacao') {
-      console.log('🔵 Abrindo edição de data. Valor atual:', conteudo.data_publicacao, 'hora:', (conteudo as any).hora_publicacao)
-      
       if (conteudo.data_publicacao) {
         // Data já está no formato YYYY-MM-DD (campo DATE do banco)
-        // Usar diretamente sem parse que causa problemas de timezone
         const dataStr = conteudo.data_publicacao.toString().split('T')[0]
         setEditValue(dataStr)
-        
+
         // Hora está em campo separado (formato HH:mm ou HH:mm:ss)
         const horaStr = (conteudo as any).hora_publicacao
-        if (horaStr) {
-          // Pegar só HH:mm
-          setEditTimeValue(horaStr.substring(0, 5))
-        } else {
-          setEditTimeValue('12:00')
-        }
-        
-        console.log('🔵 Data carregada:', dataStr, 'hora:', horaStr)
+        setEditTimeValue(horaStr ? horaStr.substring(0, 5) : '12:00')
       } else {
         // Sem data - campos vazios (NÃO usar data atual)
         setEditValue('')
@@ -423,7 +439,7 @@ export default function ConteudoDetailPage() {
           // Validar formato da data (YYYY-MM-DD)
           const dateParts = editValue.split('-')
           if (dateParts.length !== 3) {
-            alert('Formato de data inválido')
+            toast('Formato de data inválido. Use AAAA-MM-DD.', 'error')
             setSaving(false)
             return
           }
@@ -438,9 +454,7 @@ export default function ConteudoDetailPage() {
           const dataStr = `${year}-${pad(month)}-${pad(day)}`
           // Salvar hora no formato HH:mm (campo TEXT)
           const horaStr = `${pad(hours)}:${pad(minutes)}`
-          
-          console.log('📅 Salvando data:', dataStr, 'hora:', horaStr)
-          
+
           // Salvar ambos os campos
           const { error } = await db.update('conteudos', {
             data_publicacao: dataStr,
@@ -497,7 +511,7 @@ export default function ConteudoDetailPage() {
       setEditTimeValue('')
     } catch (err) {
       console.error('Erro ao salvar:', err)
-      alert('Erro ao salvar: ' + (err instanceof Error ? err.message : 'Erro desconhecido'))
+      toast('Erro ao salvar: ' + (err instanceof Error ? err.message : 'Erro desconhecido'), 'error')
     } finally {
       setSaving(false)
     }
@@ -520,7 +534,7 @@ export default function ConteudoDetailPage() {
       setConteudo(prev => prev ? { ...prev, assigned_to: userId, assignee } : null)
     } catch (err) {
       console.error('Erro ao atribuir membro:', err)
-      alert('Erro ao atribuir membro')
+      toast('Erro ao atribuir membro', 'error')
     } finally {
       setSavingAssignee(false)
     }
@@ -573,7 +587,7 @@ export default function ConteudoDetailPage() {
       setTimeout(() => setLinkCopied(false), 3000)
     } catch (err) {
       console.error('Erro ao gerar link:', err)
-      alert('Erro ao gerar link de aprovação')
+      toast('Erro ao gerar link de aprovação', 'error')
     }
   }
 
@@ -591,7 +605,7 @@ export default function ConteudoDetailPage() {
       setWaSent(true)
       setTimeout(() => setWaSent(false), 3000)
     } catch (err: any) {
-      alert(err.message || 'Erro ao enviar WhatsApp')
+      toast(err.message || 'Erro ao enviar WhatsApp', 'error')
     } finally {
       setSendingWA(false)
     }
@@ -625,7 +639,7 @@ export default function ConteudoDetailPage() {
 
       if (!res.ok) {
         const err = await res.json()
-        alert(`Erro: ${err.error}`)
+        toast(`Erro: ${err.error}`, 'error')
         setUploading(false)
         return
       }
@@ -681,7 +695,7 @@ export default function ConteudoDetailPage() {
       }
     } catch (err) {
       console.error('Upload error:', err)
-      alert('Erro ao fazer upload')
+      toast('Erro ao fazer upload. Tente novamente.', 'error')
     }
 
     setUploading(false)
@@ -690,19 +704,20 @@ export default function ConteudoDetailPage() {
     e.target.value = ''
   }
 
-  const handleRemoveMedia = async (urlToRemove: string) => {
-    if (!conteudo || !confirm('Remover este arquivo?')) return
-    const currentUrls = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
-    const updatedUrls = currentUrls.filter((u: string) => u !== urlToRemove)
-
-    const { error } = await db.update('conteudos', {
-      midia_urls: updatedUrls,
-      updated_at: new Date().toISOString(),
-    }, { id: conteudo.id })
-
-    if (!error) {
-      setConteudo(prev => prev ? { ...prev, midia_urls: updatedUrls } : null)
-    }
+  const handleRemoveMedia = (urlToRemove: string) => {
+    if (!conteudo) return
+    showConfirm('Remover arquivo', 'Remover este arquivo permanentemente?', async () => {
+      closeConfirm()
+      const currentUrls = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
+      const updatedUrls = currentUrls.filter((u: string) => u !== urlToRemove)
+      const { error } = await db.update('conteudos', {
+        midia_urls: updatedUrls,
+        updated_at: new Date().toISOString(),
+      }, { id: conteudo.id })
+      if (!error) {
+        setConteudo(prev => prev ? { ...prev, midia_urls: updatedUrls } : null)
+      }
+    })
   }
 
   if (loading) {
@@ -862,20 +877,14 @@ export default function ConteudoDetailPage() {
                 <input
                   type="date"
                   value={editValue}
-                  onChange={(e) => {
-                    console.log('📅 Data alterada para:', e.target.value)
-                    setEditValue(e.target.value)
-                  }}
+                  onChange={(e) => setEditValue(e.target.value)}
                   className="text-sm border-2 border-blue-400 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                   autoFocus
                 />
                 <input
                   type="time"
                   value={editTimeValue}
-                  onChange={(e) => {
-                    console.log('⏰ Hora alterada para:', e.target.value)
-                    setEditTimeValue(e.target.value)
-                  }}
+                  onChange={(e) => setEditTimeValue(e.target.value)}
                   className="text-sm border-2 border-blue-400 rounded px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-blue-300 bg-white"
                 />
                 <div className="flex items-center gap-1">
@@ -1247,121 +1256,25 @@ export default function ConteudoDetailPage() {
       {/* Capa do Vídeo (Reels/Stories) - Só aparece se tem vídeo */}
       {mediaUrls.some((url: string) => isVideo(url)) && (
         <Card className="p-6 mb-6">
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center gap-2 mb-4">
             <h3 className="text-lg font-semibold text-gray-900 flex items-center gap-2">
               🎬 Capa do Vídeo
               <Badge className="bg-purple-100 text-purple-700 text-xs">Reels/Stories</Badge>
             </h3>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowCoverSelector(!showCoverSelector)}
-              className="border-purple-300 text-purple-700 hover:bg-purple-50"
-            >
-              {showCoverSelector ? 'Fechar' : 'Definir Capa'}
-            </Button>
           </div>
-          
-          {/* Capa atual */}
-          {(conteudo as any).cover_url ? (
-            <div className="mb-4">
-              <p className="text-xs text-gray-500 mb-2">Capa selecionada:</p>
-              <div className="relative w-32 h-40 rounded-lg overflow-hidden border-2 border-purple-400 shadow-lg">
-                <img src={(conteudo as any).cover_url} alt="Capa" className="w-full h-full object-cover" />
-              </div>
-            </div>
-          ) : (
-            <div className="mb-4 p-4 bg-gray-50 rounded-lg border border-dashed border-gray-300 text-center">
-              <Film className="w-8 h-8 text-gray-300 mx-auto mb-2" />
-              <p className="text-sm text-gray-500">Nenhuma capa definida</p>
-              <p className="text-xs text-gray-400">O primeiro frame será usado automaticamente</p>
-            </div>
-          )}
-
-          {showCoverSelector && (
-            <div className="space-y-4 pt-4 border-t border-gray-100">
-              {/* Opções de capa */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                {/* Upload customizado */}
-                <label className="cursor-pointer">
-                  <input
-                    type="file"
-                    accept="image/*"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const file = e.target.files?.[0]
-                      if (!file || !conteudo || !cliente) return
-                      setUploadingCover(true)
-                      try {
-                        // Get presigned URL
-                        const res = await fetch('/api/posts/media-presign', {
-                          method: 'POST',
-                          headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({
-                            conteudoId: conteudo.id,
-                            clienteId: cliente.id,
-                            files: [{ name: `cover-${file.name}`, type: file.type, size: file.size }],
-                          }),
-                        })
-                        if (!res.ok) throw new Error('Erro ao fazer upload')
-                        const { urls } = await res.json()
-                        const { uploadUrl, publicUrl } = urls[0]
-                        
-                        // Upload
-                        const uploadRes = await fetch(uploadUrl, {
-                          method: 'PUT',
-                          headers: { 'Content-Type': file.type },
-                          body: file,
-                        })
-                        if (!uploadRes.ok) throw new Error('Erro no upload')
-                        
-                        // Salvar URL da capa
-                        await db.update('conteudos', { cover_url: publicUrl, updated_at: new Date().toISOString() }, { id: conteudo.id })
-                        setConteudo(prev => prev ? { ...prev, cover_url: publicUrl } as any : null)
-                        setShowCoverSelector(false)
-                      } catch (err) {
-                        console.error('Erro:', err)
-                        alert('Erro ao fazer upload da capa')
-                      }
-                      setUploadingCover(false)
-                      e.target.value = ''
-                    }}
-                    disabled={uploadingCover}
-                  />
-                  <div className={`h-32 border-2 border-dashed rounded-lg flex flex-col items-center justify-center transition-all ${uploadingCover ? 'border-gray-200 bg-gray-50' : 'border-purple-300 hover:border-purple-500 hover:bg-purple-50 cursor-pointer'}`}>
-                    {uploadingCover ? (
-                      <Loader2 className="w-6 h-6 animate-spin text-purple-500" />
-                    ) : (
-                      <>
-                        <Upload className="w-6 h-6 text-purple-400 mb-1" />
-                        <span className="text-xs text-purple-600 font-medium">Enviar Imagem</span>
-                      </>
-                    )}
-                  </div>
-                </label>
-
-                {/* Frames do vídeo como opções */}
-                {mediaUrls.filter((url: string) => isVideo(url)).slice(0, 1).map((videoUrl: string, i: number) => (
-                  <div key={i} className="col-span-3 grid grid-cols-3 gap-2">
-                    {[0, 25, 50, 75].map((pct) => (
-                      <button
-                        key={pct}
-                        onClick={async () => {
-                          // Usar thumbnail do vídeo (precisa de um serviço de processamento)
-                          // Por agora, vamos só mostrar que pode selecionar
-                          alert(`Seleção de frame ${pct}% - Em breve!`)
-                        }}
-                        className="h-24 bg-gradient-to-br from-gray-100 to-gray-200 rounded-lg flex flex-col items-center justify-center border-2 border-gray-200 hover:border-purple-400 transition-all"
-                      >
-                        <Film className="w-5 h-5 text-gray-400 mb-1" />
-                        <span className="text-[10px] text-gray-500">Frame {pct}%</span>
-                      </button>
-                    ))}
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <CoverPicker
+            videoSource={mediaUrls.find((url: string) => isVideo(url))}
+            value={(conteudo as any).cover_url}
+            onChange={async (url) => {
+              try {
+                await db.update('conteudos', { cover_url: url, updated_at: new Date().toISOString() }, { id: conteudo!.id })
+                setConteudo(prev => prev ? { ...prev, cover_url: url } as any : null)
+              } catch (err) {
+                console.error('Erro ao salvar capa:', err)
+                toast('Erro ao salvar capa. Tente novamente.', 'error')
+              }
+            }}
+          />
         </Card>
       )}
 
@@ -1533,6 +1446,15 @@ export default function ConteudoDetailPage() {
           orgId={org?.id}
         />
       )}
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={closeConfirm}
+      />
     </div>
   )
 }

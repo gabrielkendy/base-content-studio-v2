@@ -26,6 +26,7 @@ export async function getUserOrgId(userId: string): Promise<string | null> {
     .select('org_id')
     .eq('user_id', userId)
     .eq('status', 'active')
+    .order('created_at', { ascending: false })
     .limit(1)
     .maybeSingle()
   return member?.org_id ?? null

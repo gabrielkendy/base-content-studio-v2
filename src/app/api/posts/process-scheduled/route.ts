@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceClient } from '@/lib/supabase/server'
-import { buildUsername } from '@/lib/upload-post'
 
 const UPLOAD_POST_API_URL = process.env.UPLOAD_POST_API_URL || 'https://api.upload-post.com'
 const UPLOAD_POST_API_KEY = process.env.UPLOAD_POST_API_KEY!
@@ -38,7 +37,9 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
       return { success: false, error: 'Cliente não encontrado' }
     }
 
-    const username = buildUsername(cliente.org_id, cliente.id, cliente.slug)
+    // IMPORTANT: Use slug directly as username — this matches how profiles
+    // were created in Upload-Post (e.g., "nechio", "grupo-manchester", "flexbyo")
+    const username = cliente.slug
 
     // Parse platforms
     let platforms: string[] = []
@@ -59,13 +60,22 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
       return { success: false, error: 'Nenhuma plataforma válida' }
     }
 
-    const media_urls: string[] = post.media_urls || []
+    // Normalize media_urls — handle both array and string formats
+    let media_urls: string[] = []
+    if (Array.isArray(post.media_urls)) {
+      media_urls = post.media_urls
+    } else if (typeof post.media_urls === 'string' && post.media_urls) {
+      media_urls = [post.media_urls]
+    }
+
     const hashtags: string[] = post.hashtags || []
     const fullCaption = hashtags.length > 0 
       ? `${post.caption}\n\n${hashtags.join(' ')}` 
       : post.caption
 
     let publishResponse: any = null
+
+    console.log(`[process-scheduled] Publishing post ${post.id} for ${username} to ${uploadPostPlatforms.join(',')} with ${media_urls.length} media`)
 
     if (media_urls.length > 0 && media_urls.some(isVideoUrl)) {
       // Video upload — passa URL diretamente, Upload-Post busca o vídeo
@@ -82,7 +92,6 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
       if (coverUrl) {
         formData.append('cover_url', coverUrl)        // Instagram Reels
         formData.append('thumbnail_url', coverUrl)    // YouTube
-        // TikTok usa cover_timestamp (ms) — não aceita URL de imagem, omitir
       }
 
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload`, {
@@ -91,16 +100,14 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
         body: formData,
       })
       publishResponse = await res.json()
-      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}` }
+      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse }
     } else if (media_urls.length > 0) {
-      // Photo upload
+      // Photo upload — send URLs directly (Upload-Post fetches them server-side)
+      // This avoids timeout issues from downloading large images in serverless
       const formData = new FormData()
       
       for (const imageUrl of media_urls) {
-        const imgResponse = await fetch(imageUrl)
-        const imgBlob = await imgResponse.blob()
-        const filename = imageUrl.split('/').pop() || 'image.jpg'
-        formData.append('photos[]', imgBlob, filename)
+        formData.append('photos[]', imageUrl)
       }
       
       formData.append('user', username)
@@ -114,7 +121,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
         body: formData,
       })
       publishResponse = await res.json()
-      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}` }
+      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse }
     } else {
       // Text-only post
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload_text`, {
@@ -130,11 +137,13 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
         }),
       })
       publishResponse = await res.json()
-      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}` }
+      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse }
     }
 
+    console.log(`[process-scheduled] Post ${post.id} result:`, JSON.stringify(publishResponse).substring(0, 500))
     return { success: true, response: publishResponse }
   } catch (err: any) {
+    console.error(`[process-scheduled] Post ${post.id} error:`, err.message)
     return { success: false, error: err.message }
   }
 }

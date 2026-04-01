@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
-import { ensureProfile, generateJwtUrl, buildUsername } from '@/lib/upload-post'
+import { ensureProfile, generateJwtUrl } from '@/lib/upload-post'
 import { getInternalAppUrl } from '@/lib/approval-notifications'
 
 async function getAuthUser() {
@@ -62,8 +62,9 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Cliente não encontrado' }, { status: 404 })
     }
 
-    // Build consistent username (same as schedule uses)
-    const username = buildUsername(membership.org_id, cliente.id, cliente.slug)
+    // Use slug directly as username — matches how profiles exist in Upload-Post
+    // (e.g., "nechio", "grupo-manchester", "flexbyo", "itb")
+    const username = cliente.slug
 
     // Ensure profile exists
     const profileResult = await ensureProfile(username)

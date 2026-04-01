@@ -151,10 +151,14 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
 export async function GET(request: NextRequest) {
   const CRON_SECRET = process.env.CRON_SECRET
   if (!CRON_SECRET) {
+    console.error('[process-scheduled] CRON_SECRET not set')
     return NextResponse.json({ error: 'Server misconfigured: CRON_SECRET not set' }, { status: 500 })
   }
   const authHeader = request.headers.get('authorization')
-  if (authHeader !== `Bearer ${CRON_SECRET}`) {
+  // Accept both "Bearer <secret>" (Vercel Cron / n8n) and query param ?secret=<secret>
+  const querySecret = request.nextUrl.searchParams.get('secret')
+  const isAuthorized = authHeader === `Bearer ${CRON_SECRET}` || querySecret === CRON_SECRET
+  if (!isAuthorized) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
   }
 

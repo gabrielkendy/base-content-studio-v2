@@ -17,6 +17,7 @@ import { createServerClient } from '@supabase/ssr'
 import { createServiceClient } from '@/lib/supabase/server'
 import { cookies } from 'next/headers'
 import { parseScheduledAt, formatBR } from '@/lib/timezone'
+import * as UP from '@/lib/upload-post-v2'
 
 async function getAuthUser() {
   const cookieStore = await cookies()
@@ -115,6 +116,20 @@ export async function POST(request: NextRequest) {
       const mediaUrls: string[] = Array.isArray(conteudo.midia_urls) ? conteudo.midia_urls : []
       const caption = title || conteudo.legenda || conteudo.titulo || ''
       const platformStrings: string[] = Array.isArray(platforms) ? platforms : [platforms]
+
+      // Verificar se contas estão conectadas ativamente no Upload-Post API
+      const username = cliente.slug
+      const contas = await UP.verificarConexoes(username)
+      const connectedPlatforms = contas.filter((c: any) => c.conectada).map((c: any) => c.plataforma)
+      const missingPlatforms = platformStrings.filter(p => !connectedPlatforms.includes(p))
+      
+      if (missingPlatforms.length > 0) {
+        return NextResponse.json({ 
+          error: `Plataformas selecionadas não estão conectadas: ${missingPlatforms.join(', ')}`,
+          connected: connectedPlatforms,
+          requested: platformStrings,
+        }, { status: 400 })
+      }
 
       // Salvar em scheduled_posts
       const { data: post, error: insertError } = await admin
@@ -230,6 +245,20 @@ export async function POST(request: NextRequest) {
     const platformStrings: string[] = (platforms as any[]).map((p: any) =>
       typeof p === 'string' ? p : p.platform
     )
+
+    // Verificar se contas estão conectadas ativamente no Upload-Post API
+    const username = cliente.slug
+    const contas = await UP.verificarConexoes(username)
+    const connectedPlatforms = contas.filter((c: any) => c.conectada).map((c: any) => c.plataforma)
+    const missingPlatforms = platformStrings.filter(p => !connectedPlatforms.includes(p))
+    
+    if (missingPlatforms.length > 0) {
+      return NextResponse.json({ 
+        error: `Plataformas selecionadas não estão conectadas: ${missingPlatforms.join(', ')}`,
+        connected: connectedPlatforms,
+        requested: platformStrings,
+      }, { status: 400 })
+    }
 
     // Salvar em scheduled_posts
     const { data: post, error: insertError } = await admin

@@ -1020,9 +1020,12 @@ export default function AgendarPage() {
                               ) : (
                                 <video
                                   src={currentMedia.url}
+                                  poster={coverUrl || currentMedia.preview || undefined}
                                   className="w-full h-full object-contain bg-black"
+                                  controls
                                   muted
                                   playsInline
+                                  preload="metadata"
                                 />
                               )
                             ) : currentMedia ? (

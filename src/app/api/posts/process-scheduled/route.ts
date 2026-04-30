@@ -20,11 +20,31 @@ const PLATFORM_MAP: Record<string, string> = {
 }
 
 function isVideoUrl(url: string): boolean {
-  const videoExtensions = ['.mp4', '.mov', '.webm', '.avi']
-  return videoExtensions.some(ext => url.toLowerCase().includes(ext))
+  const videoExtensions = ['.mp4', '.mov', '.webm', '.avi', '.mkv']
+  try {
+    const pathname = new URL(url).pathname.toLowerCase()
+    return videoExtensions.some(ext => pathname.endsWith(ext))
+  } catch {
+    return videoExtensions.some(ext => url.toLowerCase().split('?')[0].endsWith(ext))
+  }
 }
 
-async function publishPost(post: any, admin: any): Promise<{ success: boolean; error?: string; response?: any }> {
+// Erros permanentes (4xx exceto 408/429) não devem ser retentados — o post nunca vai dar certo
+function isRetryableError(status?: number, message?: string): boolean {
+  if (status === undefined) return true // network/timeout sem status — vale retry
+  if (status >= 500) return true        // 5xx — servidor caiu
+  if (status === 408 || status === 429) return true // timeout/rate-limit
+  // 4xx restantes (400, 401, 403, 404, 422...) são erros do request, não adianta retentar
+  if (status >= 400 && status < 500) return false
+  // 2xx caiu aqui só se algo muito estranho — não retenta
+  if (message?.toLowerCase().match(/timeout|econn|fetch failed|network/)) return true
+  return true
+}
+
+async function publishPost(
+  post: any,
+  admin: any,
+): Promise<{ success: boolean; error?: string; response?: any; status?: number }> {
   try {
     // Get client info
     const { data: cliente } = await admin
@@ -100,7 +120,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
         body: formData,
       })
       publishResponse = await res.json()
-      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse }
+      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse, status: res.status }
     } else if (media_urls.length > 0) {
       // Photo upload — send URLs directly (Upload-Post fetches them server-side)
       // This avoids timeout issues from downloading large images in serverless
@@ -121,7 +141,7 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
         body: formData,
       })
       publishResponse = await res.json()
-      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse }
+      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse, status: res.status }
     } else {
       // Text-only post
       const res = await fetch(`${UPLOAD_POST_API_URL}/api/upload_text`, {
@@ -137,13 +157,42 @@ async function publishPost(post: any, admin: any): Promise<{ success: boolean; e
         }),
       })
       publishResponse = await res.json()
-      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse }
+      if (!res.ok) return { success: false, error: publishResponse.message || `HTTP ${res.status}`, response: publishResponse, status: res.status }
     }
 
     console.log(`[process-scheduled] Post ${post.id} result:`, JSON.stringify(publishResponse).substring(0, 500))
     return { success: true, response: publishResponse }
   } catch (err: any) {
     console.error(`[process-scheduled] Post ${post.id} error:`, err.message)
+    return { success: false, error: err.message }
+  }
+}
+
+const MAX_RETRIES = 3
+const RETRY_DELAY_MS = [1000, 5000, 15000]
+
+async function publishWithRetry(post: any, admin: any, attempt = 0): Promise<{ success: boolean; error?: string; response?: any; status?: number }> {
+  try {
+    const result = await publishPost(post, admin)
+
+    // Só retenta em erros transitórios (5xx, timeouts, rate limit)
+    if (!result.success && attempt < MAX_RETRIES && isRetryableError(result.status, result.error)) {
+      console.log(`[process-scheduled] Retry ${attempt + 1}/${MAX_RETRIES} for post ${post.id} in ${RETRY_DELAY_MS[attempt]}ms (status=${result.status ?? 'n/a'})`)
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS[attempt]))
+      return publishWithRetry(post, admin, attempt + 1)
+    }
+    if (!result.success && !isRetryableError(result.status, result.error)) {
+      console.log(`[process-scheduled] Permanent failure for post ${post.id} (status=${result.status}) — not retrying`)
+    }
+
+    return result
+  } catch (err: any) {
+    // Exception inesperada = network/runtime issue → retry vale a pena
+    if (attempt < MAX_RETRIES) {
+      console.log(`[process-scheduled] Exception Retry ${attempt + 1}/${MAX_RETRIES} for post ${post.id} in ${RETRY_DELAY_MS[attempt]}ms`)
+      await new Promise(r => setTimeout(r, RETRY_DELAY_MS[attempt]))
+      return publishWithRetry(post, admin, attempt + 1)
+    }
     return { success: false, error: err.message }
   }
 }
@@ -200,7 +249,7 @@ export async function GET(request: NextRequest) {
       .eq('id', post.id)
 
     // Publish
-    const result = await publishPost(post, admin)
+    const result = await publishWithRetry(post, admin)
 
     // Update status
     const status = result.success ? 'published' : 'failed'

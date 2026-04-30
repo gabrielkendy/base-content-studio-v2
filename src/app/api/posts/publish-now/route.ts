@@ -199,16 +199,14 @@ export async function POST(request: NextRequest) {
         publishResponse = await res.json()
         if (!res.ok) publishError = publishResponse.message || `HTTP ${res.status}`
       } else if (media_urls.length > 0) {
-        // Photo upload
+        // Photo upload — envia URLs direto (Upload-Post busca no servidor deles).
+        // Evita timeout no serverless ao baixar+rebufferizar imagens grandes.
         const formData = new FormData()
-        
+
         for (const imageUrl of media_urls) {
-          const imgResponse = await fetch(imageUrl)
-          const imgBlob = await imgResponse.blob()
-          const filename = imageUrl.split('/').pop() || 'image.jpg'
-          formData.append('photos[]', imgBlob, filename)
+          formData.append('photos[]', imageUrl)
         }
-        
+
         formData.append('user', username)
         formData.append('title', fullCaption)
         formData.append('description', fullCaption)

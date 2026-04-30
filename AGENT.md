@@ -49,6 +49,7 @@ Todo endpoint aceita um dos dois:
 | POST | `/api/agent/approvals/send` | Gera link + envia WhatsApp |
 | GET  | `/api/agent/approvals/:conteudo_id` | Status dos links de aprovação |
 | GET  | `/api/agent/social/:slug` | Status das redes conectadas |
+| POST | `/api/agent/media` | Sobe arquivo/URL/base64 → URL pública no storage |
 
 ## Identificação de cliente
 
@@ -142,26 +143,73 @@ curl -H "Authorization: Bearer $AGENT_API_TOKEN" \
   https://app.agenciabase.tech/api/agent/social/padaria-do-ze
 ```
 
+### Subir uma imagem/vídeo pro storage (3 modos)
+
+**A) Arquivo local (multipart):**
+```bash
+curl -X POST https://app.agenciabase.tech/api/agent/media \
+  -H "Authorization: Bearer $AGENT_API_TOKEN" \
+  -F "file=@/caminho/foto.jpg" \
+  -F "cliente=padaria-do-ze"
+# → { "url": "https://...supabase.../post-media/.../foto.jpg", ... }
+```
+
+**B) Fazer mirror de uma URL externa (Drive público, Imgur, etc.):**
+```bash
+curl -X POST https://app.agenciabase.tech/api/agent/media \
+  -H "Authorization: Bearer $AGENT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cliente": "padaria-do-ze",
+    "source_url": "https://i.imgur.com/abc123.jpg",
+    "filename": "promo-sexta.jpg"
+  }'
+```
+
+**C) Base64 (útil quando o agente recebe imagem inline):**
+```bash
+curl -X POST https://app.agenciabase.tech/api/agent/media \
+  -H "Authorization: Bearer $AGENT_API_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cliente": "padaria-do-ze",
+    "filename": "post.jpg",
+    "base64": "data:image/jpeg;base64,/9j/4AAQ..."
+  }'
+```
+
 ## Workflow padrão pro Claude operar
 
+Cenário típico — usuário diz: *"Sobe um post pra Padaria do Zé com essa imagem
+e essa legenda"*
+
 ```
-1. Pergunta do usuário: "Sobe um post pra Padaria do Zé com essa legenda…"
-   └─ POST /api/agent/conteudos                       ← cria card
-   └─ Resposta: { conteudo: { id: "..." } }
+1. POST /api/agent/media                             ← sobe a(s) imagem(ns)
+   body: { cliente: "padaria-do-ze", source_url: "https://..." }
+   →  { url: "https://...supabase.../foto.jpg" }
 
-2. "Agora gera o link de aprovação"
-   └─ POST /api/agent/approvals/link                  ← link público
-   └─ Resposta: { link: "https://studio…/aprovacao?token=…" }
-   └─ Eu te devolvo o link colado
+2. POST /api/agent/conteudos                         ← cria card no workflow
+   body: {
+     cliente: "padaria-do-ze",
+     titulo: "Promo Sexta",
+     legenda: "Sextou! 🧀 #pão",
+     midia_urls: ["https://...supabase.../foto.jpg"],
+     canais: ["instagram", "facebook"],
+     status: "aprovacao"
+   }
+   →  { conteudo: { id: "<uuid>" } }
 
-3. "Manda no WhatsApp pro cliente"
-   └─ POST /api/agent/approvals/send                  ← dispara Z-API/n8n
+3. POST /api/agent/approvals/link                    ← gera link público
+   body: { conteudo_id: "<uuid>" }
+   →  { link: "https://studio.agenciabase.tech/aprovacao?token=..." }
+   ← devolve esse link colado pro usuário
 
-4. Cliente aprova no /aprovacao?token=…
-   └─ Status do conteúdo vira "aprovado" automaticamente
+4. (opcional) POST /api/agent/approvals/send         ← manda WhatsApp também
 
-5. (Opcional) "Agora publica nas redes"
-   └─ POST /api/agent/posts/publish-now
+5. Cliente abre o link, aprova → status do conteúdo vira "aprovacao"
+
+6. (opcional) POST /api/agent/posts/publish-now      ← publica nas redes
+   body: { cliente, platforms, caption, media_urls, cover_url }
 ```
 
 ## Status válidos

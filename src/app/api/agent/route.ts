@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
       'GET    /api/agent/approvals/:conteudo_id': 'Status do(s) link(s) de aprovação',
       'GET    /api/agent/social/:slug': 'Redes sociais conectadas pro cliente',
       'POST   /api/agent/demandas': 'Cria solicitação/demanda { cliente, titulo, descricao, prioridade?, prazo? }',
+      'POST   /api/agent/media': 'Sobe mídia (multipart file | source_url | base64) → URL pública',
     },
     notes: [
       'Todos os endpoints respeitam org_id automaticamente.',
